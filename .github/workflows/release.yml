@@ -1,0 +1,50 @@
+# Release to NPM
+# Triggered when a version tag (v*) is pushed to main
+# Runs tests first, then publishes to npm if tests pass
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Test & Publish
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # Required for npm provenance
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup proto toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Check formatting
+        run: yarn prettier --check .
+      - name: Lint
+        run: yarn lint
+      - name: Build
+        run: yarn build
+      - name: Test
+        run: yarn test
+      - name: Verify tag matches package.json version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+            exit 1
+          fi
+          echo "Version: $PKG_VERSION"
+      - name: Publish to npm
+        run: yarn npm publish --access public --provenance
+        env:
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
