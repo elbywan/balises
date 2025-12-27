@@ -1,0 +1,39 @@
+# Continuous Integration
+# Runs on PRs and pushes to main to verify the code builds and tests pass
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup proto toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Check formatting
+        run: yarn prettier --check .
+      - name: Lint
+        run: yarn lint
+      - name: Build
+        run: yarn build
+      - name: Test
+        run: yarn test
+      - name: Check gzipped size
+        run: |
+          SIZE=$(gzip -c dist/balises.iife.min.js | wc -c)
+          echo "Gzipped size: ${SIZE} bytes"
+          if [ "$SIZE" -gt 3500 ]; then
+            echo "::warning::Bundle size (${SIZE} bytes) is getting large!"
+          fi

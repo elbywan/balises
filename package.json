@@ -1,0 +1,50 @@
+{
+  "name": "balises",
+  "version": "0.1.0",
+  "description": "A very simple reactive html templating library",
+  "author": "Julien Elbaz <elbywan@hotmail.com>",
+  "type": "module",
+  "keywords": [
+    "html",
+    "reactive",
+    "template"
+  ],
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "main": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "types": "./dist/esm/index.d.ts"
+    },
+    "./bundle": {
+      "import": "./dist/balises.esm.js",
+      "types": "./dist/esm/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && rolldown -c && tsc --emitDeclarationOnly --rootDir src --outDir dist/esm",
+    "test": "node --import tsx/esm --import ./tests/setup.ts --test tests/*.test.ts",
+    "lint": "eslint .",
+    "pretty": "prettier --write .",
+    "examples": "rolldown -c examples/rolldown.config.ts && npx serve examples",
+    "examples:build": "rolldown -c examples/rolldown.config.ts",
+    "bench": "cd bench && yarn && yarn start",
+    "bench:self": "cd bench && yarn && yarn start:self"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/jsdom": "27.0.0",
+    "@types/node": "25.0.3",
+    "eslint": "9.39.2",
+    "jsdom": "27.4.0",
+    "prettier": "3.7.4",
+    "rolldown": "1.0.0-beta.57",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.50.1"
+  }
+}
