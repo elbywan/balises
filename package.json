@@ -60,11 +60,11 @@
     "lint": "eslint .",
     "pretty": "prettier --write .",
     "examples": "rolldown -c examples/rolldown.config.ts && yarn dlx serve examples",
-    "examples:build": "rolldown -c examples/rolldown.config.ts",
+    "examples:build": "rolldown -c examples/rolldown.config.ts && cp docs/base.css examples/ && cp docs/example.css examples/",
     "bench": "cd bench && yarn && yarn start",
     "bench:self": "cd bench && yarn && yarn start:self",
     "docs": "yarn docs:build && yarn dlx serve _site",
-    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp assets/logo.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/"
+    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/quickstart-demo.js _site/ && cp docs/counter-demo.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
@@ -77,5 +77,8 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.50.1"
+  },
+  "dependencies": {
+    "balises": "^0.2.0"
   }
 }

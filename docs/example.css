@@ -1,0 +1,74 @@
+@import "./base.css";
+
+/* Example page specific styles */
+.container {
+  max-width: 600px;
+  padding: 3rem 1.5rem;
+}
+
+/* Common button styles for examples */
+button {
+  padding: 0.625rem 1.25rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Common web component container */
+x-counter,
+x-timer,
+x-todo-list,
+x-pokemon-viewer {
+  display: block;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  padding: 2rem;
+  border-radius: 0.5rem;
+}
+
+/* Common heading styles for components */
+.counter h2,
+.timer h2,
+.todo-list h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+/* Common display styles */
+.counter .value,
+.timer .display {
+  font-size: 3rem;
+  font-family: "JetBrains Mono", monospace;
+  text-align: center;
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Common button containers */
+.counter .buttons,
+.timer .buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}

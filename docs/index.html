@@ -8,486 +8,26 @@
       name="description"
       content="A minimal reactive HTML templating library with fine-grained updates. ~2.9KB gzipped."
     />
+    <link rel="icon" type="image/svg+xml" href="./assets/logo-icon.svg" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        --bg: #0a0a0b;
-        --bg-subtle: #111113;
-        --border: #1f1f23;
-        --text: #ededef;
-        --text-muted: #8b8b8d;
-        --accent: #3b82f6;
-        --accent-hover: #60a5fa;
-        --code-bg: #16161a;
-        --green: #22c55e;
-      }
-
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family:
-          "Inter",
-          -apple-system,
-          BlinkMacSystemFont,
-          sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        line-height: 1.6;
-        min-height: 100vh;
-      }
-
-      .container {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 4rem 1.5rem;
-      }
-
-      header {
-        text-align: center;
-        margin-bottom: 4rem;
-      }
-
-      h1 {
-        font-size: 3rem;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        margin-bottom: 0.5rem;
-      }
-
-      .tagline {
-        color: var(--text-muted);
-        font-size: 1.125rem;
-        margin-bottom: 1.5rem;
-      }
-
-      .badges {
-        display: flex;
-        gap: 0.75rem;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.375rem;
-        padding: 0.375rem 0.75rem;
-        background: var(--bg-subtle);
-        border: 1px solid var(--border);
-        border-radius: 9999px;
-        font-size: 0.8125rem;
-        color: var(--text-muted);
-      }
-
-      .badge strong {
-        color: var(--text);
-        font-weight: 500;
-      }
-
-      section {
-        margin-bottom: 3rem;
-      }
-
-      h2 {
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        color: var(--text);
-      }
-
-      h3 {
-        font-size: 1rem;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-        color: var(--text-muted);
-      }
-
-      p {
-        color: var(--text-muted);
-        margin-bottom: 1rem;
-      }
-
-      pre {
-        background: var(--code-bg);
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        padding: 1.25rem;
-        overflow-x: auto;
-        margin-bottom: 1rem;
-      }
-
-      code {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 0.875rem;
-      }
-
-      p code,
-      li code {
-        background: var(--code-bg);
-        padding: 0.125rem 0.375rem;
-        border-radius: 0.25rem;
-        font-size: 0.8125rem;
-      }
-
-      .keyword {
-        color: #c586c0;
-      }
-      .function {
-        color: #dcdcaa;
-      }
-      .string {
-        color: #ce9178;
-      }
-      .variable {
-        color: #9cdcfe;
-      }
-      .tag {
-        color: #569cd6;
-      }
-      .attr {
-        color: #9cdcfe;
-      }
-      .comment {
-        color: #6a9955;
-      }
-      .number {
-        color: #b5cea8;
-      }
-      .type {
-        color: #4ec9b0;
-      }
-
-      .links {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        justify-content: center;
-        margin-top: 2rem;
-      }
-
-      a.btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.625rem 1.25rem;
-        background: var(--bg-subtle);
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        color: var(--text);
-        text-decoration: none;
-        font-size: 0.875rem;
-        font-weight: 500;
-        transition: all 0.15s ease;
-      }
-
-      a.btn:hover {
-        border-color: var(--accent);
-        background: rgba(59, 130, 246, 0.1);
-      }
-
-      a.btn.github {
-        background: #1f3d2a;
-        border-color: #2a5038;
-      }
-
-      a.btn.github:hover {
-        background: #2a5038;
-        border-color: #358545;
-      }
-
-      a.btn.npm {
-        background: #4a2222;
-        border-color: #6b3030;
-      }
-
-      a.btn.npm:hover {
-        background: #6b3030;
-        border-color: #8b4040;
-      }
-
-      a.btn.examples {
-        background: #1e3a5f;
-        border-color: #2a4a75;
-      }
-
-      a.btn.examples:hover {
-        background: #2a4a75;
-        border-color: #3b5a8a;
-      }
-
-      .examples {
-        display: grid;
-        gap: 0.75rem;
-      }
-
-      .example-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1rem 1.25rem;
-        background: var(--bg-subtle);
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        text-decoration: none;
-        transition: all 0.15s ease;
-      }
-
-      .example-card:hover {
-        border-color: var(--accent);
-        background: rgba(59, 130, 246, 0.05);
-      }
-
-      .example-card .name {
-        font-weight: 500;
-        color: var(--text);
-      }
-
-      .example-card .desc {
-        font-size: 0.875rem;
-        color: var(--text-muted);
-      }
-
-      .example-card .arrow {
-        color: var(--text-muted);
-        transition: transform 0.15s ease;
-      }
-
-      .example-card:hover .arrow {
-        transform: translateX(4px);
-        color: var(--accent);
-      }
-
-      .features {
-        display: grid;
-        gap: 1rem;
-      }
-
-      .feature {
-        display: flex;
-        gap: 0.75rem;
-      }
-
-      .feature-icon {
-        flex-shrink: 0;
-        width: 1.5rem;
-        height: 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--green);
-      }
-
-      .feature-text {
-        color: var(--text-muted);
-        font-size: 0.9375rem;
-      }
-
-      .feature-text strong {
-        color: var(--text);
-        font-weight: 500;
-      }
-
-      .api-grid {
-        display: grid;
-        gap: 1.5rem;
-      }
-
-      .api-item {
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        overflow: hidden;
-      }
-
-      .api-item h3 {
-        padding: 0.75rem 1rem;
-        background: var(--bg-subtle);
-        border-bottom: 1px solid var(--border);
-        margin: 0;
-        color: var(--text);
-        font-family: "JetBrains Mono", monospace;
-        font-size: 0.875rem;
-      }
-
-      .api-item pre {
-        margin: 0;
-        border: none;
-        border-radius: 0;
-      }
-
-      .api-item p {
-        padding: 0.75rem 1rem;
-        margin: 0;
-        font-size: 0.875rem;
-        border-top: 1px solid var(--border);
-      }
-
-      .demo-label {
-        margin-bottom: 0.5rem;
-        color: var(--text-muted);
-        font-size: 0.875rem;
-      }
-
-      .demo {
-        background: var(--bg-subtle);
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        padding: 1.5rem;
-      }
-
-      .demo my-counter {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-      }
-
-      .demo my-counter p {
-        margin: 0;
-        font-family: "JetBrains Mono", monospace;
-      }
-
-      .demo my-counter button {
-        padding: 0.5rem 1rem;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 0.375rem;
-        color: var(--text);
-        font-family: inherit;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      .demo my-counter button:hover {
-        border-color: var(--accent);
-        background: rgba(59, 130, 246, 0.1);
-      }
-
-      .install-tabs {
-        display: flex;
-        gap: 0.25rem;
-        margin-bottom: 0.5rem;
-      }
-
-      .install-tab {
-        padding: 0.375rem 0.75rem;
-        background: transparent;
-        border: 1px solid var(--border);
-        border-radius: 0.375rem;
-        color: var(--text-muted);
-        font-family: inherit;
-        font-size: 0.8125rem;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      .install-tab:hover {
-        color: var(--text);
-        border-color: var(--text-muted);
-      }
-
-      .install-tab.active {
-        background: var(--bg-subtle);
-        border-color: var(--accent);
-        color: var(--text);
-      }
-
-      .install-cmd {
-        margin-bottom: 0;
-        position: relative;
-      }
-
-      .code-wrapper {
-        position: relative;
-      }
-
-      .code-wrapper pre {
-        margin-bottom: 0;
-      }
-
-      .copy-btn {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        padding: 0.375rem 0.625rem;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 0.375rem;
-        color: var(--text-muted);
-        font-family: inherit;
-        font-size: 0.75rem;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        opacity: 0;
-      }
-
-      .code-wrapper:hover .copy-btn,
-      .install-cmd:hover .copy-btn,
-      pre:hover .copy-btn {
-        opacity: 1;
-      }
-
-      .copy-btn:hover {
-        color: var(--text);
-        border-color: var(--accent);
-      }
-
-      .copy-btn.copied {
-        color: var(--green);
-        border-color: var(--green);
-      }
-
-      footer {
-        margin-top: 4rem;
-        padding-top: 2rem;
-        border-top: 1px solid var(--border);
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.875rem;
-      }
-
-      footer a {
-        color: var(--text);
-        text-decoration: none;
-      }
-
-      footer a:hover {
-        color: var(--accent);
-      }
-
-      @media (max-width: 480px) {
-        .container {
-          padding: 2rem 1rem;
-        }
-
-        h1 {
-          font-size: 2.25rem;
-        }
-
-        .badges {
-          gap: 0.5rem;
-        }
-
-        .links {
-          flex-direction: column;
-        }
-
-        a.btn {
-          justify-content: center;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="./styles.css" />
+
+    <!-- Prism.js for syntax highlighting -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css"
+    />
   </head>
+
   <body>
     <div class="container">
+      <!-- Header -->
       <header>
         <img
           src="./assets/logo.svg"
@@ -505,6 +45,7 @@
         </div>
       </header>
 
+      <!-- Navigation Links -->
       <header>
         <div class="links">
           <a href="https://github.com/elbywan/balises" class="btn github">
@@ -539,6 +80,7 @@
         </div>
       </header>
 
+      <!-- Install Section -->
       <section>
         <h2>Install</h2>
         <div class="install-tabs">
@@ -549,64 +91,35 @@
         </div>
         <pre
           class="install-cmd"
-        ><code><span class="function">npm</span> install balises</code><button class="copy-btn">Copy</button></pre>
+        ><code class="language-bash" data-code="install"></code><button class="copy-btn">Copy</button></pre>
       </section>
 
+      <!-- Quick Start Section -->
       <section>
         <h2>Quick Start</h2>
         <div class="code-wrapper">
-          <pre><code><span class="keyword">import</span> { html, signal } <span class="keyword">from</span> <span class="string">'balises'</span>;
-
-<span class="keyword">const</span> <span class="variable">count</span> = <span class="function">signal</span>(<span class="number">0</span>);
-
-<span class="keyword">const</span> <span class="variable">app</span> = html<span class="string">`
-  &lt;<span class="tag">button</span> <span class="attr">@click</span>=${() => count.value++}&gt;
-    Clicked: ${count}
-  &lt;/<span class="tag">button</span>&gt;
-`</span>;
-
-document.body.<span class="function">appendChild</span>(app.<span class="function">render</span>().fragment);</code></pre>
+          <pre><code class="language-javascript" data-code="quickstart"></code></pre>
           <button class="copy-btn">Copy</button>
         </div>
       </section>
 
+      <!-- Web Component Section -->
       <section>
         <h2>Web Component</h2>
         <p>Encapsulate state and rendering in a custom element:</p>
         <div class="code-wrapper">
-          <pre><code><span class="keyword">import</span> { html, Signal, computed } <span class="keyword">from</span> <span class="string">'balises'</span>;
-
-<span class="keyword">class</span> <span class="type">MyCounter</span> <span class="keyword">extends</span> <span class="type">HTMLElement</span> {
-  #count = <span class="keyword">new</span> <span class="type">Signal</span>(<span class="number">0</span>);
-  #dispose;
-
-  <span class="function">connectedCallback</span>() {
-    <span class="keyword">const</span> <span class="variable">double</span> = <span class="function">computed</span>(() =&gt; <span class="keyword">this</span>.#count.value * <span class="number">2</span>);
-
-    <span class="keyword">const</span> { fragment, dispose } = html<span class="string">`
-      &lt;<span class="tag">p</span>&gt;Count: ${this.#count} (doubled: ${double})&lt;/<span class="tag">p</span>&gt;
-      &lt;<span class="tag">button</span> <span class="attr">@click</span>=${() =&gt; this.#count.value++}&gt;+1&lt;/<span class="tag">button</span>&gt;
-      &lt;<span class="tag">button</span> <span class="attr">@click</span>=${() =&gt; this.#count.value = 0}&gt;Reset&lt;/<span class="tag">button</span>&gt;
-    `</span>.<span class="function">render</span>();
-
-    <span class="keyword">this</span>.#dispose = dispose;
-    <span class="keyword">this</span>.<span class="function">appendChild</span>(fragment);
-  }
-
-  <span class="function">disconnectedCallback</span>() {
-    <span class="keyword">this</span>.#dispose?.();
-  }
-}
-
-customElements.<span class="function">define</span>(<span class="string">'my-counter'</span>, <span class="type">MyCounter</span>);</code></pre>
+          <pre><code class="language-javascript" data-code="webcomponent"></code></pre>
           <button class="copy-btn">Copy</button>
         </div>
+
+        <br />
         <p class="demo-label">Try it:</p>
         <div class="demo">
           <my-counter></my-counter>
         </div>
       </section>
 
+      <!-- Features Section -->
       <section>
         <h2>Features</h2>
         <div class="features">
@@ -628,6 +141,7 @@ customElements.<span class="function">define</span>(<span class="string">'my-cou
               changed, no virtual DOM diffing
             </div>
           </div>
+
           <div class="feature">
             <div class="feature-icon">
               <svg
@@ -646,6 +160,7 @@ customElements.<span class="function">define</span>(<span class="string">'my-cou
               tracking with lazy evaluation
             </div>
           </div>
+
           <div class="feature">
             <div class="feature-icon">
               <svg
@@ -664,6 +179,7 @@ customElements.<span class="function">define</span>(<span class="string">'my-cou
               <code>each()</code> with DOM node recycling
             </div>
           </div>
+
           <div class="feature">
             <div class="feature-icon">
               <svg
@@ -682,6 +198,7 @@ customElements.<span class="function">define</span>(<span class="string">'my-cou
               browsers with ES modules
             </div>
           </div>
+
           <div class="feature">
             <div class="feature-icon">
               <svg
@@ -703,16 +220,15 @@ customElements.<span class="function">define</span>(<span class="string">'my-cou
         </div>
       </section>
 
+      <!-- API Section -->
       <section>
         <h2>API</h2>
         <div class="api-grid">
+          <!-- signal() -->
           <div class="api-item">
             <h3>signal(value)</h3>
             <div class="code-wrapper">
-              <pre><code><span class="keyword">const</span> <span class="variable">count</span> = <span class="function">signal</span>(<span class="number">0</span>);
-count.value;      <span class="comment">// read: 0</span>
-count.value = <span class="number">5</span>;  <span class="comment">// write: triggers updates</span>
-count.<span class="function">subscribe</span>(() => <span class="function">console.log</span>(<span class="string">'changed!'</span>));</code></pre>
+              <pre><code class="language-javascript" data-code="signal"></code></pre>
               <button class="copy-btn">Copy</button>
             </div>
             <p>
@@ -721,12 +237,11 @@ count.<span class="function">subscribe</span>(() => <span class="function">conso
             </p>
           </div>
 
+          <!-- computed() -->
           <div class="api-item">
             <h3>computed(fn)</h3>
             <div class="code-wrapper">
-              <pre><code><span class="keyword">const</span> <span class="variable">double</span> = <span class="function">computed</span>(() => count.value * <span class="number">2</span>);
-double.value;  <span class="comment">// auto-updates when count changes</span>
-double.<span class="function">dispose</span>();  <span class="comment">// cleanup when done</span></code></pre>
+              <pre><code class="language-javascript" data-code="computed"></code></pre>
               <button class="copy-btn">Copy</button>
             </div>
             <p>
@@ -735,12 +250,11 @@ double.<span class="function">dispose</span>();  <span class="comment">// cleanu
             </p>
           </div>
 
+          <!-- store() -->
           <div class="api-item">
             <h3>store(object)</h3>
             <div class="code-wrapper">
-              <pre><code><span class="keyword">const</span> <span class="variable">state</span> = <span class="function">store</span>({ count: <span class="number">0</span>, user: { name: <span class="string">'Alice'</span> } });
-state.count++;         <span class="comment">// reactive</span>
-state.user.name = <span class="string">'Bob'</span>; <span class="comment">// nested objects too</span></code></pre>
+              <pre><code class="language-javascript" data-code="store"></code></pre>
               <button class="copy-btn">Copy</button>
             </div>
             <p>
@@ -749,17 +263,11 @@ state.user.name = <span class="string">'Bob'</span>; <span class="comment">// ne
             </p>
           </div>
 
+          <!-- html`...` -->
           <div class="api-item">
             <h3>html`...`</h3>
             <div class="code-wrapper">
-              <pre><code><span class="keyword">const</span> <span class="variable">tmpl</span> = html<span class="string">`
-  &lt;<span class="tag">div</span> <span class="attr">class</span>=${className}&gt;      </span><span class="comment">&lt;!-- reactive attribute --&gt;</span><span class="string">
-    ${text}                      </span><span class="comment">&lt;!-- reactive text --&gt;</span><span class="string">
-    &lt;<span class="tag">input</span> <span class="attr">.value</span>=${value} /&gt;   </span><span class="comment">&lt;!-- property binding --&gt;</span><span class="string">
-    &lt;<span class="tag">button</span> <span class="attr">@click</span>=${handler}&gt;  </span><span class="comment">&lt;!-- event binding --&gt;</span><span class="string">
-  &lt;/<span class="tag">div</span>&gt;
-`</span>;
-<span class="keyword">const</span> { fragment, dispose } = tmpl.<span class="function">render</span>();</code></pre>
+              <pre><code class="language-javascript" data-code="html"></code></pre>
               <button class="copy-btn">Copy</button>
             </div>
             <p>
@@ -768,17 +276,11 @@ state.user.name = <span class="string">'Bob'</span>; <span class="comment">// ne
             </p>
           </div>
 
+          <!-- each() -->
           <div class="api-item">
             <h3>each(list, keyFn?, renderFn)</h3>
             <div class="code-wrapper">
-              <pre><code><span class="comment">// With key function (recommended)</span>
-${<span class="function">each</span>(items, i => i.id, i => html<span class="string">`&lt;<span class="tag">li</span>&gt;${i.name}&lt;/<span class="tag">li</span>&gt;`</span>)}
-
-<span class="comment">// Without key (uses object reference or index)</span>
-${<span class="function">each</span>(items, i => html<span class="string">`&lt;<span class="tag">li</span>&gt;${i.name}&lt;/<span class="tag">li</span>&gt;`</span>)}
-
-<span class="comment">// With getter function (for stores)</span>
-${<span class="function">each</span>(() => state.items, i => html<span class="string">`&lt;<span class="tag">li</span>&gt;${i}&lt;/<span class="tag">li</span>&gt;`</span>)}</code></pre>
+              <pre><code class="language-javascript" data-code="each"></code></pre>
               <button class="copy-btn">Copy</button>
             </div>
             <p>
@@ -787,14 +289,11 @@ ${<span class="function">each</span>(() => state.items, i => html<span class="st
             </p>
           </div>
 
+          <!-- batch() -->
           <div class="api-item">
             <h3>batch(fn)</h3>
             <div class="code-wrapper">
-              <pre><code><span class="function">batch</span>(() => {
-  count.value = <span class="number">1</span>;
-  name.value = <span class="string">'Alice'</span>;
-  items.value = [...items.value, newItem];
-}); <span class="comment">// subscribers notified once at the end</span></code></pre>
+              <pre><code class="language-javascript" data-code="batch"></code></pre>
               <button class="copy-btn">Copy</button>
             </div>
             <p>
@@ -804,6 +303,7 @@ ${<span class="function">each</span>(() => state.items, i => html<span class="st
         </div>
       </section>
 
+      <!-- Examples Section -->
       <section id="examples">
         <h2>Examples</h2>
         <div class="examples">
@@ -814,6 +314,7 @@ ${<span class="function">each</span>(() => state.items, i => html<span class="st
             </div>
             <span class="arrow">&rarr;</span>
           </a>
+
           <a href="./examples/todo-list/" class="example-card">
             <div>
               <div class="name">Todo List</div>
@@ -821,6 +322,7 @@ ${<span class="function">each</span>(() => state.items, i => html<span class="st
             </div>
             <span class="arrow">&rarr;</span>
           </a>
+
           <a href="./examples/timer/" class="example-card">
             <div>
               <div class="name">Timer</div>
@@ -828,6 +330,7 @@ ${<span class="function">each</span>(() => state.items, i => html<span class="st
             </div>
             <span class="arrow">&rarr;</span>
           </a>
+
           <a href="./examples/pokemon/" class="example-card">
             <div>
               <div class="name">Pokemon</div>
@@ -838,73 +341,200 @@ ${<span class="function">each</span>(() => state.items, i => html<span class="st
         </div>
       </section>
 
+      <!-- Footer -->
       <footer>
         <p>
           MIT License &middot; Made by
           <a href="https://github.com/elbywan">@elbywan</a>
         </p>
+        <p style="margin-top: 0.5rem; opacity: 0.7; font-size: 0.9rem">
+          This page is built with balises &middot;
+          <a href="https://github.com/elbywan/balises/blob/main/docs/index.html"
+            >View Source</a
+          >
+        </p>
       </footer>
     </div>
+
+    <!-- Prism.js for syntax highlighting -->
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+
+    <!-- App functionality -->
     <script type="module">
-      import { html, Signal, computed } from "./examples/balises.esm.js";
+      import { html, signal, computed, store } from "./examples/balises.esm.js";
 
-      class MyCounter extends HTMLElement {
-        #count = new Signal(0);
-        #dispose;
+      // Import the counter demo (this makes it work)
+      import "./counter-demo.js";
 
-        connectedCallback() {
-          const double = computed(() => this.#count.value * 2);
-
-          const { fragment, dispose } = html`
-            <p>Count: ${this.#count} (doubled: ${double})</p>
-            <button @click=${() => this.#count.value++}>+1</button>
-            <button @click=${() => (this.#count.value = 0)}>Reset</button>
-          `.render();
-
-          this.#dispose = dispose;
-          this.appendChild(fragment);
-        }
-
-        disconnectedCallback() {
-          this.#dispose?.();
-        }
-      }
-
-      customElements.define("my-counter", MyCounter);
-
-      // Install tabs
-      const cmds = {
+      // Reactive state for install command
+      const selectedPkg = signal("npm");
+      const installCommands = {
         npm: "npm install balises",
         yarn: "yarn add balises",
         pnpm: "pnpm add balises",
         bun: "bun add balises",
       };
-      document.querySelectorAll(".install-tab").forEach((tab) => {
-        tab.addEventListener("click", () => {
-          document
-            .querySelectorAll(".install-tab")
-            .forEach((t) => t.classList.remove("active"));
-          tab.classList.add("active");
-          const pkg = tab.dataset.pkg;
-          document.querySelector(".install-cmd code").innerHTML =
-            `<span class="function">${pkg}</span> ${cmds[pkg].split(" ").slice(1).join(" ")}`;
-        });
+      const installCmd = computed(() => installCommands[selectedPkg.value]);
+
+      // Convert CODE_EXAMPLES to a reactive store!
+      const codeExamples = store({
+        install: `npm install balises`,
+        quickstart: null, // Will be loaded from quickstart-demo.js
+        webcomponent: null, // Will be loaded from counter-demo.js
+        signal: `const count = signal(0);
+count.value;      // read: 0
+count.value = 5;  // write: triggers updates
+count.subscribe(() => console.log('changed!'));`,
+        computed: `const double = computed(() => count.value * 2);
+double.value;     // auto-updates when count changes
+double.dispose(); // cleanup when done`,
+        store: `const state = store({ count: 0, user: { name: 'Alice' } });
+state.count++;           // reactive
+state.user.name = 'Bob'; // nested objects too`,
+        html: `const tmpl = html\`
+  <div class=\${className}>       <!-- reactive attribute -->
+    \${text}                      <!-- reactive text -->
+    <input .value=\${value} />    <!-- property binding -->
+    <button @click=\${handler}>   <!-- event binding -->
+  </div>
+\`;
+const { fragment, dispose } = tmpl.render();`,
+        each: `// With key function (recommended)
+\${each(items, i => i.id, i => html\`<li>\${i.name}</li>\`)}
+
+// Without key (uses object reference or index)
+\${each(items, i => html\`<li>\${i.name}</li>\`)}
+
+// With getter function (for stores)
+\${each(() => state.items, i => html\`<li>\${i}</li>\`)}`,
+        batch: `batch(() => {
+  count.value = 1;
+  name.value = 'Alice';
+  items.value = [...items.value, newItem];
+}); // subscribers notified once at the end`,
       });
 
-      // Copy buttons
-      document.querySelectorAll(".copy-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const code = btn.closest(".code-wrapper, pre").querySelector("code");
-          const text = code.textContent;
-          await navigator.clipboard.writeText(text);
-          btn.textContent = "Copied!";
-          btn.classList.add("copied");
-          setTimeout(() => {
-            btn.textContent = "Copy";
-            btn.classList.remove("copied");
-          }, 2000);
+      // Also expose on window for backward compatibility (if needed)
+      window.CODE_EXAMPLES = codeExamples;
+
+      // Fetch and load demo code reactively
+      async function loadDemoCode() {
+        try {
+          // Load quickstart demo
+          const quickstartResponse = await fetch("./quickstart-demo.js");
+          const quickstartCode = await quickstartResponse.text();
+          // Update the store - this will trigger reactive updates!
+          codeExamples.quickstart = quickstartCode.replace(
+            "./examples/balises.esm.js",
+            "balises",
+          );
+
+          // Load web component demo
+          const webcomponentResponse = await fetch("./counter-demo.js");
+          const webcomponentCode = await webcomponentResponse.text();
+          // Update the store - this will trigger reactive updates!
+          codeExamples.webcomponent = webcomponentCode.replace(
+            "./examples/balises.esm.js",
+            "balises",
+          );
+        } catch (error) {
+          console.error("Failed to load demo code:", error);
+        }
+      }
+
+      // Initialize all UI functionality when DOM is ready
+      function initializeUI() {
+        // Start loading demo code (async)
+        loadDemoCode();
+
+        // Reactively populate code elements when codeExamples change
+        document.querySelectorAll("code[data-code]").forEach((codeEl) => {
+          const exampleKey = codeEl.dataset.code;
+
+          // Create a computed value that tracks this specific example
+          const exampleCode = computed(() => codeExamples[exampleKey]);
+
+          // Subscribe to changes and update the DOM
+          exampleCode.subscribe(() => {
+            if (exampleCode.value) {
+              codeEl.textContent = exampleCode.value;
+              Prism.highlightElement(codeEl);
+            }
+          });
+
+          // Set initial value
+          if (exampleCode.value) {
+            codeEl.textContent = exampleCode.value;
+            Prism.highlightElement(codeEl);
+          }
         });
-      });
+
+        // Install tabs functionality - use balises for reactive updates
+        const installCodeEl = document.querySelector(".install-cmd code");
+
+        // Subscribe to installCmd changes and update the DOM
+        installCmd.subscribe(() => {
+          installCodeEl.textContent = installCmd.value;
+          Prism.highlightElement(installCodeEl);
+        });
+
+        // Set initial value
+        installCodeEl.textContent = installCmd.value;
+        Prism.highlightElement(installCodeEl);
+
+        // Add click handlers to tabs
+        document.querySelectorAll(".install-tab").forEach((tab) => {
+          tab.addEventListener("click", () => {
+            // Update all tab classes
+            document
+              .querySelectorAll(".install-tab")
+              .forEach((t) => t.classList.remove("active"));
+            tab.classList.add("active");
+
+            // Update signal - this will trigger the subscription above
+            selectedPkg.value = tab.dataset.pkg;
+          });
+        });
+
+        // Copy buttons functionality - using balises signals for state
+        document.querySelectorAll(".copy-btn").forEach((btn) => {
+          const copied = signal(false);
+
+          // Subscribe to state changes
+          copied.subscribe(() => {
+            if (copied.value) {
+              btn.textContent = "Copied!";
+              btn.classList.add("copied");
+            } else {
+              btn.textContent = "Copy";
+              btn.classList.remove("copied");
+            }
+          });
+
+          btn.addEventListener("click", async () => {
+            const code = btn
+              .closest(".code-wrapper, pre")
+              .querySelector("code");
+            const text = code.textContent;
+            await navigator.clipboard.writeText(text);
+
+            // Update signal - this will trigger the subscription
+            copied.value = true;
+            setTimeout(() => {
+              copied.value = false;
+            }, 2000);
+          });
+        });
+      }
+
+      // Initialize when DOM is ready
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initializeUI);
+      } else {
+        initializeUI();
+      }
     </script>
   </body>
 </html>

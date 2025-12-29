@@ -4,143 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Counter - balises</title>
+    <link rel="icon" type="image/svg+xml" href="../../assets/logo-icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        --bg: #0a0a0b;
-        --bg-subtle: #111113;
-        --border: #1f1f23;
-        --text: #ededef;
-        --text-muted: #8b8b8d;
-        --accent: #3b82f6;
-        --accent-hover: #60a5fa;
-      }
-
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family:
-          "Inter",
-          -apple-system,
-          BlinkMacSystemFont,
-          sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        line-height: 1.6;
-        min-height: 100vh;
-      }
-
-      .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 3rem 1.5rem;
-      }
-
-      header {
-        text-align: center;
-        margin-bottom: 2rem;
-      }
-
-      h1 {
-        font-size: 2rem;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        margin-bottom: 0.5rem;
-      }
-
-      .tagline {
-        color: var(--text-muted);
-        font-size: 1rem;
-      }
-
-      x-counter {
-        display: block;
-        background: var(--bg-subtle);
-        border: 1px solid var(--border);
-        padding: 2rem;
-        border-radius: 0.5rem;
-      }
-
-      .counter h2 {
-        margin-top: 0;
-        margin-bottom: 1rem;
-        color: var(--text);
-        font-size: 1.25rem;
-        font-weight: 500;
-      }
-
-      .counter .value {
-        font-size: 3rem;
-        font-family: "JetBrains Mono", monospace;
-        text-align: center;
-        padding: 1rem;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-      }
-
-      .counter .buttons {
-        display: flex;
-        gap: 0.5rem;
-        justify-content: center;
-      }
-
-      .counter button {
-        padding: 0.625rem 1.25rem;
-        font-size: 1rem;
-        cursor: pointer;
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        background: var(--bg-subtle);
-        color: var(--text);
-        font-family: inherit;
-        transition: all 0.15s ease;
-      }
-
-      .counter button:hover {
-        border-color: var(--accent);
-        background: rgba(59, 130, 246, 0.1);
-      }
-
-      .nav-links {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 2rem;
-      }
-
-      .back-link,
-      .source-link {
-        color: var(--text-muted);
-        text-decoration: none;
-        font-size: 0.875rem;
-        transition: color 0.15s ease;
-      }
-
-      .back-link:hover,
-      .source-link:hover {
-        color: var(--accent);
-      }
-
-      @media (max-width: 480px) {
-        .container {
-          padding: 2rem 1rem;
-        }
-
-        h1 {
-          font-size: 1.5rem;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="../example.css" />
   </head>
   <body>
     <div class="container">

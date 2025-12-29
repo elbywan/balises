@@ -1,0 +1,92 @@
+:root {
+  --bg: #0a0a0b;
+  --bg-subtle: #111113;
+  --bg-elevated: #16161a;
+  --border: #1f1f23;
+  --text: #ededef;
+  --text-muted: #8b8b8d;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --code-bg: #16161a;
+  --green: #22c55e;
+  --red: #ef4444;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+/* Navigation links */
+.nav-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
+}
+
+.back-link,
+.source-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.back-link:hover,
+.source-link:hover {
+  color: var(--accent);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .container {
+    padding: 2rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+}

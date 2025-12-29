@@ -1,26 +1,17 @@
-<svg width="140" height="70" viewBox="0 0 140 70" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <filter id="rough" filterUnits="userSpaceOnUse" x="0" y="0" width="140" height="70">
-      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" result="noise"/>
-      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-  </defs>
-  <!-- < bracket -->
-  <path d="M 28 12 C 24 16, 12 26, 8 35 C 12 44, 24 54, 28 58" 
-        stroke="#3b82f6" stroke-width="3.5" fill="none" stroke-linecap="round" filter="url(#rough)"/>
-  <!-- B: vertical stem (with slight curve for hand-drawn feel) -->
-  <path d="M 50 14 C 49 28, 51 44, 50 58" 
-        stroke="#ededef" stroke-width="3" fill="none" stroke-linecap="round" filter="url(#rough)"/>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="64" height="64" fill="#1e293b"/>
+  <!-- Simplified B/> symbol -->
+  <!-- B: vertical stem -->
+  <path d="M 18 16 L 18 48" 
+        stroke="#ededef" stroke-width="4" fill="none" stroke-linecap="round"/>
   <!-- B: top caret > -->
-  <path d="M 50 16 L 72 26 L 50 36" 
-        stroke="#ededef" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)"/>
+  <path d="M 18 20 L 32 28 L 18 36" 
+        stroke="#ededef" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- B: bottom caret > -->
-  <path d="M 50 36 L 76 47 L 50 58" 
-        stroke="#ededef" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)"/>
+  <path d="M 18 36 L 36 44 L 18 52" 
+        stroke="#ededef" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- / slash -->
-  <path d="M 86 58 C 90 46, 96 28, 102 12" 
-        stroke="#3b82f6" stroke-width="3.5" fill="none" stroke-linecap="round" filter="url(#rough)"/>
-  <!-- > bracket (mirrors the < bracket) -->
-  <path d="M 112 12 C 116 16, 128 26, 132 35 C 128 44, 116 54, 112 58" 
-        stroke="#3b82f6" stroke-width="3.5" fill="none" stroke-linecap="round" filter="url(#rough)"/>
+  <path d="M 40 48 L 50 16" 
+        stroke="#3b82f6" stroke-width="4" fill="none" stroke-linecap="round"/>
 </svg>

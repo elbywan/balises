@@ -4,80 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pokemon Viewer - balises</title>
+    <link rel="icon" type="image/svg+xml" href="../../assets/logo-icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="../example.css" />
     <style>
-      :root {
-        --bg: #0a0a0b;
-        --bg-subtle: #111113;
-        --bg-elevated: #16161a;
-        --border: #1f1f23;
-        --text: #ededef;
-        --text-muted: #8b8b8d;
-        --accent: #3b82f6;
-        --accent-hover: #60a5fa;
-        --green: #22c55e;
-        --red: #ef4444;
-      }
-
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family:
-          "Inter",
-          -apple-system,
-          BlinkMacSystemFont,
-          sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        line-height: 1.6;
-        min-height: 100vh;
-      }
-
+      /* Override container width for pokemon viewer */
       .container {
         max-width: 800px;
-        margin: 0 auto;
-        padding: 3rem 1.5rem;
       }
 
-      header {
-        text-align: center;
-        margin-bottom: 2rem;
-      }
-
-      h1 {
-        font-size: 2rem;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        margin-bottom: 0.5rem;
-      }
-
-      .tagline {
-        color: var(--text-muted);
-        font-size: 1rem;
-      }
-
+      /* Override padding for pokemon viewer */
       x-pokemon-viewer {
-        display: block;
-        background: var(--bg-subtle);
-        border: 1px solid var(--border);
         padding: 1.5rem;
-        border-radius: 0.5rem;
-      }
-
-      h2 {
-        margin: 0;
-        color: var(--text);
-        font-size: 1.25rem;
-        font-weight: 500;
       }
 
       /* Header with language selector */
@@ -582,7 +525,7 @@
       }
 
       /* Buttons */
-      .pokemon-viewer button {
+      .pokemon-viewer button:not(.icon-btn):not(.remove-btn):not(.shuffle-btn) {
         padding: 0.5rem 1rem;
         font-size: 1rem;
         cursor: pointer;
@@ -604,32 +547,9 @@
         cursor: not-allowed;
       }
 
-      .nav-links {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 2rem;
-      }
-
-      .back-link,
-      .source-link {
-        color: var(--text-muted);
-        text-decoration: none;
-        font-size: 0.875rem;
-        transition: color 0.15s ease;
-      }
-
-      .back-link:hover,
-      .source-link:hover {
-        color: var(--accent);
-      }
-
       @media (max-width: 480px) {
-        .container {
-          padding: 2rem 1rem;
-        }
-
-        h1 {
-          font-size: 1.5rem;
+        .pokemon-viewer .pokemon-display {
+          flex-direction: column;
         }
       }
     </style>

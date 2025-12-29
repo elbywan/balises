@@ -21,6 +21,8 @@ node_modules
 
 # Built examples
 /examples/**/*.js
+/examples/base.css
+/examples/example.css
 
 # Website build output
 /_site

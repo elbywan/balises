@@ -11,11 +11,11 @@
   
   <!-- B made of carets (in blue) -->
   <path d="M 50 14 C 49 28, 51 44, 50 58" 
-        stroke="#2563eb" stroke-width="2.5" fill="none" stroke-linecap="round" filter="url(#rough)"/>
+        stroke="#2563eb" stroke-width="4" fill="none" stroke-linecap="round" filter="url(#rough)"/>
   <path d="M 50 16 L 70 26 L 50 36" 
-        stroke="#2563eb" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)"/>
+        stroke="#2563eb" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)"/>
   <path d="M 50 36 L 74 47 L 50 58" 
-        stroke="#2563eb" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)"/>
+        stroke="#2563eb" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#rough)"/>
   
   <!-- a -->
   <path d="M 90 40 C 86 36, 86 50, 94 52 C 102 54, 106 46, 104 40 C 102 34, 92 34, 90 40 M 106 36 C 105 42, 107 48, 106 54" 

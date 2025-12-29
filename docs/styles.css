@@ -1,0 +1,423 @@
+@import "./base.css";
+
+/* Homepage specific overrides */
+header {
+  margin-bottom: 4rem;
+}
+
+h1 {
+  font-size: 3rem;
+}
+
+.tagline {
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+
+.badges {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.badge strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+section {
+  margin-bottom: 3rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+p {
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.875rem;
+}
+
+p code {
+  background: var(--code-bg);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+/* Links and buttons */
+.links {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+a.btn:hover {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+a.btn.github {
+  background: #1f3d2a;
+  border-color: #2a5038;
+}
+
+a.btn.github:hover {
+  background: #2a5038;
+  border-color: #358545;
+}
+
+a.btn.npm {
+  background: #4a2222;
+  border-color: #6b3030;
+}
+
+a.btn.npm:hover {
+  background: #6b3030;
+  border-color: #8b4040;
+}
+
+a.btn.examples {
+  background: #1e3a5f;
+  border-color: #2a4a75;
+}
+
+a.btn.examples:hover {
+  background: #2a4a75;
+  border-color: #3b5a8a;
+}
+
+/* Examples section */
+.examples {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.example-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.example-card:hover {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.example-card .name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.example-card .desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.example-card .arrow {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.example-card:hover .arrow {
+  transform: translateX(4px);
+  color: var(--accent);
+}
+
+/* Features section */
+.features {
+  display: grid;
+  gap: 1rem;
+}
+
+.feature {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.feature-icon {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green);
+}
+
+.feature-text {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.feature-text strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* API section */
+.api-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.api-item {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.api-item h3 {
+  padding: 0.75rem 1rem;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  color: var(--text);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.875rem;
+}
+
+.api-item pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.api-item p {
+  padding: 0.75rem 1rem;
+  margin: 0;
+  font-size: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Demo section */
+.demo-label {
+  margin-bottom: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.demo {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+.demo my-counter {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.demo my-counter p {
+  margin: 0;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.demo my-counter button {
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.demo my-counter button:hover {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Install section */
+.install-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.install-tab {
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.install-tab:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.install-tab.active {
+  background: var(--bg-subtle);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.install-cmd {
+  margin-bottom: 0;
+  position: relative;
+}
+
+/* Code wrapper with copy button */
+.code-wrapper {
+  position: relative;
+}
+
+.code-wrapper pre {
+  margin-bottom: 0;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0;
+}
+
+.code-wrapper:hover .copy-btn,
+.install-cmd:hover .copy-btn,
+pre:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.copy-btn.copied {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* Footer */
+footer {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+footer a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+footer a:hover {
+  color: var(--accent);
+}
+
+/* Prism.js overrides */
+pre[class*="language-"],
+code[class*="language-"] {
+  background: var(--code-bg) !important;
+  color: var(--text) !important;
+  text-shadow: none !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 0.875rem !important;
+}
+
+pre[class*="language-"] {
+  padding: 1.25rem !important;
+  margin: 0 !important;
+  border: 1px solid var(--border) !important;
+  overflow-x: auto !important;
+}
+
+:not(pre) > code[class*="language-"] {
+  background: var(--code-bg) !important;
+  padding: 0.125rem 0.375rem !important;
+  border-radius: 0.25rem !important;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  h1 {
+    font-size: 2.25rem;
+  }
+
+  .badges {
+    gap: 0.5rem;
+  }
+
+  .links {
+    flex-direction: column;
+  }
+
+  a.btn {
+    justify-content: center;
+  }
+}

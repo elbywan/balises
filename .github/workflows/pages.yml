@@ -36,13 +36,20 @@ jobs:
         run: yarn build
 
       - name: Build examples
-        run: yarn examples:build
+        run: |
+          yarn examples:build
 
       - name: Prepare pages
         run: |
-          mkdir -p _site
+          mkdir -p _site/assets
           cp docs/index.html _site/
+          cp docs/*.css _site/
+          cp docs/quickstart-demo.js _site/
+          cp docs/counter-demo.js _site/
+          cp assets/logo.svg _site/assets/
+          cp assets/logo-icon.svg _site/assets/
           cp -r examples _site/examples
+          cp dist/balises.esm.js _site/examples/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
