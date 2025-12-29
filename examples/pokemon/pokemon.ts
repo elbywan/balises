@@ -279,6 +279,25 @@ export class PokemonViewerElement extends HTMLElement {
         0,
     );
 
+    // Computed values for localized type display
+    const mainTypeDisplay = computed(() =>
+      (this.#state.pokemon?.types ?? []).map((t) => {
+        const typeKey = t.type.name;
+        const found = this.#state.typeNames.find((t) => t.key === typeKey);
+        return { key: typeKey, name: found ? found.name : typeKey };
+      }),
+    );
+
+    const compareTypeDisplay = computed(() =>
+      (this.#state.comparePokemon?.types ?? []).map((t) => {
+        const typeKey = t.type.name;
+        const found = this.#state.compareTypeNames.find(
+          (t) => t.key === typeKey,
+        );
+        return { key: typeKey, name: found ? found.name : typeKey };
+      }),
+    );
+
     const renderType = (typeKey: string, displayName: string) => html`
       <span class="type-badge" data-type=${typeKey}>${displayName}</span>
     `;
@@ -488,13 +507,7 @@ export class PokemonViewerElement extends HTMLElement {
               </h3>
               <div class="types">
                 ${computed(() =>
-                  this.#state.typeNames.length > 0
-                    ? this.#state.typeNames.map((t) =>
-                        renderType(t.key, t.name),
-                      )
-                    : (this.#state.pokemon?.types ?? []).map((t) =>
-                        renderType(t.type.name, t.type.name),
-                      ),
+                  mainTypeDisplay.value.map((t) => renderType(t.key, t.name)),
                 )}
               </div>
               <div class="measurements">
@@ -550,15 +563,9 @@ export class PokemonViewerElement extends HTMLElement {
                               </h3>
                               <div class="types">
                                 ${computed(() =>
-                                  this.#state.compareTypeNames.length > 0
-                                    ? this.#state.compareTypeNames.map((t) =>
-                                        renderType(t.key, t.name),
-                                      )
-                                    : (
-                                        this.#state.comparePokemon?.types ?? []
-                                      ).map((t) =>
-                                        renderType(t.type.name, t.type.name),
-                                      ),
+                                  compareTypeDisplay.value.map((t) =>
+                                    renderType(t.key, t.name),
+                                  ),
                                 )}
                               </div>
                             `
