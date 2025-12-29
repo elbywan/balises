@@ -47,7 +47,8 @@ export class Computed<T> {
     this.#fn = undefined;
     const sources = this.#sources;
     for (let i = 0; i < sources.length; i++) {
-      sources[i]!.deleteTarget(this);
+      const source = sources[i];
+      if (source) source.deleteTarget(this);
     }
     this.#sources = [];
     this.#subs.length = 0;
@@ -68,7 +69,8 @@ export class Computed<T> {
       }
       // Different source - unlink old ones from this position
       for (let i = idx; i < sources.length; i++) {
-        sources[i]!.deleteTarget(this);
+        const source = sources[i];
+        if (source) source.deleteTarget(this);
       }
       sources.length = idx;
     }
@@ -167,7 +169,8 @@ export class Computed<T> {
       if (newLen < prevLen) {
         const sources = this.#sources;
         for (let i = newLen; i < prevLen; i++) {
-          sources[i]!.deleteTarget(this);
+          const source = sources[i];
+          if (source) source.deleteTarget(this);
         }
         sources.length = newLen;
       }
