@@ -4,8 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --expose-gc layers.mjs",
-    "start:self": "node --expose-gc layers.mjs --self"
+    "start": "node index.mjs",
+    "start:self": "node index.mjs --self",
+    "start:layers": "node index.mjs --scenario=layers",
+    "start:wide": "node index.mjs --scenario=wide",
+    "start:diamond": "node index.mjs --scenario=diamond",
+    "start:create": "node index.mjs --scenario=create",
+    "start:conditional": "node index.mjs --scenario=conditional",
+    "start:list": "node index.mjs --scenario=list"
   },
   "dependencies": {
     "@maverick-js/signals": "^6.0.0",
