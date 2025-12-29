@@ -24,6 +24,8 @@ export function removeFromArray<T>(array: T[], item: T): void {
 /**
  * A reactive value container. When the value changes, all dependent
  * computeds are marked dirty and subscribers are notified.
+ *
+ * Uses Object.is() for equality checks to correctly handle NaN values.
  */
 export class Signal<T> {
   #value: T;
@@ -40,7 +42,7 @@ export class Signal<T> {
   }
 
   set value(v: T) {
-    if (this.#value === v) return;
+    if (Object.is(this.#value, v)) return;
     this.#value = v;
 
     // Mark all dependent computeds as dirty

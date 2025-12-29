@@ -17,7 +17,7 @@ export function setContext(c: Computed<unknown> | null): void {
 
 /** Batching: defer subscriber notifications until batch completes */
 let batchDepth = 0;
-let batchQueue: Subscriber[] | null = null;
+let batchQueue: Set<Subscriber> | null = null;
 
 /**
  * Batch multiple signal updates into a single notification pass.
@@ -25,14 +25,14 @@ let batchQueue: Subscriber[] | null = null;
  */
 export function batch<T>(fn: () => T): T {
   batchDepth++;
-  if (batchDepth === 1) batchQueue = [];
+  if (batchDepth === 1) batchQueue = new Set();
   try {
     return fn();
   } finally {
     if (--batchDepth === 0) {
       const q = batchQueue!;
       batchQueue = null;
-      for (let i = 0; i < q.length; i++) q[i]!();
+      for (const sub of q) sub();
     }
   }
 }
@@ -44,10 +44,12 @@ export function isBatching(): boolean {
 
 /** Add a subscriber to the batch queue */
 export function enqueueBatch(sub: Subscriber): void {
-  batchQueue!.push(sub);
+  batchQueue!.add(sub);
 }
 
 /** Add multiple subscribers to the batch queue */
 export function enqueueBatchAll(subs: Subscriber[]): void {
-  batchQueue!.push(...subs);
+  for (let i = 0; i < subs.length; i++) {
+    batchQueue!.add(subs[i]!);
+  }
 }

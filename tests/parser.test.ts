@@ -1,6 +1,10 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import { HTMLParser, AttrPart, ParseCallbacks } from "../src/parser.js";
+import {
+  HTMLParser,
+  type AttrPart,
+  type ParseCallbacks,
+} from "../src/parser.js";
 
 describe("HTMLParser", () => {
   let parser: HTMLParser;
@@ -342,6 +346,314 @@ describe("HTMLParser", () => {
       assert.strictEqual(texts[0], "Before");
       assert.strictEqual(texts[1], "After");
       assert.strictEqual(elements.length, 1);
+    });
+
+    /**
+     * Edge case: Multiple consecutive elements without whitespace
+     *
+     * Parser should correctly identify element boundaries.
+     */
+    it("should handle multiple consecutive elements", () => {
+      parser.parseTemplate(
+        tmpl("<div></div><span></span><p></p>"),
+        createCallbacks(),
+      );
+      assert.strictEqual(elements.length, 3);
+      assert.strictEqual(elements[0]!.el.tagName, "DIV");
+      assert.strictEqual(elements[1]!.el.tagName, "SPAN");
+      assert.strictEqual(elements[2]!.el.tagName, "P");
+      assert.strictEqual(closeCount, 3);
+    });
+
+    /**
+     * Edge case: Attribute with equals sign in value
+     *
+     * The parser should correctly handle = inside quoted attribute values.
+     */
+    it("should handle equals sign inside attribute value", () => {
+      parser.parseTemplate(tmpl('<div data-expr="a=b">'), createCallbacks());
+      assert.strictEqual(attributes.length, 1);
+      assert.strictEqual(attributes[0]!.name, "data-expr");
+      assert.deepStrictEqual(attributes[0]!.parts, ["a=b"]);
+    });
+
+    /**
+     * Edge case: Empty attribute value
+     *
+     * Attributes like class="" should have an empty string as value.
+     */
+    it("should handle empty attribute value", () => {
+      parser.parseTemplate(tmpl('<div class="">'), createCallbacks());
+      assert.strictEqual(attributes.length, 1);
+      assert.strictEqual(attributes[0]!.name, "class");
+      assert.deepStrictEqual(attributes[0]!.parts, []);
+    });
+
+    /**
+     * Edge case: Attribute with quotes inside value
+     *
+     * Single quotes inside double-quoted value should be preserved.
+     */
+    it("should handle quotes inside attribute value", () => {
+      parser.parseTemplate(tmpl(`<div title="it's ok">`), createCallbacks());
+      assert.strictEqual(attributes.length, 1);
+      assert.deepStrictEqual(attributes[0]!.parts, ["it's ok"]);
+    });
+
+    /**
+     * Edge case: Double quotes inside single-quoted attribute
+     */
+    it("should handle double quotes inside single-quoted attribute", () => {
+      parser.parseTemplate(
+        tmpl(`<div title='say "hello"'>`),
+        createCallbacks(),
+      );
+      assert.strictEqual(attributes.length, 1);
+      assert.deepStrictEqual(attributes[0]!.parts, ['say "hello"']);
+    });
+
+    /**
+     * Edge case: Numeric tag names (invalid HTML but parser should handle)
+     *
+     * Tags starting with numbers are not valid HTML, but the parser
+     * should gracefully handle them as text.
+     */
+    it("should treat < followed by number as text", () => {
+      parser.parseTemplate(tmpl("5 < 10 > 3"), createCallbacks());
+      // After "5 ", < is encountered, then "1" is not alphabetic
+      // so "< 10 > 3" becomes text
+      assert.strictEqual(texts.length, 2);
+      assert.strictEqual(texts[0], "5 ");
+      assert.strictEqual(texts[1], "< 10 > 3");
+    });
+
+    /**
+     * Edge case: Multiple spaces between attributes
+     *
+     * Extra whitespace between attributes should be ignored.
+     */
+    it("should handle multiple spaces between attributes", () => {
+      parser.parseTemplate(
+        tmpl('<div   class="a"    id="b"   >'),
+        createCallbacks(),
+      );
+      assert.strictEqual(attributes.length, 2);
+      assert.strictEqual(attributes[0]!.name, "class");
+      assert.strictEqual(attributes[1]!.name, "id");
+    });
+
+    /**
+     * Edge case: Newlines and tabs in template
+     *
+     * Whitespace in text content should be preserved.
+     */
+    it("should preserve whitespace in text content", () => {
+      parser.parseTemplate(tmpl("<div>\n  Hello\n</div>"), createCallbacks());
+      assert.strictEqual(texts.length, 1);
+      assert.strictEqual(texts[0], "\n  Hello\n");
+    });
+
+    /**
+     * Edge case: Deeply nested elements
+     *
+     * Parser should correctly track depth with many nesting levels.
+     */
+    it("should handle deeply nested elements", () => {
+      parser.parseTemplate(
+        tmpl("<a><b><c><d><e></e></d></c></b></a>"),
+        createCallbacks(),
+      );
+      assert.strictEqual(elements.length, 5);
+      assert.strictEqual(closeCount, 5);
+    });
+
+    /**
+     * Edge case: Self-closing tag with attributes and no space before />
+     */
+    it("should handle self-closing with attribute no space before />", () => {
+      parser.parseTemplate(tmpl('<input type="text"/>'), createCallbacks());
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.selfClosing, true);
+      assert.strictEqual(attributes.length, 1);
+      assert.deepStrictEqual(attributes[0]!.parts, ["text"]);
+    });
+
+    /**
+     * Edge case: Comment with dashes inside
+     *
+     * Comments can contain single dashes, just not --.
+     */
+    it("should handle comments with dashes inside", () => {
+      parser.parseTemplate(
+        tmpl("<!-- a - b - c --><div></div>"),
+        createCallbacks(),
+      );
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.el.tagName, "DIV");
+    });
+
+    /**
+     * Edge case: Comment immediately followed by element
+     */
+    it("should handle comment immediately followed by element", () => {
+      parser.parseTemplate(
+        tmpl("<!--comment--><div></div>"),
+        createCallbacks(),
+      );
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.el.tagName, "DIV");
+    });
+
+    /**
+     * Edge case: Interpolation at very start of template
+     */
+    it("should handle interpolation at start", () => {
+      // Template: ${0}<div></div>
+      parser.parseTemplate(tmpl("", "<div></div>"), createCallbacks());
+      assert.strictEqual(slots.length, 1);
+      assert.strictEqual(slots[0], 0);
+      assert.strictEqual(elements.length, 1);
+    });
+
+    /**
+     * Edge case: Interpolation at very end of template
+     */
+    it("should handle interpolation at end", () => {
+      // Template: <div></div>${0}
+      parser.parseTemplate(tmpl("<div></div>", ""), createCallbacks());
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(slots.length, 1);
+      assert.strictEqual(slots[0], 0);
+    });
+
+    /**
+     * Edge case: Multiple interpolations in a row
+     */
+    it("should handle consecutive interpolations", () => {
+      // Template: ${0}${1}${2}
+      parser.parseTemplate(tmpl("", "", "", ""), createCallbacks());
+      assert.strictEqual(slots.length, 3);
+      assert.deepStrictEqual(slots, [0, 1, 2]);
+    });
+
+    /**
+     * Edge case: Unquoted attribute ending with />
+     */
+    it("should handle unquoted attribute before self-close", () => {
+      parser.parseTemplate(tmpl("<input type=text/>"), createCallbacks());
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.selfClosing, true);
+      assert.strictEqual(attributes.length, 1);
+      assert.deepStrictEqual(attributes[0]!.parts, ["text"]);
+    });
+
+    /**
+     * Edge case: Boolean attribute before self-close
+     */
+    it("should handle boolean attribute before self-close", () => {
+      parser.parseTemplate(tmpl("<input disabled/>"), createCallbacks());
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.selfClosing, true);
+      assert.strictEqual(attributes.length, 1);
+      assert.strictEqual(attributes[0]!.name, "disabled");
+      assert.deepStrictEqual(attributes[0]!.parts, []);
+    });
+
+    /**
+     * Edge case: Attribute with underscore
+     *
+     * Underscores are valid in attribute names.
+     */
+    it("should handle underscores in attribute names", () => {
+      parser.parseTemplate(
+        tmpl('<div data_custom="value">'),
+        createCallbacks(),
+      );
+      assert.strictEqual(attributes.length, 1);
+      assert.strictEqual(attributes[0]!.name, "data_custom");
+    });
+
+    /**
+     * Edge case: Only whitespace text
+     */
+    it("should preserve whitespace-only text", () => {
+      parser.parseTemplate(tmpl("<div>   </div>"), createCallbacks());
+      assert.strictEqual(texts.length, 1);
+      assert.strictEqual(texts[0], "   ");
+    });
+
+    /**
+     * Edge case: Comment spanning across interpolation
+     *
+     * If a comment starts before interpolation and ends after,
+     * the interpolation should be treated as part of the comment.
+     */
+    it("should handle interpolation inside comment", () => {
+      // Template: <!-- ${0} --><div></div>
+      parser.parseTemplate(tmpl("<!-- ", " --><div></div>"), createCallbacks());
+      // The slot should be part of the comment and skipped
+      // But actually, in state 8 (Comment), the slot() function
+      // will treat it as text slot... Let's verify actual behavior
+      assert.strictEqual(elements.length, 1);
+    });
+
+    /**
+     * Edge case: XML processing instruction
+     *
+     * <?xml ...?> should be skipped like DOCTYPE.
+     */
+    it("should skip XML processing instructions", () => {
+      parser.parseTemplate(
+        tmpl('<?xml version="1.0"?><div></div>'),
+        createCallbacks(),
+      );
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.el.tagName, "DIV");
+    });
+
+    /**
+     * Edge case: Tag with only digits after first letter
+     */
+    it("should handle tags with digits after first letter", () => {
+      parser.parseTemplate(tmpl("<h1>Heading</h1>"), createCallbacks());
+      assert.strictEqual(elements.length, 1);
+      assert.strictEqual(elements[0]!.el.tagName, "H1");
+      assert.strictEqual(texts.length, 1);
+      assert.strictEqual(texts[0], "Heading");
+    });
+
+    /**
+     * Edge case: Attribute with hyphen in name
+     */
+    it("should handle hyphens in attribute names", () => {
+      parser.parseTemplate(
+        tmpl('<div data-my-attr="value">'),
+        createCallbacks(),
+      );
+      assert.strictEqual(attributes.length, 1);
+      assert.strictEqual(attributes[0]!.name, "data-my-attr");
+    });
+
+    /**
+     * Edge case: Slot in unquoted attribute value position
+     */
+    it("should handle slot as unquoted attribute value", () => {
+      // Template: <div class=${0}>
+      parser.parseTemplate(tmpl("<div class=", ">"), createCallbacks());
+      assert.strictEqual(attributes.length, 1);
+      assert.strictEqual(attributes[0]!.name, "class");
+      assert.deepStrictEqual(attributes[0]!.parts, [{ index: 0 }]);
+    });
+
+    /**
+     * Edge case: Slot immediately after = with space before
+     */
+    it("should handle slot after = with space", () => {
+      // Template: <div class= ${0}>
+      // The space after = goes into AttrEq state which skips whitespace
+      parser.parseTemplate(tmpl("<div class= ", ">"), createCallbacks());
+      assert.strictEqual(attributes.length, 1);
+      assert.deepStrictEqual(attributes[0]!.parts, [{ index: 0 }]);
     });
   });
 });

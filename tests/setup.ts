@@ -15,3 +15,4 @@ globalThis.DocumentFragment = dom.window.DocumentFragment;
 globalThis.Node = dom.window.Node;
 globalThis.Comment = dom.window.Comment;
 globalThis.Text = dom.window.Text;
+globalThis.Event = dom.window.Event;

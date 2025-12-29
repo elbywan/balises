@@ -14,6 +14,8 @@ import {
 /**
  * A derived reactive value. Automatically tracks dependencies and
  * recomputes when any dependency changes.
+ *
+ * Uses Object.is() for equality checks to correctly handle NaN values.
  */
 export class Computed<T> {
   #fn: (() => T) | undefined;
@@ -99,7 +101,7 @@ export class Computed<T> {
         const notify = () => {
           if (c.#fn) {
             c.#recompute();
-            if (c.#value !== old) {
+            if (!Object.is(c.#value, old)) {
               for (let j = 0; j < c.#subs.length; j++) c.#subs[j]!();
             }
           }

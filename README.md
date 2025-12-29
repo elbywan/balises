@@ -158,6 +158,18 @@ state.count++; // Reactive
 state.user.name = "Bob"; // Also reactive (nested)
 ```
 
+**Note:** Array mutations like `push()`, `pop()`, `splice()` do **not** trigger reactivity. To update arrays reactively, reassign them:
+
+```ts
+const state = store({ items: [1, 2, 3] });
+
+// ❌ Does NOT trigger reactivity
+state.items.push(4);
+
+// ✅ Triggers reactivity
+state.items = [...state.items, 4];
+```
+
 ### `batch<T>(fn)`
 
 Batch multiple signal updates to defer subscriber notifications until the batch completes.
