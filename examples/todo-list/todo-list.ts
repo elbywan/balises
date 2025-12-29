@@ -34,22 +34,22 @@ export class TodoListElement extends HTMLElement {
       const input = form.elements.namedItem("todo") as HTMLInputElement;
       const text = input.value.trim();
       if (text) {
-        this.#todos.value = [
-          ...this.#todos.value,
+        this.#todos.update((todos) => [
+          ...todos,
           { id: this.#nextId++, text, completed: new Signal(false) },
-        ];
+        ]);
         input.value = "";
       }
     };
 
     const removeTodo = (id: number) => {
-      this.#todos.value = this.#todos.value.filter((t) => t.id !== id);
+      this.#todos.update((todos) => todos.filter((t) => t.id !== id));
     };
 
     const toggleTodo = (todo: Todo) => {
       todo.completed.value = !todo.completed.value;
       // Trigger reactivity for the filtered list
-      this.#todos.value = [...this.#todos.value];
+      this.#todos.update((todos) => [...todos]);
     };
 
     // renderTodo is called once per unique todo.id, template is cached and reused

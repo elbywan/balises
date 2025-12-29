@@ -66,6 +66,19 @@ export class Signal<T> {
     return () => removeFromArray(this.#subs, fn);
   }
 
+  /**
+   * Update the signal value using an updater function.
+   *
+   * @param fn - Function that receives current value and returns new value
+   *
+   * @example
+   * const count = signal(0);
+   * count.update(n => n + 1); // increment
+   */
+  update(fn: (current: T) => T): void {
+    this.value = fn(this.#value);
+  }
+
   /** @internal */
   get targets(): Computed<unknown>[] {
     return this.#targets;

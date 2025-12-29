@@ -54,7 +54,7 @@ export class TimerElement extends HTMLElement {
     if (!this.#running.value) {
       this.#running.value = true;
       this.#intervalId = setInterval(() => {
-        this.#ms.value += 10;
+        this.#ms.update((ms) => ms + 10);
       }, 10);
     }
   }

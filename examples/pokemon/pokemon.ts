@@ -1,4 +1,4 @@
-import { html, computed, store, each } from "../../src/index.js";
+import { html, computed, store, each, effect } from "../../src/index.js";
 
 interface Pokemon {
   id: number;
@@ -97,6 +97,7 @@ export class PokemonViewerElement extends HTMLElement {
   #loaderTimeout: ReturnType<typeof setTimeout> | null = null;
   #searchTimeout: ReturnType<typeof setTimeout> | null = null;
   #dispose: (() => void) | null = null;
+  #disposeEffects: Array<() => void> = [];
   #audio: HTMLAudioElement | null = null;
 
   connectedCallback() {
@@ -109,6 +110,21 @@ export class PokemonViewerElement extends HTMLElement {
         // Ignore invalid JSON
       }
     }
+
+    // Auto-sync favorites to localStorage whenever they change
+    const syncFavorites = effect(() => {
+      localStorage.setItem(
+        "pokemon-favorites",
+        JSON.stringify(this.#state.favorites),
+      );
+    });
+    this.#disposeEffects.push(syncFavorites);
+
+    // Auto-sync language preference
+    const syncLanguage = effect(() => {
+      localStorage.setItem("pokemon-language", this.#state.language);
+    });
+    this.#disposeEffects.push(syncLanguage);
 
     const prev = () => {
       if (this.#state.pokemonId > 1) {
@@ -149,23 +165,20 @@ export class PokemonViewerElement extends HTMLElement {
 
       const index = this.#state.favorites.findIndex((f) => f.id === pokemon.id);
       if (index >= 0) {
-        this.#state.favorites = this.#state.favorites.filter(
-          (f) => f.id !== pokemon.id,
+        this.#state.favorites.update((favs) =>
+          favs.filter((f) => f.id !== pokemon.id),
         );
       } else {
-        this.#state.favorites = [
-          ...this.#state.favorites,
+        this.#state.favorites.update((favs) => [
+          ...favs,
           {
             id: pokemon.id,
             name: pokemon.name,
             sprite: pokemon.sprites.front_default,
           },
-        ];
+        ]);
       }
-      localStorage.setItem(
-        "pokemon-favorites",
-        JSON.stringify(this.#state.favorites),
-      );
+      // localStorage sync happens automatically via effect()
     };
 
     const selectFavorite = (fav: FavoritePokemon) => {
@@ -175,13 +188,10 @@ export class PokemonViewerElement extends HTMLElement {
 
     const removeFavorite = (fav: FavoritePokemon, e: Event) => {
       e.stopPropagation();
-      this.#state.favorites = this.#state.favorites.filter(
-        (f) => f.id !== fav.id,
+      this.#state.favorites.update((favs) =>
+        favs.filter((f) => f.id !== fav.id),
       );
-      localStorage.setItem(
-        "pokemon-favorites",
-        JSON.stringify(this.#state.favorites),
-      );
+      // localStorage sync happens automatically via effect()
     };
 
     const onSearchInput = (e: Event) => {
@@ -213,7 +223,7 @@ export class PokemonViewerElement extends HTMLElement {
     const onLanguageChange = (e: Event) => {
       const lang = (e.target as HTMLSelectElement).value;
       this.#state.language = lang;
-      localStorage.setItem("pokemon-language", lang);
+      // localStorage sync happens automatically via effect()
       // Refetch to get localized names
       this.fetchPokemon();
       if (this.#state.comparePokemon) {
@@ -727,6 +737,7 @@ export class PokemonViewerElement extends HTMLElement {
     if (this.#loaderTimeout) clearTimeout(this.#loaderTimeout);
     if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
     if (this.#audio) this.#audio.pause();
+    this.#disposeEffects.forEach((dispose) => dispose());
     this.#dispose?.();
   }
 }

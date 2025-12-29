@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library. ~2.9KB gzipped.
+### A minimal reactive HTML templating library. ~3.0KB gzipped.
 
 **[📚️ Documentation & Examples](https://elbywan.github.io/balises/)**
 
@@ -28,7 +28,9 @@ import { html, signal } from "balises";
 const count = signal(0);
 
 const { fragment, dispose } = html`
-  <button @click=${() => count.value++}>Clicked ${count} times</button>
+  <button @click=${() => count.update((n) => n + 1)}>
+    Clicked ${count} times
+  </button>
 `.render();
 
 document.body.appendChild(fragment);
@@ -132,6 +134,20 @@ console.log(name.value); // "world"
 name.value = "everyone"; // Notifies subscribers
 ```
 
+**Updating based on current value:**
+
+```ts
+const count = signal(0);
+
+// Using update() for functional updates
+count.update((n) => n + 1);
+count.update((n) => n * 2);
+
+// Equivalent to:
+count.value = count.value + 1;
+count.value = count.value * 2;
+```
+
 ### `computed<T>(fn)` / `new Computed<T>(fn)`
 
 Creates a derived value that auto-tracks dependencies.
@@ -147,6 +163,47 @@ console.log(fullName.value); // "Jane Doe"
 ```
 
 Computeds are lazy - they only recompute when accessed and when their dependencies have changed.
+
+### `effect(fn)`
+
+Creates a side effect that automatically re-runs when its dependencies change. Unlike `computed()`, effects run immediately and are intended for side effects like DOM updates, logging, or persistence.
+
+```ts
+import { signal, effect } from "balises";
+
+const count = signal(0);
+
+// Runs immediately, then whenever count changes
+const dispose = effect(() => {
+  console.log("Count is now:", count.value);
+  document.title = `Count: ${count.value}`;
+});
+
+count.value = 1; // Logs "Count is now: 1" and updates title
+dispose(); // Stop the effect
+```
+
+**Use cases:**
+
+- Syncing state to localStorage
+- Updating document.title or other DOM properties
+- Logging and analytics
+- Network requests triggered by state changes
+
+Effects are automatically disposed when the component that created them is disposed (via the template's `dispose()` function).
+
+**Example: Auto-sync to localStorage**
+
+```ts
+const favorites = signal([]);
+
+effect(() => {
+  localStorage.setItem("favorites", JSON.stringify(favorites.value));
+});
+
+// localStorage automatically updates whenever favorites changes
+favorites.value = [...favorites.value, "new item"];
+```
 
 ### `store<T>(obj)`
 
@@ -168,6 +225,11 @@ state.items.push(4);
 
 // ✅ Triggers reactivity
 state.items = [...state.items, 4];
+
+// ✅ Using update() for functional updates (works with both signal and store)
+const items = signal([1, 2, 3]);
+items.update((arr) => [...arr, 4]);
+items.update((arr) => arr.filter((n) => n !== 2));
 ```
 
 ### `batch<T>(fn)`
@@ -224,15 +286,16 @@ doubled.dispose(); // Stops tracking, frees memory
 The library supports granular imports for optimal bundle size:
 
 ```ts
-// Full library (~2.9KB gzipped)
-import { html, signal, computed } from "balises";
+// Full library (~3.0KB gzipped)
+import { html, signal, computed, effect } from "balises";
 
 // Signals only
-import { signal, computed, store, batch } from "balises/signals";
+import { signal, computed, effect, store, batch } from "balises/signals";
 
 // Individual modules
 import { signal } from "balises/signals/signal";
 import { computed } from "balises/signals/computed";
+import { effect } from "balises/signals/effect";
 import { store } from "balises/signals/store";
 import { batch } from "balises/signals/context";
 ```
@@ -267,6 +330,42 @@ class Counter extends HTMLElement {
 }
 
 customElements.define("x-counter", Counter);
+```
+
+**With `signal.update()` for functional updates:**
+
+```ts
+import { html, signal, effect } from "balises";
+
+class Counter extends HTMLElement {
+  #count = signal(0);
+  #dispose?: () => void;
+
+  connectedCallback() {
+    // Auto-sync to localStorage
+    const syncEffect = effect(() => {
+      localStorage.setItem("counter", String(this.#count.value));
+    });
+
+    const { fragment, dispose } = html`
+      <div>
+        <p>Count: ${this.#count}</p>
+        <button @click=${() => this.#count.update((n) => n - 1)}>-</button>
+        <button @click=${() => this.#count.update((n) => n + 1)}>+</button>
+      </div>
+    `.render();
+
+    this.appendChild(fragment);
+    this.#dispose = () => {
+      syncEffect();
+      dispose();
+    };
+  }
+
+  disconnectedCallback() {
+    this.#dispose?.();
+  }
+}
 ```
 
 ## Scripts

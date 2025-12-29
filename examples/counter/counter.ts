@@ -16,8 +16,8 @@ export class CounterElement extends HTMLElement {
         <p>Count: <strong>${this.#count}</strong></p>
         <p>Doubled: <strong>${doubled}</strong></p>
         <div class="buttons">
-          <button @click=${() => this.#count.value--}>-</button>
-          <button @click=${() => this.#count.value++}>+</button>
+          <button @click=${() => this.#count.update((n) => n - 1)}>-</button>
+          <button @click=${() => this.#count.update((n) => n + 1)}>+</button>
           <button @click=${() => (this.#count.value = 0)}>Reset</button>
         </div>
       </div>

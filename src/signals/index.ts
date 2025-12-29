@@ -8,6 +8,7 @@
 
 export { Signal, signal } from "./signal.js";
 export { Computed, computed } from "./computed.js";
+export { effect } from "./effect.js";
 export { store } from "./store.js";
 export { batch, type Subscriber } from "./context.js";
 

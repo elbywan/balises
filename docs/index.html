@@ -6,7 +6,7 @@
     <title>balises - Reactive HTML templating</title>
     <meta
       name="description"
-      content="A minimal reactive HTML templating library with fine-grained updates. ~2.9KB gzipped."
+      content="A minimal reactive HTML templating library with fine-grained updates. ~3.0KB gzipped."
     />
     <link rel="icon" type="image/svg+xml" href="./assets/logo-icon.svg" />
 
@@ -39,7 +39,7 @@
           Minimal reactive HTML templating with fine-grained updates
         </p>
         <div class="badges">
-          <span class="badge"><strong>~2.9KB</strong> gzipped</span>
+          <span class="badge"><strong>~3.0KB</strong> gzipped</span>
           <span class="badge"><strong>Zero</strong> dependencies</span>
           <span class="badge"><strong>TypeScript</strong> native</span>
         </div>
@@ -250,6 +250,19 @@
             </p>
           </div>
 
+          <!-- effect() -->
+          <div class="api-item">
+            <h3>effect(fn)</h3>
+            <div class="code-wrapper">
+              <pre><code class="language-javascript" data-code="effect"></code></pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <p>
+              Runs a side effect immediately and re-runs when dependencies
+              change. Returns dispose function for cleanup.
+            </p>
+          </div>
+
           <!-- store() -->
           <div class="api-item">
             <h3>store(object)</h3>
@@ -386,10 +399,17 @@
         signal: `const count = signal(0);
 count.value;      // read: 0
 count.value = 5;  // write: triggers updates
+count.update(n => n + 1); // functional update
 count.subscribe(() => console.log('changed!'));`,
         computed: `const double = computed(() => count.value * 2);
 double.value;     // auto-updates when count changes
 double.dispose(); // cleanup when done`,
+        effect: `const dispose = effect(() => {
+  console.log('Count:', count.value);
+  localStorage.setItem('count', count.value);
+});
+// Runs immediately, re-runs when count changes
+dispose(); // cleanup when done`,
         store: `const state = store({ count: 0, user: { name: 'Alice' } });
 state.count++;           // reactive
 state.user.name = 'Bob'; // nested objects too`,

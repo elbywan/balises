@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { Signal, computed, store, batch } from "../src/signals/index.js";
+import {
+  Signal,
+  computed,
+  store,
+  batch,
+  effect,
+} from "../src/signals/index.js";
 
 describe("Signal", () => {
   it("should store and retrieve a value", () => {
@@ -475,7 +481,7 @@ describe("Computed", () => {
     for (let i = 0; i < 10; i++) {
       const source: Signal<number> | ReturnType<typeof computed<number>> = prev;
       const next: ReturnType<typeof computed<number>> = computed(
-        () => source.value + 1,
+        () => source.value + 1
       );
       chain.push(next);
       prev = next;
@@ -799,7 +805,7 @@ describe("Computed caching behavior", () => {
     // Should only compute a limited number of times, not infinite
     assert.ok(
       computeCount <= 2,
-      `Expected computeCount <= 2, got ${computeCount}`,
+      `Expected computeCount <= 2, got ${computeCount}`
     );
   });
 
@@ -1430,5 +1436,223 @@ describe("batch", () => {
     // Subscriber is deduplicated - only called once
     assert.strictEqual(callCount, 1);
     assert.strictEqual(s.value, 3);
+  });
+});
+
+describe("effect", () => {
+  it("should run immediately on creation", () => {
+    const s = new Signal(0);
+    let runCount = 0;
+
+    effect(() => {
+      runCount++;
+      void s.value; // track dependency
+    });
+
+    assert.strictEqual(runCount, 1);
+  });
+
+  it("should re-run when dependencies change", () => {
+    const s = new Signal(0);
+    const log: number[] = [];
+
+    effect(() => {
+      log.push(s.value);
+    });
+
+    assert.deepStrictEqual(log, [0]);
+
+    s.value = 1;
+    assert.deepStrictEqual(log, [0, 1]);
+
+    s.value = 2;
+    assert.deepStrictEqual(log, [0, 1, 2]);
+  });
+
+  it("should track multiple dependencies", () => {
+    const a = new Signal(1);
+    const b = new Signal(2);
+    const log: number[] = [];
+
+    effect(() => {
+      log.push(a.value + b.value);
+    });
+
+    assert.deepStrictEqual(log, [3]);
+
+    a.value = 10;
+    assert.deepStrictEqual(log, [3, 12]);
+
+    b.value = 20;
+    assert.deepStrictEqual(log, [3, 12, 30]);
+  });
+
+  it("should stop running after dispose", () => {
+    const s = new Signal(0);
+    let runCount = 0;
+
+    const dispose = effect(() => {
+      runCount++;
+      void s.value;
+    });
+
+    assert.strictEqual(runCount, 1);
+
+    s.value = 1;
+    assert.strictEqual(runCount, 2);
+
+    dispose();
+
+    s.value = 2;
+    assert.strictEqual(runCount, 2); // Should not increase
+  });
+
+  it("should work with computed dependencies", () => {
+    const s = new Signal(1);
+    const doubled = computed(() => s.value * 2);
+    const log: number[] = [];
+
+    effect(() => {
+      log.push(doubled.value);
+    });
+
+    assert.deepStrictEqual(log, [2]);
+
+    s.value = 5;
+    assert.deepStrictEqual(log, [2, 10]);
+  });
+
+  it("should handle dynamic dependencies", () => {
+    const flag = new Signal(true);
+    const a = new Signal(1);
+    const b = new Signal(10);
+    const log: number[] = [];
+
+    effect(() => {
+      log.push(flag.value ? a.value : b.value);
+    });
+
+    assert.deepStrictEqual(log, [1]);
+
+    // a is tracked, changing it should trigger
+    a.value = 2;
+    assert.deepStrictEqual(log, [1, 2]);
+
+    // b is not tracked, changing it should not trigger
+    b.value = 20;
+    assert.deepStrictEqual(log, [1, 2]);
+
+    // Switch to b
+    flag.value = false;
+    assert.deepStrictEqual(log, [1, 2, 20]);
+
+    // Now b is tracked, a is not
+    b.value = 30;
+    assert.deepStrictEqual(log, [1, 2, 20, 30]);
+
+    a.value = 100;
+    assert.deepStrictEqual(log, [1, 2, 20, 30]); // No change
+  });
+
+  it("should work with batching", () => {
+    const a = new Signal(1);
+    const b = new Signal(2);
+    let runCount = 0;
+
+    effect(() => {
+      runCount++;
+      void (a.value + b.value);
+    });
+
+    assert.strictEqual(runCount, 1);
+
+    batch(() => {
+      a.value = 10;
+      b.value = 20;
+    });
+
+    // Should only run once after batch completes
+    assert.strictEqual(runCount, 2);
+  });
+
+  it("should handle errors in effect function", () => {
+    const s = new Signal(0);
+    let runCount = 0;
+
+    const dispose = effect(() => {
+      runCount++;
+      if (s.value > 0) throw new Error("Test error");
+    });
+
+    assert.strictEqual(runCount, 1); // Initial run is fine
+
+    // Changing to trigger error
+    assert.throws(() => {
+      s.value = 1;
+    }, /Test error/);
+
+    assert.strictEqual(runCount, 2);
+    dispose();
+  });
+});
+
+describe("Signal.update", () => {
+  it("should update value using updater function", () => {
+    const s = new Signal(5);
+    s.update((n) => n * 2);
+    assert.strictEqual(s.value, 10);
+  });
+
+  it("should notify subscribers", () => {
+    const s = new Signal(0);
+    let notified = false;
+
+    s.subscribe(() => {
+      notified = true;
+    });
+
+    s.update((n) => n + 1);
+    assert.strictEqual(notified, true);
+    assert.strictEqual(s.value, 1);
+  });
+
+  it("should work with complex state", () => {
+    const s = new Signal({ count: 0, name: "test" });
+
+    s.update((state) => ({ ...state, count: state.count + 1 }));
+
+    assert.strictEqual(s.value.count, 1);
+    assert.strictEqual(s.value.name, "test");
+  });
+
+  it("should not notify if value doesn't change", () => {
+    const s = new Signal(5);
+    let notifyCount = 0;
+
+    s.subscribe(() => {
+      notifyCount++;
+    });
+
+    s.update((n) => n); // Return same value
+    assert.strictEqual(notifyCount, 0);
+  });
+
+  it("should work with computeds", () => {
+    const s = new Signal(10);
+    const doubled = computed(() => s.value * 2);
+
+    assert.strictEqual(doubled.value, 20);
+
+    s.update((n) => n + 5);
+    assert.strictEqual(s.value, 15);
+    assert.strictEqual(doubled.value, 30);
+  });
+
+  it("should allow chaining-style updates", () => {
+    const s = new Signal(1);
+    s.update((n) => n + 1);
+    s.update((n) => n * 2);
+    s.update((n) => n - 1);
+    assert.strictEqual(s.value, 3); // (1 + 1) * 2 - 1 = 3
   });
 });
