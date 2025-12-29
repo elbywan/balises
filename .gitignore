@@ -21,3 +21,6 @@ node_modules
 
 # Built examples
 /examples/**/*.js
+
+# Website build output
+/_site

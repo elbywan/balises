@@ -1,8 +1,18 @@
-# balises
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/logo.svg">
+  <source media="(prefers-color-scheme: light)" srcset="./assets/logo-light.svg">
+  <img alt="balises" src="./assets/logo.svg" width="280">
+</picture>
 
-A minimal reactive HTML templating library. ~2.9KB gzipped.
+### A minimal reactive HTML templating library. ~2.9KB gzipped.
 
-> **Note:** This is a personal side project with limited maintenance. Most of the code was written with LLM assistance. Use at your own discretion.
+**[📚️ Documentation & Examples](https://elbywan.github.io/balises/)**
+
+## Note
+
+This is a personal side project with limited maintenance. Most of the code was written with LLM assistance.
+
+🚧 Use at your own discretion.
 
 ## Installation
 

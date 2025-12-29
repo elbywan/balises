@@ -59,10 +59,12 @@
     "test": "node --import tsx/esm --import ./tests/setup.ts --test tests/*.test.ts",
     "lint": "eslint .",
     "pretty": "prettier --write .",
-    "examples": "rolldown -c examples/rolldown.config.ts && npx serve examples",
+    "examples": "rolldown -c examples/rolldown.config.ts && yarn dlx serve examples",
     "examples:build": "rolldown -c examples/rolldown.config.ts",
     "bench": "cd bench && yarn && yarn start",
-    "bench:self": "cd bench && yarn && yarn start:self"
+    "bench:self": "cd bench && yarn && yarn start:self",
+    "docs": "yarn docs:build && yarn dlx serve _site",
+    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp assets/logo.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

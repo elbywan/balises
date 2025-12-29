@@ -3,87 +3,184 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Balises Examples</title>
+    <title>Examples - balises</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
+      :root {
+        --bg: #0a0a0b;
+        --bg-subtle: #111113;
+        --border: #1f1f23;
+        --text: #ededef;
+        --text-muted: #8b8b8d;
+        --accent: #3b82f6;
+        --accent-hover: #60a5fa;
+      }
+
       * {
+        margin: 0;
+        padding: 0;
         box-sizing: border-box;
       }
 
       body {
         font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 2rem;
-        background: #f5f5f5;
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        min-height: 100vh;
       }
 
-      h1 {
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+      }
+
+      header {
         text-align: center;
-        color: #333;
         margin-bottom: 2rem;
       }
 
+      h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.5rem;
+      }
+
+      .tagline {
+        color: var(--text-muted);
+        font-size: 1rem;
+      }
+
       .examples {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .example-card {
         display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
-      .examples a {
-        display: block;
-        background: white;
-        padding: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
         text-decoration: none;
-        color: inherit;
-        transition:
-          transform 0.2s,
-          box-shadow 0.2s;
+        transition: all 0.15s ease;
       }
 
-      .examples a:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+      .example-card:hover {
+        border-color: var(--accent);
+        background: rgba(59, 130, 246, 0.05);
       }
 
-      .examples h2 {
-        margin: 0 0 0.5rem 0;
-        color: #007bff;
+      .example-card .name {
+        font-weight: 500;
+        color: var(--text);
       }
 
-      .examples p {
-        margin: 0;
-        color: #666;
-        font-size: 0.9rem;
+      .example-card .desc {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+      }
+
+      .example-card .arrow {
+        color: var(--text-muted);
+        transition: transform 0.15s ease;
+      }
+
+      .example-card:hover .arrow {
+        transform: translateX(4px);
+        color: var(--accent);
+      }
+
+      .back-link {
+        display: block;
+        margin-top: 2rem;
+        text-align: center;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.875rem;
+        transition: color 0.15s ease;
+      }
+
+      .back-link:hover {
+        color: var(--accent);
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 2rem 1rem;
+        }
+
+        h1 {
+          font-size: 1.5rem;
+        }
       }
     </style>
   </head>
 
   <body>
-    <h1>Balises Examples</h1>
+    <div class="container">
+      <header>
+        <h1>Examples</h1>
+        <p class="tagline">Live demos showcasing balises features</p>
+      </header>
 
-    <div class="examples">
-      <a href="counter/">
-        <h2>Counter</h2>
-        <p>A simple counter with increment, decrement, and reset buttons.</p>
-      </a>
+      <div class="examples">
+        <a href="counter/" class="example-card">
+          <div>
+            <div class="name">Counter</div>
+            <div class="desc">
+              A simple counter with increment, decrement, and reset buttons.
+            </div>
+          </div>
+          <span class="arrow">&rarr;</span>
+        </a>
 
-      <a href="timer/">
-        <h2>Timer</h2>
-        <p>A stopwatch timer with start, stop, and reset controls.</p>
-      </a>
+        <a href="timer/" class="example-card">
+          <div>
+            <div class="name">Timer</div>
+            <div class="desc">
+              A stopwatch timer with start, stop, and reset controls.
+            </div>
+          </div>
+          <span class="arrow">&rarr;</span>
+        </a>
 
-      <a href="todo-list/">
-        <h2>Todo List</h2>
-        <p>A full-featured todo list with filtering and persistence.</p>
-      </a>
+        <a href="todo-list/" class="example-card">
+          <div>
+            <div class="name">Todo List</div>
+            <div class="desc">
+              A full-featured todo list with filtering and persistence.
+            </div>
+          </div>
+          <span class="arrow">&rarr;</span>
+        </a>
 
-      <a href="pokemon/">
-        <h2>Pokemon Viewer</h2>
-        <p>Browse Pokemon with async data fetching from the PokeAPI.</p>
-      </a>
+        <a href="pokemon/" class="example-card">
+          <div>
+            <div class="name">Pokemon Viewer</div>
+            <div class="desc">
+              Browse Pokemon with async data fetching from the PokeAPI.
+            </div>
+          </div>
+          <span class="arrow">&rarr;</span>
+        </a>
+      </div>
+
+      <a href="../" class="back-link">&larr; Back to Home</a>
     </div>
   </body>
 </html>
