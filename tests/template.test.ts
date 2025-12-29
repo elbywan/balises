@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { html, Template, each } from "../src/template.js";
-import { Signal, signal, store } from "../src/signal.js";
+import { Signal, signal, store } from "../src/signals/index.js";
 
 describe("html template tag", () => {
   it("should create a Template instance", () => {

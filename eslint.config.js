@@ -10,7 +10,7 @@ export default tseslint.config(
       "examples/**/*.js",
       ".yarn/**",
       ".pnp.*",
-      "bench/layers.mjs",
+      "bench/**"
     ],
   },
 );

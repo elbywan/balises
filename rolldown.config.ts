@@ -1,15 +1,6 @@
 import { defineConfig } from "rolldown";
 
 export default defineConfig([
-  // ESM output (preserves module structure)
-  {
-    input: "src/index.ts",
-    output: {
-      dir: "dist/esm",
-      format: "esm",
-      sourcemap: true,
-    },
-  },
   // ESM bundle (single file)
   {
     input: "src/index.ts",

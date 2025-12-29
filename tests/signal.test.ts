@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { Signal, computed, store } from "../src/signal.js";
+import { Signal, computed, store } from "../src/signals/index.js";
 
 describe("Signal", () => {
   it("should store and retrieve a value", () => {

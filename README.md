@@ -1,6 +1,6 @@
 # balises
 
-A minimal reactive HTML templating library. ~3.2KB gzipped.
+A minimal reactive HTML templating library. ~2.9KB gzipped.
 
 > **Note:** This is a personal side project with limited maintenance. Most of the code was written with LLM assistance. Use at your own discretion.
 
@@ -95,7 +95,7 @@ The `each()` helper has two forms:
 each(list, keyFn, renderFn);
 ```
 
-- `list` - A reactive array
+- `list` - A reactive array (Signal, Computed, or getter function)
 - `keyFn` - Extracts a unique key from each item: `(item, index) => key`
 - `renderFn` - Renders each item (called once per unique key)
 
@@ -112,7 +112,7 @@ For content updates without list reconciliation, use nested signals (like `name:
 
 ## Reactivity API
 
-### `signal<T>(value, options?)` / `new Signal<T>(value, options?)`
+### `signal<T>(value)` / `new Signal<T>(value)`
 
 Creates a reactive value container.
 
@@ -122,7 +122,7 @@ console.log(name.value); // "world"
 name.value = "everyone"; // Notifies subscribers
 ```
 
-### `computed<T>(fn, options?)` / `new Computed<T>(fn, options?)`
+### `computed<T>(fn)` / `new Computed<T>(fn)`
 
 Creates a derived value that auto-tracks dependencies.
 
@@ -136,7 +136,9 @@ firstName.value = "Jane";
 console.log(fullName.value); // "Jane Doe"
 ```
 
-### `store<T>(obj, options?)`
+Computeds are lazy - they only recompute when accessed and when their dependencies have changed.
+
+### `store<T>(obj)`
 
 Proxy-based reactive wrapper. Nested plain objects are wrapped recursively.
 
@@ -144,6 +146,22 @@ Proxy-based reactive wrapper. Nested plain objects are wrapped recursively.
 const state = store({ count: 0, user: { name: "Alice" } });
 state.count++; // Reactive
 state.user.name = "Bob"; // Also reactive (nested)
+```
+
+### `batch<T>(fn)`
+
+Batch multiple signal updates to defer subscriber notifications until the batch completes.
+
+```ts
+import { batch, signal } from "balises";
+
+const a = signal(1);
+const b = signal(2);
+
+batch(() => {
+  a.value = 10;
+  b.value = 20;
+}); // Subscribers notified once after both updates
 ```
 
 ### `isSignal(value)`
@@ -156,23 +174,45 @@ isSignal(computed(() => 1)); // true
 isSignal(42); // false
 ```
 
-### Options
+### `.subscribe(fn)`
 
-All reactive primitives accept an optional `{ batched: boolean }` option:
+Subscribe to value changes on any reactive (`Signal` or `Computed`).
 
 ```ts
-const count = signal(0, { batched: true });
+const count = signal(0);
+const unsubscribe = count.subscribe(() => {
+  console.log("count changed to", count.value);
+});
+
+count.value = 1; // logs "count changed to 1"
+unsubscribe(); // Stop listening
 ```
 
-When `batched: true`, notifications are deferred to a microtask and coalesced, reducing redundant updates.
+### `.dispose()`
 
-### Global Batched Mode
+Dispose a computed, removing all dependency links.
 
 ```ts
-import { setBatched, getBatched } from "balises";
+const doubled = computed(() => count.value * 2);
+doubled.dispose(); // Stops tracking, frees memory
+```
 
-setBatched(true); // All new signals/computed default to batched
-getBatched(); // Returns current default (false initially)
+## Tree-Shaking / Modular Imports
+
+The library supports granular imports for optimal bundle size:
+
+```ts
+// Full library (~2.9KB gzipped)
+import { html, signal, computed } from "balises";
+
+// Signals only
+import { signal, computed, store, batch } from "balises/signals";
+
+// Individual modules
+import { signal } from "balises/signals/signal";
+import { computed } from "balises/signals/computed";
+import { store } from "balises/signals/store";
+import { batch } from "balises/signals/context";
 ```
 
 ## Full Example
@@ -214,6 +254,7 @@ yarn build      # Build library to dist/
 yarn test       # Run tests
 yarn lint       # Run ESLint
 yarn examples   # Build and serve examples
+yarn bench      # Run performance benchmarks
 ```
 
 ## License

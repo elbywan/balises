@@ -10,7 +10,7 @@
  * - Arrays: ${items.map(i => html`<li>${i}</li>`)}
  */
 
-import { computed, isSignal, signal, type Reactive } from "./signal.js";
+import { computed, isSignal, signal, type Reactive } from "./signals/index.js";
 import { HTMLParser } from "./parser.js";
 
 /**

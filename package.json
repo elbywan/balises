@@ -15,6 +15,7 @@
   "license": "MIT",
   "main": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
@@ -23,10 +24,38 @@
     "./bundle": {
       "import": "./dist/balises.esm.js",
       "types": "./dist/esm/index.d.ts"
+    },
+    "./signals": {
+      "import": "./dist/esm/signals/index.js",
+      "types": "./dist/esm/signals/index.d.ts"
+    },
+    "./signals/signal": {
+      "import": "./dist/esm/signals/signal.js",
+      "types": "./dist/esm/signals/signal.d.ts"
+    },
+    "./signals/computed": {
+      "import": "./dist/esm/signals/computed.js",
+      "types": "./dist/esm/signals/computed.d.ts"
+    },
+    "./signals/store": {
+      "import": "./dist/esm/signals/store.js",
+      "types": "./dist/esm/signals/store.d.ts"
+    },
+    "./signals/context": {
+      "import": "./dist/esm/signals/context.js",
+      "types": "./dist/esm/signals/context.d.ts"
+    },
+    "./template": {
+      "import": "./dist/esm/template.js",
+      "types": "./dist/esm/template.d.ts"
+    },
+    "./parser": {
+      "import": "./dist/esm/parser.js",
+      "types": "./dist/esm/parser.d.ts"
     }
   },
   "scripts": {
-    "build": "rm -rf dist && rolldown -c && tsc --emitDeclarationOnly --rootDir src --outDir dist/esm",
+    "build": "rm -rf dist && tsc && rolldown -c",
     "test": "node --import tsx/esm --import ./tests/setup.ts --test tests/*.test.ts",
     "lint": "eslint .",
     "pretty": "prettier --write .",
