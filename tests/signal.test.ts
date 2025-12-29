@@ -481,7 +481,7 @@ describe("Computed", () => {
     for (let i = 0; i < 10; i++) {
       const source: Signal<number> | ReturnType<typeof computed<number>> = prev;
       const next: ReturnType<typeof computed<number>> = computed(
-        () => source.value + 1
+        () => source.value + 1,
       );
       chain.push(next);
       prev = next;
@@ -805,7 +805,7 @@ describe("Computed caching behavior", () => {
     // Should only compute a limited number of times, not infinite
     assert.ok(
       computeCount <= 2,
-      `Expected computeCount <= 2, got ${computeCount}`
+      `Expected computeCount <= 2, got ${computeCount}`,
     );
   });
 
