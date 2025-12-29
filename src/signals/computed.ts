@@ -91,25 +91,48 @@ export class Computed<T> {
       c.#dirty = true;
 
       const targets = c.#targets;
-      for (let j = 0; j < targets.length; j++) {
-        const target = targets[j]!;
-        if (!target.#dirty) queue.push(target);
-      }
 
-      if (c.#subs.length) {
+      // Short-circuit optimization: if this computed has both subscribers AND downstream dependents,
+      // eagerly recompute to check if the value actually changed before propagating.
+      // Only do this outside of batching to avoid intermediate/inconsistent state.
+      if (c.#subs.length > 0 && targets.length > 0 && c.#fn && !isBatching()) {
         const old = c.#value;
-        const notify = () => {
-          if (c.#fn) {
-            c.#recompute();
-            if (!Object.is(c.#value, old)) {
-              for (let j = 0; j < c.#subs.length; j++) c.#subs[j]!();
-            }
+        c.#recompute();
+        const valueChanged = !Object.is(c.#value, old);
+
+        // Only propagate dirty flag to targets if value actually changed
+        if (valueChanged) {
+          for (let j = 0; j < targets.length; j++) {
+            const target = targets[j]!;
+            if (!target.#dirty) queue.push(target);
           }
-        };
-        if (isBatching()) {
-          enqueueBatch(notify);
-        } else {
-          notify();
+
+          // Notify subscribers since value changed (we're not batching here)
+          for (let j = 0; j < c.#subs.length; j++) c.#subs[j]!();
+        }
+        // If value didn't change, don't propagate or notify
+      } else {
+        // No short-circuiting needed - use original behavior
+        for (let j = 0; j < targets.length; j++) {
+          const target = targets[j]!;
+          if (!target.#dirty) queue.push(target);
+        }
+
+        if (c.#subs.length) {
+          const old = c.#value;
+          const notify = () => {
+            if (c.#fn) {
+              c.#recompute();
+              if (!Object.is(c.#value, old)) {
+                for (let j = 0; j < c.#subs.length; j++) c.#subs[j]!();
+              }
+            }
+          };
+          if (isBatching()) {
+            enqueueBatch(notify);
+          } else {
+            notify();
+          }
         }
       }
     }

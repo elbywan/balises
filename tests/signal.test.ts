@@ -611,6 +611,66 @@ describe("Computed", () => {
   });
 
   /**
+   * Short-circuiting optimization: avoid wasteful recomputations
+   *
+   * When an intermediate computed's value doesn't change AND it has subscribers,
+   * downstream computeds should not be recomputed (short-circuit).
+   */
+  it("should short-circuit when intermediate computed value stays the same", () => {
+    const a = new Signal(0);
+
+    let bComputeCount = 0;
+    let cComputeCount = 0;
+
+    // b is the intermediate computed that we'll subscribe to
+    const b = computed(() => {
+      bComputeCount++;
+      return a.value % 2;
+    });
+
+    // c depends on b
+    const c = computed(() => {
+      cComputeCount++;
+      return b.value === 0 ? "even" : "odd";
+    });
+
+    // Subscribe to BOTH b and c - this enables short-circuiting on b
+    let bNotifyCount = 0;
+    let cNotifyCount = 0;
+    b.subscribe(() => bNotifyCount++);
+    c.subscribe(() => cNotifyCount++);
+
+    // Initial state: a=0, b=0, c="even"
+    assert.strictEqual(c.value, "even");
+    assert.strictEqual(bComputeCount, 1);
+    assert.strictEqual(cComputeCount, 1);
+
+    // Change a from 0 to 2 (both even)
+    // b changes from 0 to 0 (no change)
+    // With short-circuiting, c should NOT recompute since b didn't change
+    a.value = 2;
+
+    // b should recompute (to check if value changed)
+    assert.strictEqual(bComputeCount, 2);
+    // c should NOT recompute (b's value didn't change, so it wasn't marked dirty)
+    assert.strictEqual(cComputeCount, 1);
+    // Neither should be notified (values didn't change)
+    assert.strictEqual(bNotifyCount, 0);
+    assert.strictEqual(cNotifyCount, 0);
+
+    // Change a from 2 to 3 (even to odd)
+    // b changes from 0 to 1 (change!)
+    // c should recompute and notify
+    a.value = 3;
+
+    assert.strictEqual(bComputeCount, 3);
+    assert.strictEqual(cComputeCount, 2);
+    assert.strictEqual(bNotifyCount, 1);
+    assert.strictEqual(cNotifyCount, 1);
+    assert.strictEqual(c.value, "odd");
+  });
+
+  /**
    * Edge case: Computed dispose while another computed depends on it
    *
    * Disposing a computed should clean up its relationship with sources.
