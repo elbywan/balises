@@ -4,8 +4,6 @@
  */
 
 import kleur from "kleur";
-import { cellx } from "cellx";
-import * as Sjs from "s-js";
 import * as mobx from "mobx";
 import {
   root,
@@ -13,6 +11,8 @@ import {
   computed as maverickComputed,
 } from "@maverick-js/signals";
 import * as preact from "@preact/signals-core";
+import * as vue from "@vue/reactivity";
+import * as solid from "solid-js/dist/solid.js";
 import hyperactiv from "hyperactiv";
 import { signal, computed } from "../dist/esm/index.js";
 import Table from "cli-table";
@@ -106,7 +106,6 @@ async function main() {
   console.log(`Layer tiers: ${LAYER_TIERS.join(", ")}\n`);
 
   const allLibraries = {
-    [`cellx@${getVersion("cellx")}`]: { fn: runCellx, runs: [] },
     [`hyperactiv@${getVersion("hyperactiv")}`]: { fn: runHyperactiv, runs: [] },
     [`@maverick-js/signals@${getVersion("@maverick-js/signals")}`]: {
       fn: runMaverick,
@@ -117,7 +116,11 @@ async function main() {
       fn: runPreact,
       runs: [],
     },
-    [`s-js@${getVersion("s-js")}`]: { fn: runS, runs: [] },
+    [`solid-js@${getVersion("solid-js")}`]: { fn: runSolid, runs: [] },
+    [`@vue/reactivity@${getVersion("@vue/reactivity")}`]: {
+      fn: runVue,
+      runs: [],
+    },
     [`balises@${getBalisesVersion()}`]: { fn: runBalises, runs: [] },
   };
 
@@ -161,7 +164,7 @@ async function main() {
           process.stdout.write(".");
         }
       }
-      // Allow libraries that free resources asynchronously (e.g. cellx) do so.
+      // Allow libraries that free resources asynchronously do so.
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       if (typeof result !== "number") {
@@ -236,8 +239,7 @@ async function start(runner, layers) {
   return new Promise((done) => {
     runner(layers, done);
   }).catch((error) => {
-    console.error(error);
-    return error.message.toString();
+    return error.message?.toString() ?? "error";
   });
 }
 
@@ -280,56 +282,6 @@ function runBalises(layers, done) {
 }
 
 /**
- * @see {@link https://github.com/Riim/cellx}
- */
-function runCellx(layers, done) {
-  const start = {
-    a: cellx(1),
-    b: cellx(2),
-    c: cellx(3),
-    d: cellx(4),
-  };
-
-  let layer = start;
-
-  for (let i = layers; i--; ) {
-    layer = ((m) => {
-      const props = {
-        a: cellx(() => m.b.get()),
-        b: cellx(() => m.a.get() - m.c.get()),
-        c: cellx(() => m.b.get() + m.d.get()),
-        d: cellx(() => m.c.get()),
-      };
-
-      props.a.on("change", function () {});
-      props.b.on("change", function () {});
-      props.c.on("change", function () {});
-      props.d.on("change", function () {});
-
-      return props;
-    })(layer);
-  }
-
-  const startTime = performance.now();
-  const end = layer;
-
-  start.a.set(4);
-  start.b.set(3);
-  start.c.set(2);
-  start.d.set(1);
-
-  const solution = [end.a.get(), end.b.get(), end.c.get(), end.d.get()];
-  const endTime = performance.now() - startTime;
-
-  start.a.dispose();
-  start.b.dispose();
-  start.c.dispose();
-  start.d.dispose();
-
-  done(isSolution(layers, solution) ? endTime : "wrong");
-}
-
-/**
  * @see {@link https://github.com/maverick-js/signals}
  */
 function runMaverick(layers, done) {
@@ -361,47 +313,6 @@ function runMaverick(layers, done) {
     const endTime = performance.now() - startTime;
 
     dispose();
-    done(isSolution(layers, solution) ? endTime : "wrong");
-  });
-}
-
-/**
- * @see {@link https://github.com/adamhaile/S}
- */
-function runS(layers, done) {
-  const S = Sjs.default;
-
-  S.root(() => {
-    const start = {
-      a: S.data(1),
-      b: S.data(2),
-      c: S.data(3),
-      d: S.data(4),
-    };
-
-    let layer = start;
-
-    for (let i = layers; i--; ) {
-      layer = ((m) => {
-        const props = {
-          a: S(() => m.b()),
-          b: S(() => m.a() - m.c()),
-          c: S(() => m.b() + m.d()),
-          d: S(() => m.c()),
-        };
-
-        return props;
-      })(layer);
-    }
-
-    const startTime = performance.now();
-    const end = layer;
-
-    (start.a(4), start.b(3), start.c(2), start.d(1));
-
-    const solution = [end.a(), end.b(), end.c(), end.d()];
-    const endTime = performance.now() - startTime;
-
     done(isSolution(layers, solution) ? endTime : "wrong");
   });
 }
@@ -487,6 +398,9 @@ function runPreact(layers, done) {
   done(isSolution(layers, solution) ? endTime : -1);
 }
 
+/**
+ * @see {@link https://github.com/elbywan/hyperactiv}
+ */
 function runHyperactiv(layers, done) {
   const observe = (obj) => hyperactiv.observe(obj, { batch: true });
   const comp = (fn) => hyperactiv.computed(fn, { disableTracking: true });
@@ -524,6 +438,83 @@ function runHyperactiv(layers, done) {
   const solution = [end.a, end.b, end.c, end.d];
   const endTime = performance.now() - startTime;
   done(isSolution(layers, solution) ? endTime : "wrong");
+}
+
+/**
+ * @see {@link https://github.com/vuejs/core/tree/main/packages/reactivity}
+ */
+function runVue(layers, done) {
+  const start = {
+    a: vue.ref(1),
+    b: vue.ref(2),
+    c: vue.ref(3),
+    d: vue.ref(4),
+  };
+
+  let layer = start;
+
+  for (let i = layers; i--; ) {
+    layer = ((m) => ({
+      a: vue.computed(() => m.b.value),
+      b: vue.computed(() => m.a.value - m.c.value),
+      c: vue.computed(() => m.b.value + m.d.value),
+      d: vue.computed(() => m.c.value),
+    }))(layer);
+  }
+
+  const startTime = performance.now();
+  const end = layer;
+
+  start.a.value = 4;
+  start.b.value = 3;
+  start.c.value = 2;
+  start.d.value = 1;
+
+  const solution = [end.a.value, end.b.value, end.c.value, end.d.value];
+  const endTime = performance.now() - startTime;
+
+  done(isSolution(layers, solution) ? endTime : "wrong");
+}
+
+/**
+ * @see {@link https://github.com/solidjs/solid}
+ */
+function runSolid(layers, done) {
+  solid.createRoot((dispose) => {
+    const [a, setA] = solid.createSignal(1);
+    const [b, setB] = solid.createSignal(2);
+    const [c, setC] = solid.createSignal(3);
+    const [d, setD] = solid.createSignal(4);
+
+    const start = { a, b, c, d };
+
+    let layer = start;
+
+    for (let i = layers; i--; ) {
+      layer = ((m) => ({
+        a: solid.createMemo(() => m.b()),
+        b: solid.createMemo(() => m.a() - m.c()),
+        c: solid.createMemo(() => m.b() + m.d()),
+        d: solid.createMemo(() => m.c()),
+      }))(layer);
+    }
+
+    const startTime = performance.now();
+    const end = layer;
+
+    solid.batch(() => {
+      setA(4);
+      setB(3);
+      setC(2);
+      setD(1);
+    });
+
+    const solution = [end.a(), end.b(), end.c(), end.d()];
+    const endTime = performance.now() - startTime;
+
+    dispose();
+    done(isSolution(layers, solution) ? endTime : "wrong");
+  });
 }
 
 main();
