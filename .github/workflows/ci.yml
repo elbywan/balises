@@ -26,6 +26,8 @@ jobs:
         run: yarn prettier --check .
       - name: Lint
         run: yarn lint
+      - name: Type check
+        run: yarn typecheck
       - name: Build
         run: yarn build
       - name: Test
