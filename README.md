@@ -4,15 +4,36 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library. ~3.0KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~3.0KB gzipped.
+
+Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
+
+**You can also use it as a standalone signals library** - the reactivity system works independently of the templating, making it useful for any JavaScript project that needs reactive state management.
 
 **[📚️ Documentation & Examples](https://elbywan.github.io/balises/)**
 
-## Note
+## Preamble
 
-This is a personal side project with limited maintenance. Most of the code was written with LLM assistance.
+> [!WARNING]
+> 🚧 Use at your own discretion .
 
-🚧 Use at your own discretion.
+This library was built in a couple of days **using LLM assistance** as an experiment to see if it was possible to produce something high-quality and performant very quickly.
+
+It all begun with me needing a lightweight reactive templating solution with zero dependencies for a non-critical work project at [Datadog](https://www.datadoghq.com/), and since I wanted to explore what modern AI-assisted development could achieve it was a good fit.
+
+Ultimately it turns out that I am quite happy with the result! It is quite performant, ergonomic, has a very small bundle size, is thoroughly tested and suits my needs well. 🌟
+
+**However, please be aware that this is a personal side project with limited maintenance and no guarantees of long-term support.**
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Building Web Components](#building-web-components)
+- [Template Syntax](#template-syntax)
+- [Reactivity API](#reactivity-api)
+- [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
+- [Benchmarks](#benchmarks)
 
 ## Installation
 
@@ -21,6 +42,8 @@ npm install balises
 ```
 
 ## Quick Start
+
+Balises uses tagged template literals to create reactive HTML. Just interpolate signals into your markup and they'll automatically update the DOM when they change.
 
 ```ts
 import { html, signal } from "balises";
@@ -37,9 +60,57 @@ document.body.appendChild(fragment);
 // Call dispose() when done to clean up subscriptions
 ```
 
+## Building Web Components
+
+Balises works naturally with the Web Components API. Just render templates in `connectedCallback` and clean up in `disconnectedCallback`.
+
+```ts
+import { html, signal, effect } from "balises";
+
+class Counter extends HTMLElement {
+  #count = signal(0);
+  #dispose?: () => void;
+
+  connectedCallback() {
+    // Auto-sync to localStorage
+    const syncEffect = effect(() => {
+      localStorage.setItem("counter", String(this.#count.value));
+    });
+
+    const { fragment, dispose } = html`
+      <div>
+        <p>Count: ${this.#count}</p>
+        <button @click=${() => this.#count.update((n) => n - 1)}>-</button>
+        <button @click=${() => this.#count.update((n) => n + 1)}>+</button>
+      </div>
+    `.render();
+
+    this.appendChild(fragment);
+    this.#dispose = () => {
+      syncEffect();
+      dispose();
+    };
+  }
+
+  disconnectedCallback() {
+    this.#dispose?.();
+  }
+}
+
+customElements.define("x-counter", Counter);
+```
+
+Use it in your HTML:
+
+```html
+<x-counter></x-counter>
+```
+
+You can build entire apps this way, or just add interactive widgets to existing pages. No build step required if you use it from a CDN.
+
 ## Template Syntax
 
-The `html` tagged template creates reactive DOM fragments.
+The `html` tagged template creates reactive DOM fragments. When you interpolate a signal, that specific part of the DOM updates automatically when the signal changes.
 
 ### Interpolation Types
 
@@ -69,7 +140,7 @@ html`
 
 ### Efficient List Rendering with `each()`
 
-For lists that change frequently, use `each()` for keyed reconciliation. Templates are cached by key and reused:
+When rendering lists that change frequently, use `each()` for keyed reconciliation. It caches templates by key so items can be reordered, added, or removed without recreating the DOM nodes:
 
 ```ts
 import { html, signal, each } from "balises";
@@ -99,9 +170,9 @@ items.value[0].name.value = "Alicia";
 items.value = [...items.value].reverse();
 ```
 
-The `each()` helper has two forms:
+The `each()` helper has two signatures:
 
-**With key function (recommended when objects may be recreated with same identity):**
+**With key function (use this when objects might be recreated with the same data):**
 
 ```ts
 each(list, keyFn, renderFn);
@@ -111,22 +182,22 @@ each(list, keyFn, renderFn);
 - `keyFn` - Extracts a unique key from each item: `(item, index) => key`
 - `renderFn` - Renders each item (called once per unique key)
 
-**Without key function (automatic keying):**
+**Without key function (uses object references or array indices):**
 
 ```ts
 each(list, renderFn);
 ```
 
-- Objects use their reference as key (reordering works correctly)
-- Primitives use index as key (duplicates are handled correctly)
+- Objects are keyed by reference (reordering works)
+- Primitives are keyed by index (duplicates work correctly)
 
-For content updates without list reconciliation, use nested signals (like `name: signal("Alice")` above).
+If you want to update item content without triggering list reconciliation, nest signals inside your items (like `name: signal("Alice")` above).
 
 ## Reactivity API
 
 ### `signal<T>(value)` / `new Signal<T>(value)`
 
-Creates a reactive value container.
+Wraps a value to make it reactive.
 
 ```ts
 const name = signal("world");
@@ -134,7 +205,7 @@ console.log(name.value); // "world"
 name.value = "everyone"; // Notifies subscribers
 ```
 
-**Updating based on current value:**
+**Updating based on the current value:**
 
 ```ts
 const count = signal(0);
@@ -150,7 +221,7 @@ count.value = count.value * 2;
 
 ### `computed<T>(fn)` / `new Computed<T>(fn)`
 
-Creates a derived value that auto-tracks dependencies.
+Derives a value from other signals. Automatically tracks dependencies.
 
 ```ts
 const firstName = signal("John");
@@ -162,11 +233,11 @@ firstName.value = "Jane";
 console.log(fullName.value); // "Jane Doe"
 ```
 
-Computeds are lazy - they only recompute when accessed and when their dependencies have changed.
+Computed values are lazy - they only recalculate when accessed and a dependency has changed.
 
 ### `effect(fn)`
 
-Creates a side effect that automatically re-runs when its dependencies change. Unlike `computed()`, effects run immediately and are intended for side effects like DOM updates, logging, or persistence.
+Runs a side effect whenever its dependencies change. Under the hood, `effect()` is a computed with an automatic subscription, which makes it run eagerly on every dependency change rather than waiting to be accessed.
 
 ```ts
 import { signal, effect } from "balises";
@@ -183,14 +254,14 @@ count.value = 1; // Logs "Count is now: 1" and updates title
 dispose(); // Stop the effect
 ```
 
-**Use cases:**
+Good for things like:
 
 - Syncing state to localStorage
-- Updating document.title or other DOM properties
+- Updating document.title or other globals
 - Logging and analytics
-- Network requests triggered by state changes
+- Network requests based on state
 
-Effects are automatically disposed when the component that created them is disposed (via the template's `dispose()` function).
+When you call `dispose()` on a template, any effects created during rendering are cleaned up automatically.
 
 **Example: Auto-sync to localStorage**
 
@@ -207,7 +278,7 @@ favorites.value = [...favorites.value, "new item"];
 
 ### `store<T>(obj)`
 
-Proxy-based reactive wrapper. Nested plain objects are wrapped recursively.
+A proxy-based alternative to signals. Nested plain objects become reactive automatically.
 
 ```ts
 const state = store({ count: 0, user: { name: "Alice" } });
@@ -215,7 +286,7 @@ state.count++; // Reactive
 state.user.name = "Bob"; // Also reactive (nested)
 ```
 
-**Note:** Array mutations like `push()`, `pop()`, `splice()` do **not** trigger reactivity. To update arrays reactively, reassign them:
+**Note:** Array mutations like `push()`, `pop()`, `splice()` do **not** trigger reactivity. You need to reassign the array:
 
 ```ts
 const state = store({ items: [1, 2, 3] });
@@ -226,7 +297,7 @@ state.items.push(4);
 // ✅ Triggers reactivity
 state.items = [...state.items, 4];
 
-// Alternative: Use signal for arrays if you want .update() method
+// Alternative: Use signal for arrays to get the .update() helper
 const items = signal([1, 2, 3]);
 items.update((arr) => [...arr, 4]);
 items.update((arr) => arr.filter((n) => n !== 2));
@@ -234,7 +305,7 @@ items.update((arr) => arr.filter((n) => n !== 2));
 
 ### `batch<T>(fn)`
 
-Batch multiple signal updates to defer subscriber notifications until the batch completes.
+Batches multiple signal updates so subscribers only get notified once at the end.
 
 ```ts
 import { batch, signal } from "balises";
@@ -250,7 +321,7 @@ batch(() => {
 
 ### `scope(fn)`
 
-Create a disposal scope that automatically collects all computeds and effects created within, allowing cleanup with a single `dispose()` call.
+Groups reactive primitives together so you can dispose them all at once.
 
 ```ts
 import { scope, signal, computed, effect } from "balises";
@@ -268,7 +339,7 @@ const [state, dispose] = scope(() => {
 dispose();
 ```
 
-Useful for components, temporary reactive contexts, or any scenario where you want automatic cleanup of multiple reactive primitives.
+Handy for components or temporary reactive contexts where you need bulk cleanup.
 
 ### `isSignal(value)`
 
@@ -296,7 +367,7 @@ unsubscribe(); // Stop listening
 
 ### `.dispose()`
 
-Dispose a computed, removing all dependency links.
+Stops a computed from tracking dependencies and frees memory.
 
 ```ts
 const doubled = computed(() => count.value * 2);
@@ -305,13 +376,13 @@ doubled.dispose(); // Stops tracking, frees memory
 
 ## Tree-Shaking / Modular Imports
 
-The library supports granular imports for optimal bundle size:
+You can import just what you need to keep bundle size down:
 
 ```ts
 // Full library (~3.0KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
-// Signals only
+// Signals only (no HTML templating - use in any JS project)
 import { signal, computed, effect, store, batch, scope } from "balises/signals";
 
 // Individual modules
@@ -320,6 +391,25 @@ import { computed } from "balises/signals/computed";
 import { effect } from "balises/signals/effect";
 import { store } from "balises/signals/store";
 import { batch, scope } from "balises/signals/context";
+```
+
+### Using as a Standalone Signals Library
+
+The reactivity system is completely independent of the HTML templating. You can use just the signals in Node.js, Electron, or any JavaScript environment:
+
+```ts
+import { signal, computed, effect } from "balises/signals";
+
+// Reactive state management without DOM
+const users = signal([]);
+const userCount = computed(() => users.value.length);
+
+effect(() => {
+  console.log(`Total users: ${userCount.value}`);
+});
+
+users.value = [{ name: "Alice" }, { name: "Bob" }];
+// Logs: "Total users: 2"
 ```
 
 ## Full Example
@@ -455,6 +545,7 @@ Performance comparison of Balises against other popular reactive libraries. Benc
 ```
 
 **Scenarios:**
+
 - **S1: Layers** - Deep dependency chains (A→B→C→D...)
 - **S2: Wide** - Many independent signals updating in parallel
 - **S3: Diamond** - Multiple paths to same computed (diamond dependencies)
@@ -463,8 +554,9 @@ Performance comparison of Balises against other popular reactive libraries. Benc
 - **S6: Batch** - Batched/transactional updates
 
 **Interpretation:**
-- Balises excels at diamond dependencies, list operations, and batching while maintaining competitive performance across all scenarios
-- Results show pure reactivity performance - real-world apps should consider framework ecosystem, DX, and specific use cases
+
+- Balises performs well across all scenarios, particularly excelling at diamond dependencies, list operations, and batching
+- These are synthetic benchmarks measuring pure reactivity - real apps should consider the whole picture (ecosystem, docs, community, etc.)
 - Lower rank = better performance
 
 _Last updated: 2025-12-30_

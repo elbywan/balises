@@ -182,8 +182,8 @@ ${rankingsTable}
 - **S6: Batch** - Batched/transactional updates
 
 **Interpretation:**
-- Balises excels at diamond dependencies, list operations, and batching while maintaining competitive performance across all scenarios
-- Results show pure reactivity performance - real-world apps should consider framework ecosystem, DX, and specific use cases
+- Balises performs well across all scenarios, particularly excelling at diamond dependencies, list operations, and batching
+- These are synthetic benchmarks measuring pure reactivity - real apps should consider the whole picture (ecosystem, docs, community, etc.)
 - Lower rank = better performance
 
 _Last updated: ${new Date().toISOString().split("T")[0]}_
