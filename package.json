@@ -57,6 +57,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc && rolldown -c",
     "test": "node --expose-gc --import tsx/esm --import ./tests/setup.ts --test tests/*.test.ts",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
     "lint": "eslint .",
     "pretty": "prettier --write .",
     "examples": "rolldown -c examples/rolldown.config.ts && yarn dlx serve examples",

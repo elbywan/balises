@@ -1,4 +1,4 @@
-import { html, computed, store, each, effect } from "../../src/index.js";
+import { html, computed, store, each, effect, scope } from "../../src/index.js";
 
 interface Pokemon {
   id: number;
@@ -72,32 +72,29 @@ function getDefaultLanguage(): string {
  * - Internationalization (i18n)
  */
 export class PokemonViewerElement extends HTMLElement {
-  #state = store(
-    {
-      pokemonId: 1,
-      pokemon: null as Pokemon | null,
-      pokemonName: "", // Localized name
-      typeNames: [] as { key: string; name: string }[], // Localized type names with keys
-      loading: false,
-      showLoader: false,
-      error: null as string | null,
-      shiny: false,
-      favorites: [] as FavoritePokemon[],
-      searchQuery: "",
-      searchResults: [] as { name: string; url: string }[],
-      compareMode: false,
-      comparePokemon: null as Pokemon | null,
-      comparePokemonName: "",
-      compareTypeNames: [] as { key: string; name: string }[],
-      language: getDefaultLanguage(),
-    },
-    { batched: true },
-  );
+  #state = store({
+    pokemonId: 1,
+    pokemon: null as Pokemon | null,
+    pokemonName: "", // Localized name
+    typeNames: [] as { key: string; name: string }[], // Localized type names with keys
+    loading: false,
+    showLoader: false,
+    error: null as string | null,
+    shiny: false,
+    favorites: [] as FavoritePokemon[],
+    searchQuery: "",
+    searchResults: [] as { name: string; url: string }[],
+    compareMode: false,
+    comparePokemon: null as Pokemon | null,
+    comparePokemonName: "",
+    compareTypeNames: [] as { key: string; name: string }[],
+    language: getDefaultLanguage(),
+  });
 
   #loaderTimeout: ReturnType<typeof setTimeout> | null = null;
   #searchTimeout: ReturnType<typeof setTimeout> | null = null;
   #dispose: (() => void) | null = null;
-  #disposeEffects: Array<() => void> = [];
+  #disposeEffects: (() => void) | null = null;
   #audio: HTMLAudioElement | null = null;
 
   connectedCallback() {
@@ -111,20 +108,21 @@ export class PokemonViewerElement extends HTMLElement {
       }
     }
 
-    // Auto-sync favorites to localStorage whenever they change
-    const syncFavorites = effect(() => {
-      localStorage.setItem(
-        "pokemon-favorites",
-        JSON.stringify(this.#state.favorites),
-      );
-    });
-    this.#disposeEffects.push(syncFavorites);
+    // Create a scope for effects that auto-sync to localStorage
+    this.#disposeEffects = scope(() => {
+      // Auto-sync favorites to localStorage whenever they change
+      effect(() => {
+        localStorage.setItem(
+          "pokemon-favorites",
+          JSON.stringify(this.#state.favorites),
+        );
+      });
 
-    // Auto-sync language preference
-    const syncLanguage = effect(() => {
-      localStorage.setItem("pokemon-language", this.#state.language);
-    });
-    this.#disposeEffects.push(syncLanguage);
+      // Auto-sync language preference
+      effect(() => {
+        localStorage.setItem("pokemon-language", this.#state.language);
+      });
+    })[1];
 
     const prev = () => {
       if (this.#state.pokemonId > 1) {
@@ -165,18 +163,18 @@ export class PokemonViewerElement extends HTMLElement {
 
       const index = this.#state.favorites.findIndex((f) => f.id === pokemon.id);
       if (index >= 0) {
-        this.#state.favorites.update((favs) =>
-          favs.filter((f) => f.id !== pokemon.id),
+        this.#state.favorites = this.#state.favorites.filter(
+          (f) => f.id !== pokemon.id,
         );
       } else {
-        this.#state.favorites.update((favs) => [
-          ...favs,
+        this.#state.favorites = [
+          ...this.#state.favorites,
           {
             id: pokemon.id,
             name: pokemon.name,
             sprite: pokemon.sprites.front_default,
           },
-        ]);
+        ];
       }
       // localStorage sync happens automatically via effect()
     };
@@ -188,8 +186,8 @@ export class PokemonViewerElement extends HTMLElement {
 
     const removeFavorite = (fav: FavoritePokemon, e: Event) => {
       e.stopPropagation();
-      this.#state.favorites.update((favs) =>
-        favs.filter((f) => f.id !== fav.id),
+      this.#state.favorites = this.#state.favorites.filter(
+        (f) => f.id !== fav.id,
       );
       // localStorage sync happens automatically via effect()
     };
@@ -744,7 +742,7 @@ export class PokemonViewerElement extends HTMLElement {
     if (this.#loaderTimeout) clearTimeout(this.#loaderTimeout);
     if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
     if (this.#audio) this.#audio.pause();
-    this.#disposeEffects.forEach((dispose) => dispose());
+    this.#disposeEffects?.();
     this.#dispose?.();
   }
 }

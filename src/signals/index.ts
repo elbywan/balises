@@ -10,7 +10,7 @@ export { Signal, signal } from "./signal.js";
 export { Computed, computed } from "./computed.js";
 export { effect } from "./effect.js";
 export { store } from "./store.js";
-export { batch, type Subscriber } from "./context.js";
+export { batch, scope, type Subscriber } from "./context.js";
 
 import { Signal } from "./signal.js";
 import { Computed } from "./computed.js";

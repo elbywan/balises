@@ -313,6 +313,19 @@
               Batches multiple signal updates into a single notification pass.
             </p>
           </div>
+
+          <!-- scope() -->
+          <div class="api-item">
+            <h3>scope(fn)</h3>
+            <div class="code-wrapper">
+              <pre><code class="language-javascript" data-code="scope"></code></pre>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <p>
+              Creates a disposal scope that collects all computeds and effects,
+              allowing cleanup with a single <code>dispose()</code> call.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -434,6 +447,14 @@ const { fragment, dispose } = tmpl.render();`,
   name.value = 'Alice';
   items.value = [...items.value, newItem];
 }); // subscribers notified once at the end`,
+        scope: `const [state, dispose] = scope(() => {
+  const count = signal(0);
+  const doubled = computed(() => count.value * 2);
+  effect(() => console.log(doubled.value));
+  return { count, doubled };
+});
+// Use state.count, state.doubled...
+dispose(); // cleanup everything at once`,
       });
 
       // Also expose on window for backward compatibility (if needed)

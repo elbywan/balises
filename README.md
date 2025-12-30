@@ -226,7 +226,7 @@ state.items.push(4);
 // ✅ Triggers reactivity
 state.items = [...state.items, 4];
 
-// ✅ Using update() for functional updates (works with both signal and store)
+// Alternative: Use signal for arrays if you want .update() method
 const items = signal([1, 2, 3]);
 items.update((arr) => [...arr, 4]);
 items.update((arr) => arr.filter((n) => n !== 2));
@@ -247,6 +247,28 @@ batch(() => {
   b.value = 20;
 }); // Subscribers notified once after both updates
 ```
+
+### `scope(fn)`
+
+Create a disposal scope that automatically collects all computeds and effects created within, allowing cleanup with a single `dispose()` call.
+
+```ts
+import { scope, signal, computed, effect } from "balises";
+
+const [state, dispose] = scope(() => {
+  const count = signal(0);
+  const doubled = computed(() => count.value * 2);
+  effect(() => console.log(doubled.value));
+  return { count, doubled };
+});
+
+// Use state.count, state.doubled...
+
+// Later: clean up everything at once
+dispose();
+```
+
+Useful for components, temporary reactive contexts, or any scenario where you want automatic cleanup of multiple reactive primitives.
 
 ### `isSignal(value)`
 
@@ -290,14 +312,14 @@ The library supports granular imports for optimal bundle size:
 import { html, signal, computed, effect } from "balises";
 
 // Signals only
-import { signal, computed, effect, store, batch } from "balises/signals";
+import { signal, computed, effect, store, batch, scope } from "balises/signals";
 
 // Individual modules
 import { signal } from "balises/signals/signal";
 import { computed } from "balises/signals/computed";
 import { effect } from "balises/signals/effect";
 import { store } from "balises/signals/store";
-import { batch } from "balises/signals/context";
+import { batch, scope } from "balises/signals/context";
 ```
 
 ## Full Example

@@ -8,6 +8,7 @@ import {
   setContext,
   isBatching,
   enqueueBatch,
+  registerDisposer,
   type Subscriber,
 } from "./context.js";
 
@@ -30,6 +31,9 @@ export class Computed<T> {
   constructor(fn: () => T) {
     this.#fn = fn;
     this.#recompute();
+
+    // Auto-register disposal in current root scope
+    registerDisposer(() => this.dispose());
   }
 
   get value(): T {

@@ -53,3 +53,58 @@ export function enqueueBatchAll(subs: Subscriber[]): void {
     batchQueue!.add(subs[i]!);
   }
 }
+
+/** Scope disposal: collect all disposers in a scope */
+let disposalStack: Array<Array<() => void>> | null = null;
+
+/**
+ * Create a disposal scope that collects all subscriptions and computeds created within.
+ * Returns the result of the function and a dispose function that cleans up all resources.
+ *
+ * @example
+ * ```ts
+ * const [result, dispose] = scope(() => {
+ *   const count = signal(0);
+ *   const doubled = computed(() => count.value * 2);
+ *   effect(() => console.log(doubled.value));
+ *   return { count, doubled };
+ * });
+ *
+ * // Later: clean up all subscriptions and computeds
+ * dispose();
+ * ```
+ */
+export function scope<T>(fn: () => T): [result: T, dispose: () => void] {
+  const disposers: Array<() => void> = [];
+
+  // Push new disposal context
+  if (!disposalStack) disposalStack = [];
+  disposalStack.push(disposers);
+
+  try {
+    const result = fn();
+    return [
+      result,
+      () => {
+        for (let i = disposers.length - 1; i >= 0; i--) {
+          disposers[i]!();
+        }
+        disposers.length = 0;
+      },
+    ];
+  } finally {
+    // Pop disposal context
+    disposalStack.pop();
+    if (disposalStack.length === 0) disposalStack = null;
+  }
+}
+
+/**
+ * Register a disposer in the current scope (if any).
+ * This is called internally by computed/effect when they create cleanup functions.
+ */
+export function registerDisposer(dispose: () => void): void {
+  if (disposalStack && disposalStack.length > 0) {
+    disposalStack[disposalStack.length - 1]!.push(dispose);
+  }
+}
