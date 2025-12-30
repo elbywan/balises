@@ -856,14 +856,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"balises@npm:^0.2.0, balises@workspace:.":
+"balises@workspace:.":
   version: 0.0.0-use.local
   resolution: "balises@workspace:."
   dependencies:
     "@eslint/js": "npm:9.39.2"
     "@types/jsdom": "npm:27.0.0"
     "@types/node": "npm:25.0.3"
-    balises: "npm:^0.2.0"
+    balises: "workspace:."
     eslint: "npm:9.39.2"
     jsdom: "npm:27.4.0"
     prettier: "npm:3.7.4"
