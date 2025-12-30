@@ -75,7 +75,7 @@
     "bench:conditional": "cd bench && yarn && yarn start:conditional --isolate",
     "bench:list": "cd bench && yarn && yarn start:list --isolate",
     "docs": "yarn docs:build && yarn dlx serve _site",
-    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/quickstart-demo.js _site/ && cp docs/counter-demo.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/"
+    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/*.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

@@ -640,23 +640,29 @@ describe("Template.render()", () => {
      * Edge case: SVG elements
      *
      * Note: The library currently uses document.createElement() which creates
-     * HTML namespace elements. SVG elements are created but without proper
-     * SVG namespace (they get uppercase tagNames and XHTML namespace).
-     * For proper SVG support, the parser would need namespace-aware element creation.
-     * This test verifies the current behavior - elements are created and attributes work.
+     * SVG elements are now created with proper SVG namespace.
+     * This means tagNames are lowercase and attributes like viewBox are preserved correctly.
      */
-    it("should render SVG elements (without proper namespace)", () => {
-      const { fragment } = html`<svg width="100" height="100">
+    it("should render SVG elements with proper namespace", () => {
+      const { fragment } = html`<svg
+        width="100"
+        height="100"
+        viewBox="0 0 100 100"
+      >
         <circle cx="50" cy="50" r="40" />
       </svg>`.render();
 
       const svg = fragment.firstChild as Element;
-      // Note: tagName is uppercase because createElement is used (HTML namespace)
-      assert.strictEqual(svg.tagName, "SVG");
+      // tagName is lowercase because createElementNS is used (SVG namespace)
+      assert.strictEqual(svg.tagName, "svg");
       assert.strictEqual(svg.getAttribute("width"), "100");
+      assert.strictEqual(svg.getAttribute("viewBox"), "0 0 100 100");
+      assert.strictEqual(svg.namespaceURI, "http://www.w3.org/2000/svg");
 
       const circle = svg.querySelector("circle")!;
+      assert.strictEqual(circle.tagName, "circle");
       assert.strictEqual(circle.getAttribute("r"), "40");
+      assert.strictEqual(circle.namespaceURI, "http://www.w3.org/2000/svg");
     });
 
     /**

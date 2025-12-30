@@ -5,6 +5,10 @@ header {
   margin-bottom: 4rem;
 }
 
+header img {
+  margin-bottom: 1.5rem;
+}
+
 h1 {
   font-size: 3rem;
 }
@@ -309,7 +313,7 @@ a.btn.examples:hover {
   border-color: var(--text-muted);
 }
 
-.install-tab.active {
+.install-tab[data-active="true"] {
   background: var(--bg-subtle);
   border-color: var(--accent);
   color: var(--text);
@@ -369,6 +373,12 @@ footer {
   text-align: center;
   color: var(--text-muted);
   font-size: 0.875rem;
+}
+
+footer p + p {
+  margin-top: 0.5rem;
+  opacity: 0.7;
+  font-size: 0.9rem;
 }
 
 footer a {

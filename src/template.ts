@@ -13,6 +13,9 @@
 import { computed, isSignal, signal, type Reactive } from "./signals/index.js";
 import { HTMLParser } from "./parser.js";
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+type AttrPart = string | { index: number };
+
 /**
  * Bind a value to an update function.
  * If reactive, subscribes and returns unsubscribe. Otherwise returns null.
@@ -47,92 +50,96 @@ export class Template {
     const parser = new HTMLParser();
     const values = this.values;
 
+    const handleAttribute = (el: Element, name: string, parts: AttrPart[]) => {
+      const prefix = name[0];
+      const part0 = parts[0];
+
+      // Event binding: @click=${handler}
+      if (prefix === "@") {
+        if (part0 && typeof part0 !== "string") {
+          const handler = values[part0.index] as EventListener;
+          el.addEventListener(name.slice(1), handler);
+          disposers.push(() => el.removeEventListener(name.slice(1), handler));
+        }
+        return;
+      }
+
+      // Property binding: .value=${data} - sets DOM property directly
+      if (prefix === ".") {
+        if (part0 && typeof part0 !== "string") {
+          const unsub = bind(values[part0.index], (v) => {
+            (el as unknown as Record<string, unknown>)[name.slice(1)] = v;
+          });
+          if (unsub) disposers.push(unsub);
+        }
+        return;
+      }
+
+      // Static attribute (all parts are strings)
+      if (!parts.some((p) => typeof p !== "string")) {
+        const value = (parts as string[]).join("");
+        if (value || !parts.length) el.setAttribute(name, value);
+        return;
+      }
+
+      // Dynamic attribute
+      const dynParts = parts.filter(
+        (p): p is { index: number } => typeof p !== "string",
+      );
+      const sigs = dynParts
+        .map((p) => values[p.index])
+        .filter(isSignal) as Reactive<unknown>[];
+      const single = parts.length === 1;
+
+      const update = () => {
+        if (single) {
+          const val = isSignal(values[dynParts[0]!.index])
+            ? (values[dynParts[0]!.index] as Reactive<unknown>).value
+            : values[dynParts[0]!.index];
+          if (val == null || val === false) el.removeAttribute(name);
+          else el.setAttribute(name, val === true ? "" : String(val));
+        } else {
+          el.setAttribute(
+            name,
+            parts
+              .map((p) => {
+                if (typeof p === "string") return p;
+                const val = isSignal(values[p.index])
+                  ? (values[p.index] as Reactive<unknown>).value
+                  : values[p.index];
+                return val == null ? "" : String(val);
+              })
+              .join(""),
+          );
+        }
+      };
+
+      update();
+      for (const s of sigs) disposers.push(s.subscribe(update));
+    };
+
     parser.parseTemplate(this.strings, {
       onText: (text) => {
-        stack.at(-1)!.appendChild(document.createTextNode(text));
+        stack.at(-1)!.append(text);
       },
 
-      onElement: (el, selfClosing) => {
-        stack.at(-1)!.appendChild(el);
+      onOpenTag: (tag, attrs, selfClosing) => {
+        const parent = stack.at(-1)!;
+        const el =
+          tag === "svg" ||
+          tag === "SVG" ||
+          (parent instanceof Element && parent.namespaceURI === SVG_NS)
+            ? document.createElementNS(SVG_NS, tag)
+            : document.createElement(tag);
+        for (const [name, parts] of attrs) {
+          handleAttribute(el, name, parts);
+        }
+        parent.appendChild(el);
         if (!selfClosing) stack.push(el);
       },
 
       onClose: () => {
         if (stack.length > 1) stack.pop();
-      },
-
-      onAttribute: (el, name, parts) => {
-        const prefix = name[0];
-
-        // Event binding: @click=${handler}
-        if (prefix === "@") {
-          const event = name.slice(1);
-          const part = parts[0];
-          if (part && typeof part !== "string") {
-            const handler = values[part.index] as EventListener;
-            el.addEventListener(event, handler);
-            disposers.push(() => el.removeEventListener(event, handler));
-          }
-          return;
-        }
-
-        // Property binding: .value=${data} - sets DOM property directly
-        if (prefix === ".") {
-          const prop = name.slice(1);
-          const part = parts[0];
-          if (part && typeof part !== "string") {
-            const unsub = bind(values[part.index], (v) => {
-              (el as unknown as Record<string, unknown>)[prop] = v;
-            });
-            if (unsub) disposers.push(unsub);
-          }
-          return;
-        }
-
-        // Static attribute (all parts are strings)
-        if (parts.every((p) => typeof p === "string")) {
-          const value = parts.join("");
-          if (value || parts.length === 0) {
-            el.setAttribute(name, value);
-          }
-          return;
-        }
-
-        // Dynamic attribute - has at least one interpolated value
-        const dynamicParts = parts.filter(
-          (p): p is { index: number } => typeof p !== "string",
-        );
-        const signals = dynamicParts
-          .map((p) => values[p.index])
-          .filter(isSignal) as Reactive<unknown>[];
-
-        // Single dynamic with no static parts: handle null/false as removal
-        const isSingleDynamic =
-          parts.length === 1 && typeof parts[0] !== "string";
-
-        const update = () => {
-          if (isSingleDynamic) {
-            // Boolean/null handling: false/null removes, true sets empty string
-            const v = values[dynamicParts[0]!.index];
-            const val = isSignal(v) ? (v as Reactive<unknown>).value : v;
-            if (val == null || val === false) el.removeAttribute(name);
-            else el.setAttribute(name, val === true ? "" : String(val));
-          } else {
-            // Multi-part: concatenate all parts
-            const resolved = parts
-              .map((p) => {
-                if (typeof p === "string") return p;
-                const v = values[p.index];
-                const val = isSignal(v) ? (v as Reactive<unknown>).value : v;
-                return val == null ? "" : String(val);
-              })
-              .join("");
-            el.setAttribute(name, resolved);
-          }
-        };
-
-        update();
-        signals.forEach((s) => disposers.push(s.subscribe(update)));
       },
 
       onSlot: (index) => {

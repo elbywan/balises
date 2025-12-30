@@ -44,8 +44,7 @@ jobs:
           mkdir -p _site/assets
           cp docs/index.html _site/
           cp docs/*.css _site/
-          cp docs/quickstart-demo.js _site/
-          cp docs/counter-demo.js _site/
+          cp docs/*.js _site/
           cp assets/logo.svg _site/assets/
           cp assets/logo-icon.svg _site/assets/
           cp -r examples _site/examples

@@ -7,18 +7,21 @@ export type AttrPart = string | { index: number };
 
 export interface ParseCallbacks {
   onText: (text: string) => void;
-  onElement: (el: Element, selfClosing: boolean) => void;
+  onOpenTag: (
+    tag: string,
+    attrs: [string, AttrPart[]][],
+    selfClosing: boolean,
+  ) => void;
   onClose: () => void;
-  onAttribute: (el: Element, name: string, parts: AttrPart[]) => void;
   onSlot: (index: number) => void;
 }
 
 export class HTMLParser {
   private s = 0; // state
-  private el: Element | null = null;
   private tag = "";
   private attr = "";
   private parts: AttrPart[] = [];
+  private attrs: [string, AttrPart[]][] = [];
   private text = "";
   private q = "";
 
@@ -68,16 +71,10 @@ export class HTMLParser {
         // TagName
         if (this.isT(ch)) this.tag += ch;
         else if (this.isW(ch)) {
-          this.el = document.createElement(this.tag);
-          this.tag = "";
           this.s = 3;
         } else if (ch === ">") {
-          this.el = document.createElement(this.tag);
-          this.tag = "";
           this.emit(cb, false);
         } else if (ch === "/" && nx === ">") {
-          this.el = document.createElement(this.tag);
-          this.tag = "";
           i++;
           this.emit(cb, true);
         }
@@ -98,13 +95,13 @@ export class HTMLParser {
         if (this.isT(ch) || ch === "_") this.attr += ch;
         else if (ch === "=") this.s = 5;
         else if (this.isW(ch)) {
-          this.emitAttr(cb);
+          this.emitAttr();
           this.s = 3;
         } else if (ch === ">") {
-          this.emitAttr(cb);
+          this.emitAttr();
           this.emit(cb, false);
         } else if (ch === "/" && nx === ">") {
-          this.emitAttr(cb);
+          this.emitAttr();
           i++;
           this.emit(cb, true);
         }
@@ -124,7 +121,7 @@ export class HTMLParser {
           ? ch === this.q
           : this.isW(ch) || ch === ">" || ch === "/";
         if (end) {
-          this.emitAttr(cb);
+          this.emitAttr();
           this.q = "";
           this.s = 3;
           if (ch === ">") this.emit(cb, false);
@@ -168,13 +165,14 @@ export class HTMLParser {
   }
 
   private emit(cb: ParseCallbacks, self: boolean) {
-    cb.onElement(this.el!, self);
-    this.el = null;
+    cb.onOpenTag(this.tag, this.attrs, self);
+    this.tag = "";
+    this.attrs = [];
     this.s = 0;
   }
 
-  private emitAttr(cb: ParseCallbacks) {
-    if (this.el && this.attr) cb.onAttribute(this.el, this.attr, this.parts);
+  private emitAttr() {
+    if (this.attr) this.attrs.push([this.attr, this.parts]);
     this.attr = "";
     this.parts = [];
   }
