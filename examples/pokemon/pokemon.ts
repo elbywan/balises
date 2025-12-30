@@ -1,61 +1,13 @@
-import { html, computed, store, each, effect, scope } from "../../src/index.js";
-
-interface Pokemon {
-  id: number;
-  name: string;
-  sprites: {
-    front_default: string;
-    front_shiny: string;
-    other?: {
-      "official-artwork"?: {
-        front_default: string;
-        front_shiny: string;
-      };
-    };
-  };
-  types: { type: { name: string; url: string } }[];
-  stats: { base_stat: number; stat: { name: string } }[];
-  height: number;
-  weight: number;
-  cries?: { latest?: string };
-  species: { url: string };
-}
-
-interface PokemonSpecies {
-  names: { language: { name: string }; name: string }[];
-}
-
-interface TypeData {
-  names: { language: { name: string }; name: string }[];
-}
-
-interface FavoritePokemon {
-  id: number;
-  name: string;
-  sprite: string;
-}
-
-const LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "Français" },
-  { code: "de", label: "Deutsch" },
-  { code: "es", label: "Español" },
-  { code: "it", label: "Italiano" },
-  { code: "ja", label: "日本語" },
-  { code: "ko", label: "한국어" },
-  { code: "zh-Hans", label: "中文" },
-];
-
-/** Get default language from browser, falling back to English */
-function getDefaultLanguage(): string {
-  const saved = localStorage.getItem("pokemon-language");
-  if (saved) return saved;
-
-  // Check browser language
-  const browserLang = navigator.language.split("-")[0]; // "fr-FR" -> "fr"
-  const supported = LANGUAGES.find((l) => l.code === browserLang);
-  return supported ? supported.code : "en";
-}
+import { html, computed, store, effect, scope } from "../../src/index.js";
+import type { Pokemon, FavoritePokemon } from "./types.js";
+import { LANGUAGES, getDefaultLanguage } from "./utils/language.js";
+import { loadFavorites } from "./utils/storage.js";
+import { PokemonService } from "./services/pokemon-service.js";
+import { NavigationControls } from "./components/navigation-controls.js";
+import { SearchBox, type SearchResult } from "./components/search-box.js";
+import { PokemonCard } from "./components/pokemon-card.js";
+import { ComparePanel } from "./components/compare-panel.js";
+import { FavoritesList } from "./components/favorites-list.js";
 
 /**
  * Pokemon Viewer - A feature-rich example showcasing:
@@ -83,7 +35,7 @@ export class PokemonViewerElement extends HTMLElement {
     shiny: false,
     favorites: [] as FavoritePokemon[],
     searchQuery: "",
-    searchResults: [] as { name: string; url: string }[],
+    searchResults: [] as SearchResult[],
     compareMode: false,
     comparePokemon: null as Pokemon | null,
     comparePokemonName: "",
@@ -96,17 +48,11 @@ export class PokemonViewerElement extends HTMLElement {
   #dispose: (() => void) | null = null;
   #disposeEffects: (() => void) | null = null;
   #audio: HTMLAudioElement | null = null;
+  #pokemonService = new PokemonService();
 
   connectedCallback() {
     // Load favorites from localStorage
-    const saved = localStorage.getItem("pokemon-favorites");
-    if (saved) {
-      try {
-        this.#state.favorites = JSON.parse(saved);
-      } catch {
-        // Ignore invalid JSON
-      }
-    }
+    this.#state.favorites = loadFavorites();
 
     // Create a scope for effects that auto-sync to localStorage
     this.#disposeEffects = scope(() => {
@@ -124,6 +70,7 @@ export class PokemonViewerElement extends HTMLElement {
       });
     })[1];
 
+    // Event handlers
     const prev = () => {
       if (this.#state.pokemonId > 1) {
         this.#state.pokemonId--;
@@ -207,7 +154,7 @@ export class PokemonViewerElement extends HTMLElement {
       }
     };
 
-    const selectSearchResult = (result: { name: string; url: string }) => {
+    const selectSearchResult = (result: SearchResult) => {
       const id = parseInt(result.url.split("/").filter(Boolean).pop()!);
       this.#state.pokemonId = id;
       this.#state.searchQuery = "";
@@ -231,17 +178,10 @@ export class PokemonViewerElement extends HTMLElement {
 
     const setComparePokemon = async () => {
       const randomId = Math.floor(Math.random() * 1025) + 1;
-      try {
-        const response = await fetch(
-          `https://pokeapi.co/api/v2/pokemon/${randomId}`,
-        );
-        if (response.ok) {
-          const pokemon = await response.json();
-          this.#state.comparePokemon = pokemon;
-          this.fetchLocalizedNames(pokemon, true);
-        }
-      } catch {
-        // Ignore errors
+      const pokemon = await this.#pokemonService.fetchPokemon(randomId);
+      if (pokemon) {
+        this.#state.comparePokemon = pokemon;
+        this.fetchLocalizedNames(pokemon, true);
       }
     };
 
@@ -260,89 +200,6 @@ export class PokemonViewerElement extends HTMLElement {
     const isFavorite = computed(() =>
       this.#state.favorites.some((f) => f.id === this.#state.pokemon?.id),
     );
-
-    const spriteUrl = computed(() => {
-      const pokemon = this.#state.pokemon;
-      if (!pokemon) return "";
-      const artwork = pokemon.sprites.other?.["official-artwork"];
-      if (this.#state.shiny) {
-        return artwork?.front_shiny || pokemon.sprites.front_shiny;
-      }
-      return artwork?.front_default || pokemon.sprites.front_default;
-    });
-
-    const totalStats = computed(
-      () =>
-        this.#state.pokemon?.stats.reduce((sum, s) => sum + s.base_stat, 0) ??
-        0,
-    );
-
-    // Computed values for localized type display
-    const mainTypeDisplay = computed(() =>
-      (this.#state.pokemon?.types ?? []).map((t) => {
-        const typeKey = t.type.name;
-        const found = this.#state.typeNames.find((t) => t.key === typeKey);
-        return { key: typeKey, name: found ? found.name : typeKey };
-      }),
-    );
-
-    const compareTypeDisplay = computed(() =>
-      (this.#state.comparePokemon?.types ?? []).map((t) => {
-        const typeKey = t.type.name;
-        const found = this.#state.compareTypeNames.find(
-          (t) => t.key === typeKey,
-        );
-        return { key: typeKey, name: found ? found.name : typeKey };
-      }),
-    );
-
-    const renderType = (typeKey: string, displayName: string) => html`
-      <span class="type-badge" data-type=${typeKey}>${displayName}</span>
-    `;
-
-    const renderStat = (
-      stat: { base_stat: number; stat: { name: string } },
-      compareStat?: number,
-    ) => {
-      const percentage = Math.min(stat.base_stat, 150) / 1.5;
-      const hue = Math.min(stat.base_stat, 150) * 0.8;
-      const diff = compareStat !== undefined ? stat.base_stat - compareStat : 0;
-      return html`
-        <div class="stat">
-          <span class="stat-name">${stat.stat.name}</span>
-          <div class="stat-bar">
-            <div
-              class="stat-fill"
-              style="width: ${percentage}%; background: hsl(${hue}, 70%, 50%)"
-            ></div>
-          </div>
-          <span class="stat-value">${stat.base_stat}</span>
-          ${compareStat !== undefined
-            ? html`<span
-                class="stat-diff ${diff > 0
-                  ? "positive"
-                  : diff < 0
-                    ? "negative"
-                    : ""}"
-                >${diff > 0 ? "+" : ""}${diff !== 0 ? diff : "="}</span
-              >`
-            : null}
-        </div>
-      `;
-    };
-
-    const renderFavorite = (fav: FavoritePokemon) => html`
-      <div class="favorite-item" @click=${() => selectFavorite(fav)}>
-        <img src=${fav.sprite} alt=${fav.name} />
-        <span>${fav.name}</span>
-        <button
-          class="remove-btn"
-          @click=${(e: Event) => removeFavorite(fav, e)}
-        >
-          ×
-        </button>
-      </div>
-    `;
 
     const { fragment, dispose } = html`
       <div class="pokemon-viewer">
@@ -365,66 +222,21 @@ export class PokemonViewerElement extends HTMLElement {
         </div>
 
         <!-- Search Section -->
-        <div class="search-section">
-          <div class="search-box">
-            <input
-              type="search"
-              placeholder="Search Pokemon..."
-              @input=${onSearchInput}
-              @search=${onSearchInput}
-            />
-            <div
-              class="search-results"
-              style=${computed(() =>
-                this.#state.searchResults.length > 0 ? "" : "display: none",
-              )}
-            >
-              ${computed(() =>
-                this.#state.searchResults
-                  .slice(0, 8)
-                  .map(
-                    (r) => html`
-                      <div
-                        class="search-result"
-                        @click=${() => selectSearchResult(r)}
-                      >
-                        ${r.name}
-                      </div>
-                    `,
-                  ),
-              )}
-            </div>
-          </div>
-        </div>
+        ${SearchBox({
+          searchQuery: this.#state.searchQuery,
+          searchResults: this.#state.searchResults,
+          onInput: onSearchInput,
+          onSelectResult: selectSearchResult,
+        })}
 
         <!-- Navigation Controls -->
-        <div class="controls">
-          <button
-            @click=${prev}
-            .disabled=${computed(
-              () => this.#state.pokemonId <= 1 || this.#state.loading,
-            )}
-          >
-            ←
-          </button>
-          <span class="pokemon-id"
-            >#${computed(() =>
-              String(this.#state.pokemonId).padStart(4, "0"),
-            )}</span
-          >
-          <button
-            @click=${next}
-            .disabled=${computed(() => this.#state.loading)}
-          >
-            →
-          </button>
-          <button
-            @click=${random}
-            .disabled=${computed(() => this.#state.loading)}
-          >
-            Random
-          </button>
-        </div>
+        ${NavigationControls({
+          pokemonId: this.#state.pokemonId,
+          loading: this.#state.loading,
+          onPrev: prev,
+          onNext: next,
+          onRandom: random,
+        })}
 
         <!-- Error Message -->
         ${computed(() =>
@@ -433,187 +245,45 @@ export class PokemonViewerElement extends HTMLElement {
             : null,
         )}
 
-        <!-- Pokemon Card -->
+        <!-- Pokemon Card with Compare Panel -->
         <div
-          class="pokemon-card"
+          class="pokemon-card-wrapper"
           style=${computed(() => (this.#state.error ? "display: none" : ""))}
         >
           ${computed(() =>
-            this.#state.showLoader
-              ? html`<div class="loading-overlay">
-                  <div class="spinner"></div>
-                </div>`
-              : null,
+            PokemonCard({
+              pokemon: this.#state.pokemon,
+              pokemonName: this.#state.pokemonName,
+              typeNames: this.#state.typeNames,
+              shiny: this.#state.shiny,
+              loading: this.#state.loading,
+              showLoader: this.#state.showLoader,
+              error: this.#state.error,
+              isFavorite: isFavorite.value,
+              compareMode: this.#state.compareMode,
+              onToggleShiny: toggleShiny,
+              onPlayCry: playCry,
+              onToggleFavorite: toggleFavorite,
+              onToggleCompare: toggleCompare,
+              comparePokemonStats: this.#state.comparePokemon?.stats,
+              comparePanel: this.#state.compareMode
+                ? ComparePanel({
+                    comparePokemon: this.#state.comparePokemon,
+                    comparePokemonName: this.#state.comparePokemonName,
+                    compareTypeNames: this.#state.compareTypeNames,
+                    onShuffle: setComparePokemon,
+                  })
+                : undefined,
+            }),
           )}
-
-          <!-- Action Buttons -->
-          <div class="action-buttons">
-            <button class="icon-btn" @click=${toggleShiny} title="Toggle Shiny">
-              ${computed(() => (this.#state.shiny ? "★" : "☆"))}
-            </button>
-            <button
-              class="icon-btn"
-              @click=${playCry}
-              title="Play Cry"
-              .disabled=${computed(() => !this.#state.pokemon?.cries?.latest)}
-            >
-              🔊
-            </button>
-            <button
-              class="icon-btn ${computed(() =>
-                isFavorite.value ? "active" : "",
-              )}"
-              @click=${toggleFavorite}
-              title="Toggle Favorite"
-            >
-              ${computed(() => (isFavorite.value ? "❤️" : "🤍"))}
-            </button>
-            <button
-              class="icon-btn"
-              @click=${toggleCompare}
-              title="Compare Mode"
-            >
-              ${computed(() => (this.#state.compareMode ? "📊" : "📈"))}
-            </button>
-          </div>
-
-          <!-- Main Pokemon Display -->
-          <div
-            class="pokemon-display ${computed(() =>
-              this.#state.compareMode ? "compare-mode" : "",
-            )}"
-          >
-            <div class="pokemon-main">
-              <img
-                src=${spriteUrl}
-                alt=${computed(
-                  () =>
-                    this.#state.pokemonName || this.#state.pokemon?.name || "",
-                )}
-                class=${computed(() => (this.#state.loading ? "faded" : ""))}
-              />
-              <h3>
-                ${computed(
-                  () =>
-                    this.#state.pokemonName || this.#state.pokemon?.name || "",
-                )}
-                ${computed(() =>
-                  this.#state.shiny
-                    ? html`<span class="shiny-badge">✨</span>`
-                    : null,
-                )}
-              </h3>
-              <div class="types">
-                ${computed(() =>
-                  mainTypeDisplay.value.map((t) => renderType(t.key, t.name)),
-                )}
-              </div>
-              <div class="measurements">
-                <span
-                  >📏
-                  ${computed(() =>
-                    this.#state.pokemon
-                      ? (this.#state.pokemon.height / 10).toFixed(1)
-                      : "—",
-                  )}m</span
-                >
-                <span
-                  >⚖️
-                  ${computed(() =>
-                    this.#state.pokemon
-                      ? (this.#state.pokemon.weight / 10).toFixed(1)
-                      : "—",
-                  )}kg</span
-                >
-              </div>
-            </div>
-
-            <!-- Compare Pokemon (when in compare mode) -->
-            ${computed(() =>
-              this.#state.compareMode
-                ? html`
-                    <div class="pokemon-compare">
-                      ${computed(() =>
-                        this.#state.comparePokemon
-                          ? html`
-                              <button
-                                class="shuffle-btn"
-                                @click=${setComparePokemon}
-                                title="Random Pokemon"
-                              >
-                                🔀
-                              </button>
-                              <img
-                                src=${this.#state.comparePokemon.sprites
-                                  .other?.["official-artwork"]?.front_default ||
-                                this.#state.comparePokemon.sprites
-                                  .front_default}
-                                alt=${this.#state.comparePokemonName ||
-                                this.#state.comparePokemon.name}
-                              />
-                              <h3>
-                                ${computed(
-                                  () =>
-                                    this.#state.comparePokemonName ||
-                                    this.#state.comparePokemon?.name ||
-                                    "",
-                                )}
-                              </h3>
-                              <div class="types">
-                                ${computed(() =>
-                                  compareTypeDisplay.value.map((t) =>
-                                    renderType(t.key, t.name),
-                                  ),
-                                )}
-                              </div>
-                            `
-                          : html`<div class="compare-loading">Loading...</div>`,
-                      )}
-                    </div>
-                  `
-                : null,
-            )}
-          </div>
-
-          <!-- Stats -->
-          <div class="stats">
-            <div class="stats-header">
-              <span>Stats</span>
-              <span class="total-stats">Total: ${totalStats}</span>
-            </div>
-            ${computed(() => {
-              const stats = this.#state.pokemon?.stats ?? [];
-              const compareStats = this.#state.comparePokemon?.stats;
-              return stats.map((stat, i) =>
-                renderStat(stat, compareStats?.[i]?.base_stat),
-              );
-            })}
-          </div>
         </div>
 
         <!-- Favorites Section -->
-        <div class="favorites-section">
-          <h3>
-            Favorites
-            <span class="favorites-count"
-              >(${computed(() => this.#state.favorites.length)})</span
-            >
-          </h3>
-          ${computed(() =>
-            this.#state.favorites.length === 0
-              ? html`<p class="no-favorites">
-                  No favorites yet. Click ❤️ to add!
-                </p>`
-              : null,
-          )}
-          <div class="favorites-list">
-            ${each(
-              () => this.#state.favorites,
-              (fav) => fav.id,
-              renderFavorite,
-            )}
-          </div>
-        </div>
+        ${FavoritesList({
+          favorites: this.#state.favorites,
+          onSelectFavorite: selectFavorite,
+          onRemoveFavorite: removeFavorite,
+        })}
       </div>
     `.render();
 
@@ -623,19 +293,8 @@ export class PokemonViewerElement extends HTMLElement {
   }
 
   async searchPokemon(query: string) {
-    try {
-      const response = await fetch(
-        "https://pokeapi.co/api/v2/pokemon?limit=1025",
-      );
-      if (response.ok) {
-        const data = await response.json();
-        this.#state.searchResults = data.results.filter((p: { name: string }) =>
-          p.name.toLowerCase().includes(query.toLowerCase()),
-        );
-      }
-    } catch {
-      this.#state.searchResults = [];
-    }
+    const results = await this.#pokemonService.searchPokemon(query);
+    this.#state.searchResults = results;
   }
 
   async fetchPokemon() {
@@ -653,13 +312,12 @@ export class PokemonViewerElement extends HTMLElement {
     }, 300);
 
     try {
-      const response = await fetch(
-        `https://pokeapi.co/api/v2/pokemon/${this.#state.pokemonId}`,
+      const pokemon = await this.#pokemonService.fetchPokemon(
+        this.#state.pokemonId,
       );
-      if (!response.ok) {
+      if (!pokemon) {
         throw new Error(`Pokemon #${this.#state.pokemonId} not found`);
       }
-      const pokemon: Pokemon = await response.json();
       this.#state.pokemon = pokemon;
 
       // Fetch localized names
@@ -679,62 +337,14 @@ export class PokemonViewerElement extends HTMLElement {
   async fetchLocalizedNames(pokemon: Pokemon, isCompare: boolean) {
     const lang = this.#state.language;
 
-    try {
-      // Fetch species for localized Pokemon name
-      const speciesRes = await fetch(pokemon.species.url);
-      if (speciesRes.ok) {
-        const species: PokemonSpecies = await speciesRes.json();
-        const localizedName =
-          species.names.find((n) => n.language.name === lang)?.name ??
-          pokemon.name;
+    const names = await this.#pokemonService.fetchLocalizedNames(pokemon, lang);
 
-        if (isCompare) {
-          this.#state.comparePokemonName = localizedName;
-        } else {
-          this.#state.pokemonName = localizedName;
-        }
-      }
-
-      // Fetch localized type names
-      const typeNames = await Promise.all(
-        pokemon.types.map(async (t) => {
-          const key = t.type.name;
-          try {
-            const typeRes = await fetch(t.type.url);
-            if (typeRes.ok) {
-              const typeData: TypeData = await typeRes.json();
-              const name =
-                typeData.names.find((n) => n.language.name === lang)?.name ??
-                key;
-              return { key, name };
-            }
-          } catch {
-            // Ignore
-          }
-          return { key, name: key };
-        }),
-      );
-
-      if (isCompare) {
-        this.#state.compareTypeNames = typeNames;
-      } else {
-        this.#state.typeNames = typeNames;
-      }
-    } catch {
-      // Fallback to English names
-      if (isCompare) {
-        this.#state.comparePokemonName = pokemon.name;
-        this.#state.compareTypeNames = pokemon.types.map((t) => ({
-          key: t.type.name,
-          name: t.type.name,
-        }));
-      } else {
-        this.#state.pokemonName = pokemon.name;
-        this.#state.typeNames = pokemon.types.map((t) => ({
-          key: t.type.name,
-          name: t.type.name,
-        }));
-      }
+    if (isCompare) {
+      this.#state.comparePokemonName = names.pokemonName;
+      this.#state.compareTypeNames = names.typeNames;
+    } else {
+      this.#state.pokemonName = names.pokemonName;
+      this.#state.typeNames = names.typeNames;
     }
   }
 
