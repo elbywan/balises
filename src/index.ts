@@ -1,2 +1,15 @@
-export { html, Template, each } from "./template.js";
-export * from "./signals/index.js";
+export { html, each, type Template } from "./template.js";
+export {
+  signal,
+  computed,
+  effect,
+  store,
+  batch,
+  scope,
+} from "./signals/index.js";
+export type {
+  Signal,
+  Computed,
+  Reactive,
+  Subscriber,
+} from "./signals/index.js";

@@ -1,18 +1,18 @@
-import { html, Signal, computed, each } from "../../src/index.js";
+import { html, signal, computed, each } from "../../src/index.js";
 
 interface Todo {
   id: number;
   text: string;
-  completed: Signal<boolean>;
+  completed: ReturnType<typeof signal<boolean>>;
 }
 
 /**
  * A todo list web component showcasing efficient list rendering with each()
  */
 export class TodoListElement extends HTMLElement {
-  #todos = new Signal<Todo[]>([]);
+  #todos = signal<Todo[]>([]);
   #nextId = 1;
-  #filter = new Signal<"all" | "active" | "completed">("all");
+  #filter = signal<"all" | "active" | "completed">("all");
   #dispose: (() => void) | null = null;
 
   connectedCallback() {
@@ -36,7 +36,7 @@ export class TodoListElement extends HTMLElement {
       if (text) {
         this.#todos.update((todos) => [
           ...todos,
-          { id: this.#nextId++, text, completed: new Signal(false) },
+          { id: this.#nextId++, text, completed: signal(false) },
         ]);
         input.value = "";
       }

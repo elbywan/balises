@@ -1,13 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { html, Template, each } from "../src/template.js";
-import {
-  Signal,
-  signal,
-  store,
-  computed,
-  batch,
-} from "../src/signals/index.js";
+import { signal, store, computed, batch } from "../src/signals/index.js";
 
 describe("html template tag", () => {
   it("should create a Template instance", () => {
@@ -163,8 +157,8 @@ describe("Template.render()", () => {
     });
 
     it("should update multi-part attribute values reactively", () => {
-      const width = new Signal(50);
-      const color = new Signal("red");
+      const width = signal(50);
+      const color = signal("red");
       const { fragment } = html`<div
         style="width: ${width}%; background: ${color}"
       ></div>`.render();
@@ -246,7 +240,7 @@ describe("Template.render()", () => {
 
   describe("reactive bindings", () => {
     it("should update text content when signal changes", () => {
-      const count = new Signal(0);
+      const count = signal(0);
       const { fragment } = html`<div>${count}</div>`.render();
       const div = fragment.firstChild as Element;
       assert.strictEqual(div.textContent, "0");
@@ -255,7 +249,7 @@ describe("Template.render()", () => {
     });
 
     it("should update attributes when signal changes", () => {
-      const className = new Signal("inactive");
+      const className = signal("inactive");
       const { fragment } = html`<div class=${className}></div>`.render();
       const div = fragment.firstChild as Element;
       assert.strictEqual(div.getAttribute("class"), "inactive");
@@ -264,7 +258,7 @@ describe("Template.render()", () => {
     });
 
     it("should update properties when signal changes", () => {
-      const value = new Signal("initial");
+      const value = signal("initial");
       const { fragment } = html`<input .value=${value} />`.render();
       const input = fragment.firstChild as HTMLInputElement;
       assert.strictEqual(input.value, "initial");
@@ -273,7 +267,7 @@ describe("Template.render()", () => {
     });
 
     it("should stop updating after dispose", () => {
-      const count = new Signal(0);
+      const count = signal(0);
       const { fragment, dispose } = html`<div>Count: ${count}</div>`.render();
 
       // Append to document so we can query it
@@ -301,7 +295,7 @@ describe("Template.render()", () => {
 
   describe("dispose", () => {
     it("should clean up nested template disposers", () => {
-      const innerCount = new Signal(0);
+      const innerCount = signal(0);
       const inner = html`<span>Value: ${innerCount}</span>`;
       const { fragment, dispose } = html`<div>${inner}</div>`.render();
 
@@ -335,7 +329,7 @@ describe("Template.render()", () => {
      * Calling dispose() multiple times should be safe (no errors).
      */
     it("should handle multiple dispose calls safely", () => {
-      const count = new Signal(0);
+      const count = signal(0);
       const { fragment, dispose } = html`<div>${count}</div>`.render();
 
       document.body.appendChild(fragment);
@@ -469,7 +463,7 @@ describe("Template.render()", () => {
      * the old template should be disposed and new one rendered.
      */
     it("should switch between templates reactively", () => {
-      const showA = new Signal(true);
+      const showA = signal(true);
       const templateA = html`<span>A</span>`;
       const templateB = html`<span>B</span>`;
 
@@ -498,7 +492,7 @@ describe("Template.render()", () => {
      * - When condition is true, the template is rendered
      */
     it("should handle conditional && pattern", () => {
-      const show = new Signal(false);
+      const show = signal(false);
       const { fragment } = html`<div>
         ${computed(() => show.value && html`<span>Shown</span>`)}
       </div>`.render();
@@ -536,7 +530,7 @@ describe("Template.render()", () => {
      * Edge case: Dynamic attribute that becomes null then a value
      */
     it("should handle attribute transitioning null -> value -> null", () => {
-      const cls = new Signal<string | null>(null);
+      const cls = signal<string | null>(null);
       const { fragment } = html`<div class=${cls}></div>`.render();
 
       document.body.appendChild(fragment);
@@ -557,7 +551,7 @@ describe("Template.render()", () => {
      * Edge case: Event handler that modifies the DOM
      */
     it("should handle event handlers that modify state", () => {
-      const count = new Signal(0);
+      const count = signal(0);
       const increment = () => {
         count.value++;
       };
@@ -589,7 +583,7 @@ describe("Template.render()", () => {
      * .prop=${signal} should update the property when signal changes.
      */
     it("should update property bindings reactively", () => {
-      const checked = new Signal(false);
+      const checked = signal(false);
       const { fragment } = html`<input
         type="checkbox"
         .checked=${checked}
@@ -688,7 +682,7 @@ describe("Template.render()", () => {
      * When a signal contains an array, updates should re-render.
      */
     it("should update when array signal changes", () => {
-      const items = new Signal(["a", "b"]);
+      const items = signal(["a", "b"]);
       const { fragment } = html`<div>${items}</div>`.render();
 
       document.body.appendChild(fragment);
@@ -708,8 +702,8 @@ describe("Template.render()", () => {
      * Multiple signal updates in a batch should result in single DOM update.
      */
     it("should handle batched signal updates", () => {
-      const firstName = new Signal("John");
-      const lastName = new Signal("Doe");
+      const firstName = signal("John");
+      const lastName = signal("Doe");
 
       const { fragment } = html`<div>${firstName} ${lastName}</div>`.render();
       document.body.appendChild(fragment);
@@ -735,8 +729,8 @@ describe("Template.render()", () => {
      * Edge case: Template with computed that depends on multiple signals
      */
     it("should work with computed values in templates", () => {
-      const a = new Signal(5);
-      const b = new Signal(10);
+      const a = signal(5);
+      const b = signal(10);
       const sum = computed(() => a.value + b.value);
 
       const { fragment } = html`<div>Sum: ${sum}</div>`.render();
@@ -758,7 +752,7 @@ describe("Template.render()", () => {
      * Edge case: Self-closing tags with reactive attributes
      */
     it("should handle reactive attributes on self-closing tags", () => {
-      const src = new Signal("img1.png");
+      const src = signal("img1.png");
       const { fragment } = html`<img .src=${src} />`.render();
 
       const img = fragment.firstChild as HTMLImageElement;
@@ -772,7 +766,7 @@ describe("Template.render()", () => {
      * Edge case: Boolean attribute with computed value
      */
     it("should handle computed boolean attributes", () => {
-      const enabled = new Signal(true);
+      const enabled = signal(true);
       const disabled = computed(() => !enabled.value);
 
       const { fragment } = html`<button disabled=${disabled}>
@@ -793,7 +787,7 @@ describe("Template.render()", () => {
      * Function as reactive content - automatically wrapped in computed
      */
     it("should treat functions as reactive content", () => {
-      const count = new Signal(1);
+      const count = signal(1);
 
       const { fragment } = html`<div>${() => count.value * 2}</div>`.render();
       const div = fragment.firstChild as HTMLDivElement;
@@ -811,7 +805,7 @@ describe("Template.render()", () => {
      * Function as reactive attribute - automatically wrapped in computed
      */
     it("should treat functions as reactive attributes", () => {
-      const count = new Signal(1);
+      const count = signal(1);
 
       const { fragment } = html`<div
         class=${() => `item-${count.value}`}
@@ -828,7 +822,7 @@ describe("Template.render()", () => {
      * Function returning boolean for attribute
      */
     it("should handle function returning boolean for attribute", () => {
-      const enabled = new Signal(true);
+      const enabled = signal(true);
 
       const { fragment } = html`<button disabled=${() => !enabled.value}>
         Click

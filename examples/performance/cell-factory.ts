@@ -1,4 +1,4 @@
-import { Signal, computed } from "../../src/index.js";
+import { signal, computed } from "../../src/index.js";
 import type { Cell } from "./types.js";
 
 /**
@@ -14,7 +14,7 @@ export class CellFactory {
     return {
       id,
       type: "input",
-      value: new Signal(1),
+      value: signal(1),
     };
   }
 
@@ -25,7 +25,7 @@ export class CellFactory {
     const cell: Cell = {
       id,
       type: "formula",
-      value: new Signal(0),
+      value: signal(0),
     };
 
     const deps = [
@@ -57,7 +57,7 @@ export class CellFactory {
     const cell: Cell = {
       id,
       type: "multiplier",
-      value: new Signal(0),
+      value: signal(0),
       multiplier,
       specialLabel: label,
     };
@@ -80,7 +80,7 @@ export class CellFactory {
     const cell: Cell = {
       id,
       type: "max",
-      value: new Signal(0),
+      value: signal(0),
       specialLabel: "MAX",
     };
 
@@ -108,7 +108,7 @@ export class CellFactory {
     const cell: Cell = {
       id,
       type: "min",
-      value: new Signal(0),
+      value: signal(0),
       specialLabel: "MIN",
     };
 
@@ -136,7 +136,7 @@ export class CellFactory {
     const cell: Cell = {
       id,
       type: "average",
-      value: new Signal(0),
+      value: signal(0),
       specialLabel: "AVG",
     };
 

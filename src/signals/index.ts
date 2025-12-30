@@ -21,6 +21,6 @@ export interface Reactive<T> {
   subscribe(fn: () => void): () => void;
 }
 
-/** Check if a value is a reactive signal or computed. */
+/** Check if a value is a reactive signal or computed. @internal */
 export const isSignal = (value: unknown): value is Reactive<unknown> =>
   value instanceof Signal || value instanceof Computed;

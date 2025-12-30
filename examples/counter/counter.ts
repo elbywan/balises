@@ -1,10 +1,10 @@
-import { html, Signal, computed } from "../../src/index.js";
+import { html, signal, computed } from "../../src/index.js";
 
 /**
  * A simple counter web component showcasing reactive state
  */
 export class CounterElement extends HTMLElement {
-  #count = new Signal(0);
+  #count = signal(0);
   #dispose: (() => void) | null = null;
 
   connectedCallback() {

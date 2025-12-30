@@ -1,4 +1,5 @@
-import { Signal, computed } from "../../src/index.js";
+import { computed } from "../../src/index.js";
+import type { Signal } from "../../src/signals/signal.js";
 
 export type CellType =
   | "input"

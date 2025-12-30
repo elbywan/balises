@@ -1,4 +1,4 @@
-import { html, Signal, computed, each, batch } from "../../src/index.js";
+import { html, signal, computed, each, batch } from "../../src/index.js";
 import type { Cell } from "./types.js";
 import { CellFactory } from "./cell-factory.js";
 import { GridCell } from "./components/grid-cell.js";
@@ -15,19 +15,17 @@ import { ControlGroup } from "./components/control-group.js";
  * - CellFactory: Factory for creating different cell types
  */
 export class PerformanceElement extends HTMLElement {
-  #cells = new Signal<Cell[]>([]);
-  #running = new Signal(false);
+  #cells = signal<Cell[]>([]);
+  #running = signal(false);
   #intervalId: ReturnType<typeof setInterval> | null = null;
-  #totalUpdates = new Signal(0);
-  #fps = new Signal(0);
-  #lastBenchmark = new Signal<{ duration: number; operation: string } | null>(
-    null,
-  );
-  #updatesPerSecond = new Signal(0);
+  #totalUpdates = signal(0);
+  #fps = signal(0);
+  #lastBenchmark = signal<{ duration: number; operation: string } | null>(null);
+  #updatesPerSecond = signal(0);
   #dispose: (() => void) | null = null;
   #updateCountInLastSecond = 0;
   #lastSecondTimestamp = 0;
-  #updateRate = new Signal(30); // Target updates per second
+  #updateRate = signal(30); // Target updates per second
 
   connectedCallback() {
     this.#initializeCells();
@@ -69,7 +67,7 @@ export class PerformanceElement extends HTMLElement {
         const cell: Cell = {
           id: i,
           type: specialConfig.type,
-          value: new Signal(0),
+          value: signal(0),
           specialLabel: specialConfig.label,
         };
 

@@ -1,69 +1,70 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import {
-  Signal,
+  signal,
   computed,
-  store,
-  batch,
   effect,
+  batch,
+  store,
+  Signal,
 } from "../src/signals/index.js";
 
 describe("Signal", () => {
   it("should store and retrieve a value", () => {
-    const signal = new Signal(10);
-    assert.strictEqual(signal.value, 10);
+    const s = signal(10);
+    assert.strictEqual(s.value, 10);
   });
 
   it("should update value", () => {
-    const signal = new Signal(10);
-    signal.value = 20;
-    assert.strictEqual(signal.value, 20);
+    const s = signal(10);
+    s.value = 20;
+    assert.strictEqual(s.value, 20);
   });
 
   it("should notify subscribers on value change", () => {
-    const signal = new Signal(10);
+    const s = signal(10);
     let notified = false;
-    signal.subscribe(() => {
+    s.subscribe(() => {
       notified = true;
     });
-    signal.value = 20;
+    s.value = 20;
     assert.strictEqual(notified, true);
   });
 
   it("should not notify subscribers when value is the same", () => {
-    const signal = new Signal(10);
+    const s = signal(10);
     let notifyCount = 0;
-    signal.subscribe(() => {
+    s.subscribe(() => {
       notifyCount++;
     });
-    signal.value = 10;
+    s.value = 10;
     assert.strictEqual(notifyCount, 0);
   });
 
   it("should allow unsubscribing", () => {
-    const signal = new Signal(10);
+    const s = signal(10);
     let notifyCount = 0;
-    const unsubscribe = signal.subscribe(() => {
+    const unsubscribe = s.subscribe(() => {
       notifyCount++;
     });
-    signal.value = 20;
+    s.value = 20;
     assert.strictEqual(notifyCount, 1);
     unsubscribe();
-    signal.value = 30;
+    s.value = 30;
     assert.strictEqual(notifyCount, 1);
   });
 
   it("should support multiple subscribers", () => {
-    const signal = new Signal(10);
+    const s = signal(10);
     let count1 = 0;
     let count2 = 0;
-    signal.subscribe(() => {
+    s.subscribe(() => {
       count1++;
     });
-    signal.subscribe(() => {
+    s.subscribe(() => {
       count2++;
     });
-    signal.value = 20;
+    s.value = 20;
     assert.strictEqual(count1, 1);
     assert.strictEqual(count2, 1);
   });
@@ -78,15 +79,15 @@ describe("Signal", () => {
    * iteration index. This is a known trade-off for O(1) removal.
    */
   it("should handle unsubscribing during notification without crashing", () => {
-    const signal = new Signal(0);
+    const s = signal(0);
     let sub1Called = false;
 
-    const unsub1 = signal.subscribe(() => {
+    const unsub1 = s.subscribe(() => {
       sub1Called = true;
       unsub1(); // Unsubscribe itself during notification
     });
 
-    signal.value = 1;
+    s.value = 1;
 
     // The subscriber that unsubscribed itself should have been called
     assert.strictEqual(sub1Called, true);
@@ -101,17 +102,17 @@ describe("Signal", () => {
    * This documents the actual behavior.
    */
   it("should call subscribers added during notification in same cycle", () => {
-    const signal = new Signal(0);
+    const s = signal(0);
     let newSubCalled = false;
 
-    signal.subscribe(() => {
+    s.subscribe(() => {
       // Add a new subscriber during notification
-      signal.subscribe(() => {
+      s.subscribe(() => {
         newSubCalled = true;
       });
     });
 
-    signal.value = 1;
+    s.value = 1;
 
     // The new subscriber IS called during this cycle because
     // the loop iterates over the growing array
@@ -127,16 +128,16 @@ describe("Signal", () => {
    */
   it("should use reference equality for objects", () => {
     const obj = { a: 1 };
-    const signal = new Signal(obj);
+    const s = signal(obj);
     let notifyCount = 0;
-    signal.subscribe(() => notifyCount++);
+    s.subscribe(() => notifyCount++);
 
     // Same reference - no notification
-    signal.value = obj;
+    s.value = obj;
     assert.strictEqual(notifyCount, 0);
 
     // Different reference with same content - should notify
-    signal.value = { a: 1 };
+    s.value = { a: 1 };
     assert.strictEqual(notifyCount, 1);
   });
 
@@ -147,21 +148,21 @@ describe("Signal", () => {
    * The library uses Object.is() to avoid spurious notifications.
    */
   it("should handle NaN values correctly with Object.is", () => {
-    const signal = new Signal(NaN);
+    const s = signal(NaN);
     let notifyCount = 0;
-    signal.subscribe(() => notifyCount++);
+    s.subscribe(() => notifyCount++);
 
     // NaN === NaN is false, but Object.is(NaN, NaN) is true
     // So setting NaN again should NOT trigger notification
-    signal.value = NaN;
+    s.value = NaN;
     assert.strictEqual(notifyCount, 0);
 
     // Setting to a different value should notify
-    signal.value = 5;
+    s.value = 5;
     assert.strictEqual(notifyCount, 1);
 
     // Setting back to NaN should notify
-    signal.value = NaN;
+    s.value = NaN;
     assert.strictEqual(notifyCount, 2);
   });
 
@@ -171,20 +172,20 @@ describe("Signal", () => {
    * These falsy values should work correctly.
    */
   it("should handle undefined and null values", () => {
-    const signal = new Signal<string | null | undefined>("initial");
+    const s = signal<string | null | undefined>("initial");
     let notifyCount = 0;
-    signal.subscribe(() => notifyCount++);
+    s.subscribe(() => notifyCount++);
 
-    signal.value = null;
+    s.value = null;
     assert.strictEqual(notifyCount, 1);
-    assert.strictEqual(signal.value, null);
+    assert.strictEqual(s.value, null);
 
-    signal.value = undefined;
+    s.value = undefined;
     assert.strictEqual(notifyCount, 2);
-    assert.strictEqual(signal.value, undefined);
+    assert.strictEqual(s.value, undefined);
 
     // Setting to same value should not notify
-    signal.value = undefined;
+    s.value = undefined;
     assert.strictEqual(notifyCount, 2);
   });
 
@@ -194,15 +195,15 @@ describe("Signal", () => {
    * Calling unsubscribe more than once should be safe (no-op).
    */
   it("should safely handle multiple unsubscribe calls", () => {
-    const signal = new Signal(0);
+    const s = signal(0);
     let notifyCount = 0;
-    const unsub = signal.subscribe(() => notifyCount++);
+    const unsub = s.subscribe(() => notifyCount++);
 
     unsub();
     unsub(); // Second call should be a no-op
     unsub(); // Third call should also be safe
 
-    signal.value = 1;
+    s.value = 1;
     assert.strictEqual(notifyCount, 0);
   });
 
@@ -212,14 +213,14 @@ describe("Signal", () => {
    * Subscribers should be able to read the new value.
    */
   it("should provide new value to subscribers", () => {
-    const signal = new Signal(0);
+    const s = signal(0);
     let observedValue: number | null = null;
 
-    signal.subscribe(() => {
-      observedValue = signal.value;
+    s.subscribe(() => {
+      observedValue = s.value;
     });
 
-    signal.value = 42;
+    s.value = 42;
     assert.strictEqual(observedValue, 42);
   });
 
@@ -230,18 +231,18 @@ describe("Signal", () => {
    * of notifications (cascade update).
    */
   it("should handle cascading updates from subscribers", () => {
-    const signal = new Signal(0);
+    const s = signal(0);
     const history: number[] = [];
 
-    signal.subscribe(() => {
-      history.push(signal.value);
+    s.subscribe(() => {
+      history.push(s.value);
       // Trigger another update when value is 1
-      if (signal.value === 1) {
-        signal.value = 2;
+      if (s.value === 1) {
+        s.value = 2;
       }
     });
 
-    signal.value = 1;
+    s.value = 1;
 
     // Should have recorded both 1 and 2
     assert.deepStrictEqual(history, [1, 2]);
@@ -250,22 +251,22 @@ describe("Signal", () => {
 
 describe("Computed", () => {
   it("should compute initial value", () => {
-    const a = new Signal(5);
-    const b = new Signal(10);
+    const a = signal(5);
+    const b = signal(10);
     const sum = computed(() => a.value + b.value);
     assert.strictEqual(sum.value, 15);
   });
 
   it("should update when dependencies change", () => {
-    const a = new Signal(5);
-    const b = new Signal(10);
+    const a = signal(5);
+    const b = signal(10);
     const sum = computed(() => a.value + b.value);
     a.value = 10;
     assert.strictEqual(sum.value, 20);
   });
 
   it("should notify subscribers when computed value changes", () => {
-    const a = new Signal(5);
+    const a = signal(5);
     const doubled = computed(() => a.value * 2);
     let notified = false;
     doubled.subscribe(() => {
@@ -277,7 +278,7 @@ describe("Computed", () => {
   });
 
   it("should not notify subscribers when computed value stays the same", () => {
-    const a = new Signal(5);
+    const a = signal(5);
     const isPositive = computed(() => a.value > 0);
     let notifyCount = 0;
     isPositive.subscribe(() => {
@@ -289,7 +290,7 @@ describe("Computed", () => {
   });
 
   it("should support chained computed values", () => {
-    const a = new Signal(2);
+    const a = signal(2);
     const doubled = computed(() => a.value * 2);
     const quadrupled = computed(() => doubled.value * 2);
     assert.strictEqual(quadrupled.value, 8);
@@ -298,7 +299,7 @@ describe("Computed", () => {
   });
 
   it("should not notify subscribers after dispose", () => {
-    const a = new Signal(5);
+    const a = signal(5);
     const doubled = computed(() => a.value * 2);
     let notifyCount = 0;
     doubled.subscribe(() => {
@@ -319,9 +320,9 @@ describe("Computed", () => {
   });
 
   it("should dynamically track dependencies", () => {
-    const show = new Signal(true);
-    const a = new Signal(1);
-    const b = new Signal(2);
+    const show = signal(true);
+    const a = signal(1);
+    const b = signal(2);
 
     let computeCount = 0;
     const result = computed(() => {
@@ -359,9 +360,9 @@ describe("Computed", () => {
   });
 
   it("should dynamically track dependencies with nested computed", () => {
-    const flag = new Signal(true);
-    const x = new Signal(1);
-    const y = new Signal(2);
+    const flag = signal(true);
+    const x = signal(1);
+    const y = signal(2);
 
     const branch = computed(() => (flag.value ? x.value : y.value));
     const doubled = computed(() => branch.value * 2);
@@ -418,7 +419,7 @@ describe("Computed", () => {
    * the computed() call itself.
    */
   it("should propagate errors from compute function", () => {
-    const flag = new Signal(false); // Start with no error
+    const flag = signal(false); // Start with no error
 
     const c = computed(() => {
       if (flag.value) throw new Error("Test error");
@@ -445,7 +446,7 @@ describe("Computed", () => {
    * and should see consistent values from B and C.
    */
   it("should handle diamond dependency pattern correctly", () => {
-    const a = new Signal(1);
+    const a = signal(1);
     const b = computed(() => a.value * 2);
     const c = computed(() => a.value * 3);
     const d = computed(() => b.value + c.value);
@@ -473,7 +474,7 @@ describe("Computed", () => {
    * Tests that changes propagate through a long chain of computeds.
    */
   it("should propagate through deeply nested computed chain", () => {
-    const root = new Signal(1);
+    const root = signal(1);
     let prev: Signal<number> | ReturnType<typeof computed<number>> = root;
 
     // Create a chain of 10 computeds
@@ -500,7 +501,7 @@ describe("Computed", () => {
    * Should only track the signal once as a dependency.
    */
   it("should deduplicate multiple reads of the same signal", () => {
-    const s = new Signal(5);
+    const s = signal(5);
     let computeCount = 0;
 
     const c = computed(() => {
@@ -523,10 +524,10 @@ describe("Computed", () => {
    * When the set of dependencies shrinks, old dependencies should be unlinked.
    */
   it("should unlink dependencies that are no longer accessed", () => {
-    const useAll = new Signal(true);
-    const a = new Signal(1);
-    const b = new Signal(2);
-    const c = new Signal(3);
+    const useAll = signal(true);
+    const a = signal(1);
+    const b = signal(2);
+    const c = signal(3);
 
     let computeCount = 0;
     const result = computed(() => {
@@ -569,7 +570,7 @@ describe("Computed", () => {
    * notified only when the computed value actually changes.
    */
   it("should notify subscriber only when computed value changes", () => {
-    const a = new Signal(5);
+    const a = signal(5);
     const isEven = computed(() => a.value % 2 === 0);
 
     let notifyCount = 0;
@@ -595,7 +596,7 @@ describe("Computed", () => {
    * when the value stays NaN.
    */
   it("should not notify when computed value stays NaN", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     const c = computed(() => (s.value > 0 ? NaN : 0));
 
     let notifyCount = 0;
@@ -623,7 +624,7 @@ describe("Computed", () => {
    * downstream computeds should not be recomputed (short-circuit).
    */
   it("should short-circuit when intermediate computed value stays the same", () => {
-    const a = new Signal(0);
+    const a = signal(0);
 
     let bComputeCount = 0;
     let cComputeCount = 0;
@@ -682,7 +683,7 @@ describe("Computed", () => {
    * Disposing a computed should clean up its relationship with sources.
    */
   it("should dispose cleanly when other computeds depend on it", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     const c1 = computed(() => s.value * 2);
     const c2 = computed(() => c1.value + 1);
 
@@ -702,7 +703,7 @@ describe("Computed", () => {
    * but should not recompute.
    */
   it("should return last value after dispose", () => {
-    const s = new Signal(10);
+    const s = signal(10);
     let computeCount = 0;
     const c = computed(() => {
       computeCount++;
@@ -728,7 +729,7 @@ describe("Computed caching behavior", () => {
    * A computed should cache its value and only recompute when marked dirty.
    */
   it("should not recompute on multiple reads", () => {
-    const s = new Signal(5);
+    const s = signal(5);
     let computeCount = 0;
 
     const c = computed(() => {
@@ -754,8 +755,8 @@ describe("Computed caching behavior", () => {
    * should not cause recomputation.
    */
   it("should not recompute when unrelated signals change", () => {
-    const related = new Signal(1);
-    const unrelated = new Signal(100);
+    const related = signal(1);
+    const unrelated = signal(100);
     let computeCount = 0;
 
     const c = computed(() => {
@@ -786,7 +787,7 @@ describe("Computed caching behavior", () => {
    * modifying a dependency during compute doesn't cause infinite loops.
    */
   it("should prevent re-entry during computation via #computing flag", () => {
-    const trigger = new Signal(0);
+    const trigger = signal(0);
     let computeCount = 0;
 
     const c = computed(() => {
@@ -816,8 +817,8 @@ describe("Computed caching behavior", () => {
    * the dependency tracking context should be properly saved and restored.
    */
   it("should isolate context during nested computed access", () => {
-    const a = new Signal(1);
-    const b = new Signal(2);
+    const a = signal(1);
+    const b = signal(2);
 
     // c1 depends only on a
     const c1 = computed(() => a.value * 10);
@@ -855,7 +856,7 @@ describe("Computed caching behavior", () => {
    * should not cause errors.
    */
   it("should handle dispose during notification", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     const c = computed(() => s.value * 2);
 
     let disposed = false;
@@ -876,7 +877,7 @@ describe("Computed caching behavior", () => {
 
 describe("Computed loop protection", () => {
   it("should prevent infinite loops when computed modifies its dependency", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let computeCount = 0;
 
     const c = computed(() => {
@@ -898,7 +899,7 @@ describe("Computed loop protection", () => {
   });
 
   it("should prevent infinite loops with multiple computeds modifying shared signal", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let computeCountA = 0;
     let computeCountB = 0;
 
@@ -1219,8 +1220,8 @@ describe("batch", () => {
    * should only be notified once at the end.
    */
   it("should defer notifications until batch completes", () => {
-    const a = new Signal(1);
-    const b = new Signal(2);
+    const a = signal(1);
+    const b = signal(2);
     let notifyCount = 0;
 
     const sum = computed(() => a.value + b.value);
@@ -1257,7 +1258,7 @@ describe("batch", () => {
    * outermost batch completes.
    */
   it("should support nested batches", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let notifyCount = 0;
     s.subscribe(() => notifyCount++);
 
@@ -1285,8 +1286,8 @@ describe("batch", () => {
    * and subscribers should be notified after batch.
    */
   it("should work correctly with computed values", () => {
-    const firstName = new Signal("John");
-    const lastName = new Signal("Doe");
+    const firstName = signal("John");
+    const lastName = signal("Doe");
     const fullNameUpdates: string[] = [];
 
     const fullName = computed(() => `${firstName.value} ${lastName.value}`);
@@ -1311,7 +1312,7 @@ describe("batch", () => {
    * be processed for changes made before the error.
    */
   it("should process notifications even if batch throws", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let notified = false;
     s.subscribe(() => {
       notified = true;
@@ -1336,7 +1337,7 @@ describe("batch", () => {
    * A batch that makes no changes should not cause any notifications.
    */
   it("should handle batch with no changes", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     let notifyCount = 0;
     s.subscribe(() => notifyCount++);
 
@@ -1353,7 +1354,7 @@ describe("batch", () => {
    * Assigning the same value should not queue any notifications.
    */
   it("should not notify for same-value assignments in batch", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     let notifyCount = 0;
     s.subscribe(() => notifyCount++);
 
@@ -1393,8 +1394,8 @@ describe("batch", () => {
    * in a batch, the handler is only called once (deduplicated via Set).
    */
   it("should deduplicate same handler subscribed to multiple signals in batch", () => {
-    const a = new Signal(1);
-    const b = new Signal(2);
+    const a = signal(1);
+    const b = signal(2);
     let callCount = 0;
 
     const handler = () => {
@@ -1420,7 +1421,7 @@ describe("batch", () => {
    * subscribers are only called once (deduplicated via Set).
    */
   it("should deduplicate multiple updates to same signal in batch", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let callCount = 0;
 
     s.subscribe(() => {
@@ -1441,7 +1442,7 @@ describe("batch", () => {
 
 describe("effect", () => {
   it("should run immediately on creation", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let runCount = 0;
 
     effect(() => {
@@ -1453,7 +1454,7 @@ describe("effect", () => {
   });
 
   it("should re-run when dependencies change", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     const log: number[] = [];
 
     effect(() => {
@@ -1470,8 +1471,8 @@ describe("effect", () => {
   });
 
   it("should track multiple dependencies", () => {
-    const a = new Signal(1);
-    const b = new Signal(2);
+    const a = signal(1);
+    const b = signal(2);
     const log: number[] = [];
 
     effect(() => {
@@ -1488,7 +1489,7 @@ describe("effect", () => {
   });
 
   it("should stop running after dispose", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let runCount = 0;
 
     const dispose = effect(() => {
@@ -1508,7 +1509,7 @@ describe("effect", () => {
   });
 
   it("should work with computed dependencies", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     const doubled = computed(() => s.value * 2);
     const log: number[] = [];
 
@@ -1523,9 +1524,9 @@ describe("effect", () => {
   });
 
   it("should handle dynamic dependencies", () => {
-    const flag = new Signal(true);
-    const a = new Signal(1);
-    const b = new Signal(10);
+    const flag = signal(true);
+    const a = signal(1);
+    const b = signal(10);
     const log: number[] = [];
 
     effect(() => {
@@ -1555,8 +1556,8 @@ describe("effect", () => {
   });
 
   it("should work with batching", () => {
-    const a = new Signal(1);
-    const b = new Signal(2);
+    const a = signal(1);
+    const b = signal(2);
     let runCount = 0;
 
     effect(() => {
@@ -1576,7 +1577,7 @@ describe("effect", () => {
   });
 
   it("should handle errors in effect function", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let runCount = 0;
 
     const dispose = effect(() => {
@@ -1598,13 +1599,13 @@ describe("effect", () => {
 
 describe("Signal.update", () => {
   it("should update value using updater function", () => {
-    const s = new Signal(5);
+    const s = signal(5);
     s.update((n) => n * 2);
     assert.strictEqual(s.value, 10);
   });
 
   it("should notify subscribers", () => {
-    const s = new Signal(0);
+    const s = signal(0);
     let notified = false;
 
     s.subscribe(() => {
@@ -1617,7 +1618,7 @@ describe("Signal.update", () => {
   });
 
   it("should work with complex state", () => {
-    const s = new Signal({ count: 0, name: "test" });
+    const s = signal({ count: 0, name: "test" });
 
     s.update((state) => ({ ...state, count: state.count + 1 }));
 
@@ -1626,7 +1627,7 @@ describe("Signal.update", () => {
   });
 
   it("should not notify if value doesn't change", () => {
-    const s = new Signal(5);
+    const s = signal(5);
     let notifyCount = 0;
 
     s.subscribe(() => {
@@ -1638,7 +1639,7 @@ describe("Signal.update", () => {
   });
 
   it("should work with computeds", () => {
-    const s = new Signal(10);
+    const s = signal(10);
     const doubled = computed(() => s.value * 2);
 
     assert.strictEqual(doubled.value, 20);
@@ -1649,7 +1650,7 @@ describe("Signal.update", () => {
   });
 
   it("should allow chaining-style updates", () => {
-    const s = new Signal(1);
+    const s = signal(1);
     s.update((n) => n + 1);
     s.update((n) => n * 2);
     s.update((n) => n - 1);

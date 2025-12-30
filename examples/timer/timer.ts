@@ -1,11 +1,11 @@
-import { html, Signal, computed } from "../../src/index.js";
+import { html, signal, computed } from "../../src/index.js";
 
 /**
  * A timer web component showcasing reactive computed values and cleanup
  */
 export class TimerElement extends HTMLElement {
-  #ms = new Signal(0);
-  #running = new Signal(false);
+  #ms = signal(0);
+  #running = signal(false);
   #intervalId: ReturnType<typeof setInterval> | null = null;
   #dispose: (() => void) | null = null;
 

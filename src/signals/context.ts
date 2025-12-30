@@ -43,15 +43,13 @@ export function isBatching(): boolean {
 }
 
 /** Add a subscriber to the batch queue */
-export function enqueueBatch(sub: Subscriber): void {
+export function enqueueBatchOne(sub: Subscriber): void {
   batchQueue!.add(sub);
 }
 
 /** Add multiple subscribers to the batch queue */
 export function enqueueBatchAll(subs: Subscriber[]): void {
-  for (let i = 0; i < subs.length; i++) {
-    batchQueue!.add(subs[i]!);
-  }
+  for (let i = 0; i < subs.length; i++) batchQueue!.add(subs[i]!);
 }
 
 /** Scope disposal: collect all disposers in a scope */
@@ -104,7 +102,5 @@ export function scope<T>(fn: () => T): [result: T, dispose: () => void] {
  * This is called internally by computed/effect when they create cleanup functions.
  */
 export function registerDisposer(dispose: () => void): void {
-  if (disposalStack && disposalStack.length > 0) {
-    disposalStack[disposalStack.length - 1]!.push(dispose);
-  }
+  disposalStack?.at(-1)?.push(dispose);
 }

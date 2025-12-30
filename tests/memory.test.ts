@@ -10,23 +10,23 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { Signal, computed, store } from "../src/signals/index.js";
+import { signal, computed, store, Signal } from "../src/signals/index.js";
 
 describe("Cleanup behavior", () => {
   describe("Signal subscriptions", () => {
     it("should not call unsubscribed handler on value change", () => {
-      const signal = new Signal(1);
+      const s = signal(1);
 
       let handler1Called = 0;
       let handler2Called = 0;
       let handler3Called = 0;
 
-      const unsub1 = signal.subscribe(() => handler1Called++);
-      const unsub2 = signal.subscribe(() => handler2Called++);
-      const unsub3 = signal.subscribe(() => handler3Called++);
+      const unsub1 = s.subscribe(() => handler1Called++);
+      const unsub2 = s.subscribe(() => handler2Called++);
+      const unsub3 = s.subscribe(() => handler3Called++);
 
       // All handlers called on first change
-      signal.value = 2;
+      s.value = 2;
       assert.strictEqual(handler1Called, 1);
       assert.strictEqual(handler2Called, 1);
       assert.strictEqual(handler3Called, 1);
@@ -35,7 +35,7 @@ describe("Cleanup behavior", () => {
       unsub2();
 
       // Only handler1 and handler3 should be called
-      signal.value = 3;
+      s.value = 3;
       assert.strictEqual(handler1Called, 2);
       assert.strictEqual(handler2Called, 1); // Not called again
       assert.strictEqual(handler3Called, 2);
@@ -46,16 +46,16 @@ describe("Cleanup behavior", () => {
     });
 
     it("should not call any old handlers after unsubscribing all", () => {
-      const signal = new Signal(1);
+      const s = signal(1);
       const unsubscribes: (() => void)[] = [];
       let oldHandlerCalls = 0;
 
       for (let i = 0; i < 100; i++) {
-        unsubscribes.push(signal.subscribe(() => oldHandlerCalls++));
+        unsubscribes.push(s.subscribe(() => oldHandlerCalls++));
       }
 
       // Verify all 100 are called initially
-      signal.value = 2;
+      s.value = 2;
       assert.strictEqual(oldHandlerCalls, 100);
 
       // Unsubscribe all
@@ -65,27 +65,27 @@ describe("Cleanup behavior", () => {
 
       // Verify none of the old handlers are called
       oldHandlerCalls = 0;
-      signal.value = 3;
+      s.value = 3;
       assert.strictEqual(oldHandlerCalls, 0);
     });
 
     it("should work correctly after many subscribe/unsubscribe cycles", () => {
-      const signal = new Signal(1);
+      const s = signal(1);
 
       // Perform many subscribe/unsubscribe cycles
       for (let i = 0; i < 100; i++) {
-        const unsub = signal.subscribe(() => {});
+        const unsub = s.subscribe(() => {});
         unsub();
       }
 
       // Signal should still notify new subscribers correctly
       let callCount = 0;
-      const unsub = signal.subscribe(() => callCount++);
+      const unsub = s.subscribe(() => callCount++);
 
-      signal.value = 2;
+      s.value = 2;
       assert.strictEqual(callCount, 1);
 
-      signal.value = 3;
+      s.value = 3;
       assert.strictEqual(callCount, 2);
 
       unsub();
@@ -94,27 +94,27 @@ describe("Cleanup behavior", () => {
 
   describe("Computed cleanup", () => {
     it("should remove computed from signal targets after dispose", () => {
-      const signal = new Signal(1);
-      const comp = computed(() => signal.value * 2);
+      const s = signal(1);
+      const comp = computed(() => s.value * 2);
 
       // Establish dependency
       void comp.value;
 
       // Signal should have computed as target
-      assert.strictEqual(signal.targets.length, 1);
-      assert.strictEqual(signal.targets[0], comp);
+      assert.strictEqual(s.targets.length, 1);
+      assert.strictEqual(s.targets[0], comp);
 
       // Dispose
       comp.dispose();
 
       // Signal should no longer have computed as target
-      assert.strictEqual(signal.targets.length, 0);
+      assert.strictEqual(s.targets.length, 0);
     });
 
     it("should remove computed from multiple signal targets after dispose", () => {
-      const a = new Signal(1);
-      const b = new Signal(2);
-      const c = new Signal(3);
+      const a = signal(1);
+      const b = signal(2);
+      const c = signal(3);
 
       const comp = computed(() => a.value + b.value + c.value);
       void comp.value; // Establish dependencies
@@ -131,9 +131,9 @@ describe("Cleanup behavior", () => {
     });
 
     it("should unlink old dependencies when computed deps change", () => {
-      const flag = new Signal(true);
-      const a = new Signal(1);
-      const b = new Signal(2);
+      const flag = signal(true);
+      const a = signal(1);
+      const b = signal(2);
 
       const comp = computed(() => (flag.value ? a.value : b.value));
       void comp.value; // Initially depends on flag and a
@@ -154,15 +154,15 @@ describe("Cleanup behavior", () => {
     });
 
     it("should clean up chained computeds", () => {
-      const signal = new Signal(1);
-      const comp1 = computed(() => signal.value * 2);
+      const s = signal(1);
+      const comp1 = computed(() => s.value * 2);
       const comp2 = computed(() => comp1.value + 1);
       const comp3 = computed(() => comp2.value * 3);
 
       // Establish all dependencies
       void comp3.value;
 
-      assert.strictEqual(signal.targets.length, 1);
+      assert.strictEqual(s.targets.length, 1);
       assert.strictEqual(comp1.targets.length, 1);
       assert.strictEqual(comp2.targets.length, 1);
 
@@ -174,11 +174,11 @@ describe("Cleanup behavior", () => {
       assert.strictEqual(comp1.targets.length, 0);
 
       comp1.dispose();
-      assert.strictEqual(signal.targets.length, 0);
+      assert.strictEqual(s.targets.length, 0);
     });
 
     it("should clean up diamond dependency pattern", () => {
-      const root = new Signal(1);
+      const root = signal(1);
       const left = computed(() => root.value * 2);
       const right = computed(() => root.value * 3);
       const bottom = computed(() => left.value + right.value);
@@ -205,8 +205,8 @@ describe("Cleanup behavior", () => {
 
   describe("Computed subscriber cleanup", () => {
     it("should not notify subscribers after dispose", () => {
-      const signal = new Signal(1);
-      const comp = computed(() => signal.value * 2);
+      const s = signal(1);
+      const comp = computed(() => s.value * 2);
 
       let callCount = 0;
       comp.subscribe(() => callCount++);
@@ -214,14 +214,14 @@ describe("Cleanup behavior", () => {
       comp.subscribe(() => callCount++);
 
       // Verify subscribers are called before dispose
-      signal.value = 2;
+      s.value = 2;
       assert.strictEqual(callCount, 3);
 
       comp.dispose();
 
       // After dispose, changing signal should not notify subscribers
       callCount = 0;
-      signal.value = 3;
+      s.value = 3;
       assert.strictEqual(callCount, 0);
     });
   });
@@ -250,7 +250,7 @@ describe("Cleanup behavior", () => {
 
   describe("Long chains", () => {
     it("should clean up long computed chains", () => {
-      const root = new Signal(1);
+      const root = signal(1);
       const chain: ReturnType<typeof computed<number>>[] = [];
 
       let prev: Signal<number> | ReturnType<typeof computed<number>> = root;
@@ -285,7 +285,7 @@ describe("Cleanup behavior", () => {
     it("should handle many signals feeding one computed", () => {
       const signals: Signal<number>[] = [];
       for (let i = 0; i < 50; i++) {
-        signals.push(new Signal(i));
+        signals.push(signal(i));
       }
 
       const sum = computed(() => signals.reduce((acc, s) => acc + s.value, 0));
@@ -307,24 +307,24 @@ describe("Cleanup behavior", () => {
 
   describe("Edge cases", () => {
     it("should handle dispose called multiple times", () => {
-      const signal = new Signal(1);
-      const comp = computed(() => signal.value * 2);
+      const s = signal(1);
+      const comp = computed(() => s.value * 2);
       void comp.value;
 
       comp.dispose();
       comp.dispose(); // Should not throw
       comp.dispose();
 
-      assert.strictEqual(signal.targets.length, 0);
+      assert.strictEqual(s.targets.length, 0);
     });
 
     it("should not call handler after multiple unsubscribe calls", () => {
-      const signal = new Signal(1);
+      const s = signal(1);
       let callCount = 0;
-      const unsub = signal.subscribe(() => callCount++);
+      const unsub = s.subscribe(() => callCount++);
 
       // Verify handler is called before unsubscribe
-      signal.value = 2;
+      s.value = 2;
       assert.strictEqual(callCount, 1);
 
       // Multiple unsubscribe calls should be safe
@@ -333,16 +333,16 @@ describe("Cleanup behavior", () => {
       unsub();
 
       // Handler should not be called after unsubscribe
-      signal.value = 3;
+      s.value = 3;
       assert.strictEqual(callCount, 1); // Should not increase
     });
 
     it("should dispose multiple computeds correctly", () => {
-      const signal = new Signal(1);
+      const s = signal(1);
       const comps: ReturnType<typeof computed>[] = [];
 
       for (let i = 0; i < 10; i++) {
-        comps.push(computed(() => signal.value + i));
+        comps.push(computed(() => s.value + i));
       }
 
       // Establish dependencies
@@ -351,7 +351,7 @@ describe("Cleanup behavior", () => {
       }
 
       // Verify all 10 are connected
-      assert.strictEqual(signal.targets.length, 10);
+      assert.strictEqual(s.targets.length, 10);
 
       // Dispose all (not during iteration - just in a loop)
       for (const comp of comps) {
@@ -359,7 +359,7 @@ describe("Cleanup behavior", () => {
       }
 
       // Verify all cleaned up
-      assert.strictEqual(signal.targets.length, 0);
+      assert.strictEqual(s.targets.length, 0);
     });
   });
 });

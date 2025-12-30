@@ -1,7 +1,7 @@
-import { html, Signal, computed } from "./examples/balises.esm.js";
+import { html, signal, computed } from "./examples/balises.esm.js";
 
 class MyCounter extends HTMLElement {
-  #count = new Signal(0);
+  #count = signal(0);
   #dispose;
 
   connectedCallback() {

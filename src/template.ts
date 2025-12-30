@@ -24,8 +24,8 @@ type AttrPart = string | { index: number };
 function bind(
   value: unknown,
   update: (v: unknown) => void,
-): (() => void) | null {
-  if (typeof value === "function" && !isEach(value)) {
+): (() => void) | null | undefined {
+  if (typeof value === "function") {
     const c = computed(value as () => unknown);
     update(c.value);
     const unsub = c.subscribe(() => update(c.value));
@@ -39,7 +39,6 @@ function bind(
     return value.subscribe(() => update((value as Reactive<unknown>).value));
   }
   update(value);
-  return null;
 }
 
 /** A parsed HTML template. Call render() to create live DOM. */
@@ -61,11 +60,10 @@ export class Template {
     const values = this.values;
 
     const handleAttribute = (el: Element, name: string, parts: AttrPart[]) => {
-      const prefix = name[0];
       const part0 = parts[0];
 
       // Event binding: @click=${handler}
-      if (prefix === "@") {
+      if (name[0] === "@") {
         if (part0 && typeof part0 !== "string") {
           const handler = values[part0.index] as EventListener;
           el.addEventListener(name.slice(1), handler);
@@ -75,7 +73,7 @@ export class Template {
       }
 
       // Property binding: .value=${data} - sets DOM property directly
-      if (prefix === ".") {
+      if (name[0] === ".") {
         if (part0 && typeof part0 !== "string") {
           const unsub = bind(values[part0.index], (v) => {
             (el as unknown as Record<string, unknown>)[name.slice(1)] = v;
@@ -85,17 +83,19 @@ export class Template {
         return;
       }
 
+      // Dynamic attribute - collect dynamic parts
+      const dynParts: { index: number }[] = [];
+      for (const p of parts) {
+        if (typeof p !== "string") dynParts.push(p);
+      }
+
       // Static attribute (all parts are strings)
-      if (!parts.some((p) => typeof p !== "string")) {
+      if (!dynParts.length) {
         const value = (parts as string[]).join("");
         if (value || !parts.length) el.setAttribute(name, value);
         return;
       }
 
-      // Dynamic attribute
-      const dynParts = parts.filter(
-        (p): p is { index: number } => typeof p !== "string",
-      );
       // Wrap functions in computed, collect all reactive sources
       const reactives: Reactive<unknown>[] = [];
       for (const p of dynParts) {
@@ -109,15 +109,13 @@ export class Template {
           reactives.push(v);
         }
       }
-      const single = parts.length === 1;
-
       const getValue = (idx: number) => {
         const v = values[idx];
         return isSignal(v) ? (v as Reactive<unknown>).value : v;
       };
 
       const update = () => {
-        if (single) {
+        if (parts.length === 1) {
           const val = getValue(dynParts[0]!.index);
           if (val == null || val === false) el.removeAttribute(name);
           else el.setAttribute(name, val === true ? "" : String(val));
@@ -199,10 +197,10 @@ function bindContent(marker: Comment, value: unknown): () => void {
   };
 
   // Handle each() - keyed list for efficient list rendering
-  if (isEach(value)) {
+  if (value != null && typeof value === "object" && EACH in value) {
     const cache = new Map<unknown, EachEntry>();
-    const { list, keyFn, renderFn } = value;
-    let warnedDuplicate = false;
+    const { list, keyFn, renderFn } = value as EachDescriptor<unknown>;
+    let warned = 0;
 
     const updateList = () => {
       const parent = marker.parentNode!;
@@ -215,13 +213,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
         const key = keyFn(item, i);
 
         if (newKeys.has(key)) {
-          if (!warnedDuplicate) {
-            warnedDuplicate = true;
-            console.warn(
-              `[balises] Duplicate key in each(): ${String(key)}. ` +
-                `Each item should have a unique key. Consider providing a keyFn.`,
-            );
-          }
+          void (warned++ || console.warn("Duplicate key:", key));
           continue; // Skip duplicate
         }
         newKeys.add(key);
@@ -316,19 +308,8 @@ interface EachDescriptor<T> {
   renderFn: (item: T) => Template;
 }
 
-/** Type guard for Each descriptor */
-const isEach = (v: unknown): v is EachDescriptor<unknown> =>
-  v != null && typeof v === "object" && EACH in v;
-
 /** List input type - accepts arrays, reactive arrays, or getter functions */
 type ListInput<T> = T[] | Reactive<T[]> | (() => T[]);
-
-/** Normalize list input to a reactive signal */
-function toReactiveList<T>(list: ListInput<T>): Reactive<T[]> {
-  if (Array.isArray(list)) return signal(list);
-  if (typeof list === "function") return computed(list);
-  return list;
-}
 
 /**
  * Efficient keyed list rendering.
@@ -371,27 +352,22 @@ export function each<T>(
     | ((item: T) => Template),
   renderFn?: (item: T) => Template,
 ): EachDescriptor<T> {
-  const reactiveList = toReactiveList(list);
-
-  if (renderFn === undefined) {
-    // Two-arg form: each(list, renderFn)
-    // Use object reference for objects, index for primitives
-    return {
-      [EACH]: true,
-      list: reactiveList,
-      keyFn: (item, index) =>
+  // Two-arg form: each(list, renderFn) - use object ref for objects, index for primitives
+  const keyFn = renderFn
+    ? (keyFnOrRenderFn as (item: T, index: number) => unknown)
+    : (item: T, index: number) =>
         item !== null &&
         (typeof item === "object" || typeof item === "function")
           ? item
-          : index,
-      renderFn: keyFnOrRenderFn as (item: T) => Template,
-    };
-  }
-  // Three-arg form: each(list, keyFn, renderFn)
+          : index;
   return {
     [EACH]: true,
-    list: reactiveList,
-    keyFn: keyFnOrRenderFn as (item: T, index: number) => unknown,
-    renderFn,
+    list: Array.isArray(list)
+      ? signal(list)
+      : typeof list === "function"
+        ? computed(list)
+        : list,
+    keyFn,
+    renderFn: renderFn ?? (keyFnOrRenderFn as (item: T) => Template),
   };
 }

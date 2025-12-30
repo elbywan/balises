@@ -6,11 +6,6 @@ import { Signal } from "./signal.js";
 
 const STORE = Symbol();
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null &&
-  typeof value === "object" &&
-  Object.getPrototypeOf(value) === Object.prototype;
-
 /**
  * Create a reactive store from a plain object.
  * Each property becomes a signal, and nested objects are recursively wrapped.
@@ -23,8 +18,12 @@ export function store<T extends object>(obj: T): T {
     if (value !== null && typeof value === "object" && STORE in value) {
       return value; // Already a store
     }
-    if (isPlainObject(value)) {
-      return store(value);
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      Object.getPrototypeOf(value) === Object.prototype
+    ) {
+      return store(value as Record<string, unknown>);
     }
     if (Array.isArray(value)) {
       return value.map(wrap);

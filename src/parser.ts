@@ -181,9 +181,15 @@ export class HTMLParser {
     return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
   }
   private isT(c: string) {
-    return this.isA(c) || (c >= "0" && c <= "9") || c === "-" || c === ":";
+    return (
+      (c >= "a" && c <= "z") ||
+      (c >= "A" && c <= "Z") ||
+      (c >= "0" && c <= "9") ||
+      c === "-" ||
+      c === ":"
+    );
   }
   private isW(c: string) {
-    return c === " " || c === "\t" || c === "\n" || c === "\r";
+    return c <= " " && c !== "";
   }
 }
