@@ -224,20 +224,18 @@ export class PerformanceElement extends HTMLElement {
           ${MetricCard({ label: "Updates", value: this.#totalUpdates })}
           ${MetricCard({
             label: "Benchmark",
-            value: computed(() =>
+            value: () =>
               this.#lastBenchmark.value
                 ? `${this.#lastBenchmark.value.duration}ms`
                 : "-",
-            ),
-            highlight: computed(() => !!this.#lastBenchmark.value),
+            highlight: this.#lastBenchmark,
           })}
           ${MetricCard({
             label: "Updates/s",
-            value: computed(() =>
+            value: () =>
               this.#updatesPerSecond.value > 0
                 ? this.#updatesPerSecond.value.toLocaleString()
                 : "-",
-            ),
             highlight: this.#running,
           })}
         </div>
@@ -262,7 +260,7 @@ export class PerformanceElement extends HTMLElement {
                 type="number"
                 min="1"
                 max="500"
-                .value=${computed(() => this.#updateRate.value)}
+                .value=${() => this.#updateRate.value}
                 @input=${(e: Event) => {
                   const value = parseInt((e.target as HTMLInputElement).value);
                   if (value >= 1 && value <= 500) {

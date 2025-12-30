@@ -494,7 +494,7 @@ describe("Template.render()", () => {
     it("should handle conditional && pattern", () => {
       const show = signal(false);
       const { fragment } = html`<div>
-        ${computed(() => show.value && html`<span>Shown</span>`)}
+        ${() => show.value && html`<span>Shown</span>`}
       </div>`.render();
 
       document.body.appendChild(fragment);

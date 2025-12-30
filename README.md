@@ -133,7 +133,7 @@ const items = signal(["a", "b", "c"]);
 
 html`
   <ul>
-    ${computed(() => items.value.map((item) => html`<li>${item}</li>`))}
+    ${() => items.value.map((item) => html`<li>${item}</li>`)}
   </ul>
 `.render();
 ```
@@ -426,7 +426,7 @@ class Counter extends HTMLElement {
 
     const { fragment, dispose } = html`
       <div>
-        <p>Count: ${computed(() => state.count)} (double: ${double})</p>
+        <p>Count: ${() => state.count} (double: ${double})</p>
         <button @click=${() => state.count++}>+</button>
         <button @click=${() => state.count--}>-</button>
       </div>

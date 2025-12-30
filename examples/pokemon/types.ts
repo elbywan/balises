@@ -42,3 +42,27 @@ export interface SearchResult {
   name: string;
   url: string;
 }
+
+export interface TypeDisplay {
+  key: string;
+  name: string;
+}
+
+export interface PokemonViewerState {
+  pokemonId: number;
+  pokemon: Pokemon | null;
+  pokemonName: string;
+  typeNames: TypeDisplay[];
+  loading: boolean;
+  showLoader: boolean;
+  error: string | null;
+  shiny: boolean;
+  favorites: FavoritePokemon[];
+  searchQuery: string;
+  searchResults: SearchResult[];
+  compareMode: boolean;
+  comparePokemon: Pokemon | null;
+  comparePokemonName: string;
+  compareTypeNames: TypeDisplay[];
+  language: string;
+}

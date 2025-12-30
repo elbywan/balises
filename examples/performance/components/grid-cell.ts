@@ -66,7 +66,7 @@ export function GridCell(props: {
       data-cell-id=${cell.id}
       title=${getTitle}
       @click=${handleClick}
-      style=${computed(() => (cell.type === "input" ? "cursor: pointer;" : ""))}
+      style=${() => (cell.type === "input" ? "cursor: pointer;" : "")}
     >
       ${cell.specialLabel
         ? html`<div class="special-badge">${cell.specialLabel}</div>`

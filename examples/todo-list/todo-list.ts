@@ -1,4 +1,4 @@
-import { html, signal, computed, each } from "../../src/index.js";
+import { html, signal, each, computed } from "../../src/index.js";
 
 interface Todo {
   id: number;
@@ -54,7 +54,7 @@ export class TodoListElement extends HTMLElement {
 
     // renderTodo is called once per unique todo.id, template is cached and reused
     const renderTodo = (todo: Todo) => html`
-      <li class=${computed(() => (todo.completed.value ? "completed" : ""))}>
+      <li class=${() => (todo.completed.value ? "completed" : "")}>
         <input
           type="checkbox"
           .checked=${todo.completed}
@@ -76,25 +76,19 @@ export class TodoListElement extends HTMLElement {
 
         <div class="filters">
           <button
-            class=${computed(() =>
-              this.#filter.value === "all" ? "active" : "",
-            )}
+            class=${() => (this.#filter.value === "all" ? "active" : "")}
             @click=${() => (this.#filter.value = "all")}
           >
             All
           </button>
           <button
-            class=${computed(() =>
-              this.#filter.value === "active" ? "active" : "",
-            )}
+            class=${() => (this.#filter.value === "active" ? "active" : "")}
             @click=${() => (this.#filter.value = "active")}
           >
             Active
           </button>
           <button
-            class=${computed(() =>
-              this.#filter.value === "completed" ? "active" : "",
-            )}
+            class=${() => (this.#filter.value === "completed" ? "active" : "")}
             @click=${() => (this.#filter.value = "completed")}
           >
             Completed

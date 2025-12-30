@@ -2,14 +2,11 @@
  * ComparePanel Component - Display comparison Pokemon in compare mode
  */
 
-import { html, computed } from "../../../src/index.js";
-import type { Pokemon } from "../types.js";
-import type { TypeDisplay } from "./pokemon-card.js";
+import { html } from "../../../src/index.js";
+import type { PokemonViewerState } from "../types.js";
 
 export interface ComparePanelProps {
-  comparePokemon: Pokemon | null;
-  comparePokemonName: string;
-  compareTypeNames: TypeDisplay[];
+  state: PokemonViewerState;
   onShuffle: () => void;
 }
 
@@ -17,16 +14,14 @@ export interface ComparePanelProps {
  * Renders the comparison Pokemon panel that appears beside the main Pokemon
  */
 export function ComparePanel(props: ComparePanelProps) {
-  const { comparePokemon, comparePokemonName, compareTypeNames, onShuffle } =
-    props;
+  const { state, onShuffle } = props;
 
-  const compareTypeDisplay = computed(() =>
-    (comparePokemon?.types ?? []).map((t) => {
+  const compareTypeDisplay = () =>
+    (state.comparePokemon?.types ?? []).map((t) => {
       const typeKey = t.type.name;
-      const found = compareTypeNames.find((tn) => tn.key === typeKey);
+      const found = state.compareTypeNames.find((tn) => tn.key === typeKey);
       return { key: typeKey, name: found ? found.name : typeKey };
-    }),
-  );
+    });
 
   const renderType = (typeKey: string, displayName: string) => html`
     <span class="type-badge" data-type=${typeKey}>${displayName}</span>
@@ -34,28 +29,28 @@ export function ComparePanel(props: ComparePanelProps) {
 
   return html`
     <div class="pokemon-compare">
-      ${comparePokemon
-        ? html`
-            <button
-              class="shuffle-btn"
-              @click=${onShuffle}
-              title="Random Pokemon"
-            >
-              🔀
-            </button>
-            <img
-              src=${comparePokemon.sprites.other?.["official-artwork"]
-                ?.front_default || comparePokemon.sprites.front_default}
-              alt=${comparePokemonName || comparePokemon.name}
-            />
-            <h3>${comparePokemonName || comparePokemon.name}</h3>
-            <div class="types">
-              ${computed(() =>
-                compareTypeDisplay.value.map((t) => renderType(t.key, t.name)),
-              )}
-            </div>
-          `
-        : html`<div class="compare-loading">Loading...</div>`}
+      ${() =>
+        state.comparePokemon
+          ? html`
+              <button
+                class="shuffle-btn"
+                @click=${onShuffle}
+                title="Random Pokemon"
+              >
+                🔀
+              </button>
+              <img
+                src=${state.comparePokemon.sprites.other?.["official-artwork"]
+                  ?.front_default || state.comparePokemon.sprites.front_default}
+                alt=${state.comparePokemonName || state.comparePokemon.name}
+              />
+              <h3>${state.comparePokemonName || state.comparePokemon.name}</h3>
+              <div class="types">
+                ${() =>
+                  compareTypeDisplay().map((t) => renderType(t.key, t.name))}
+              </div>
+            `
+          : html`<div class="compare-loading">Loading...</div>`}
     </div>
   `;
 }

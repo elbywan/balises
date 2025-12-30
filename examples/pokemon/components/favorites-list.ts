@@ -2,11 +2,11 @@
  * FavoritesList Component - Display and manage favorite Pokemon
  */
 
-import { html, each, computed } from "../../../src/index.js";
-import type { FavoritePokemon } from "../types.js";
+import { html, each } from "../../../src/index.js";
+import type { FavoritePokemon, PokemonViewerState } from "../types.js";
 
 export interface FavoritesListProps {
-  favorites: FavoritePokemon[];
+  state: PokemonViewerState;
   onSelectFavorite: (fav: FavoritePokemon) => void;
   onRemoveFavorite: (fav: FavoritePokemon, e: Event) => void;
 }
@@ -15,7 +15,7 @@ export interface FavoritesListProps {
  * Renders the favorites list section with add/remove functionality
  */
 export function FavoritesList(props: FavoritesListProps) {
-  const { favorites, onSelectFavorite, onRemoveFavorite } = props;
+  const { state, onSelectFavorite, onRemoveFavorite } = props;
 
   const renderFavorite = (fav: FavoritePokemon) => html`
     <div class="favorite-item" @click=${() => onSelectFavorite(fav)}>
@@ -34,18 +34,15 @@ export function FavoritesList(props: FavoritesListProps) {
     <div class="favorites-section">
       <h3>
         Favorites
-        <span class="favorites-count"
-          >(${computed(() => favorites.length)})</span
-        >
+        <span class="favorites-count">(${() => state.favorites.length})</span>
       </h3>
-      ${computed(() =>
-        favorites.length === 0
+      ${() =>
+        state.favorites.length === 0
           ? html`<p class="no-favorites">No favorites yet. Click ❤️ to add!</p>`
-          : null,
-      )}
+          : null}
       <div class="favorites-list">
         ${each(
-          () => favorites,
+          () => state.favorites,
           (fav) => fav.id,
           renderFavorite,
         )}

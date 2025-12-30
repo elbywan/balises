@@ -1,12 +1,13 @@
-import { html, type Signal, type Computed } from "../../../src/index.js";
+import { html } from "../../../src/index.js";
+import type { Reactive } from "../../../src/signals/index.js";
 
 /**
  * Reusable metric card component for displaying performance metrics
  */
 export function MetricCard(props: {
-  label: string;
-  value: string | number | Signal<number> | Computed<string>;
-  highlight?: boolean | Signal<boolean> | Computed<boolean>;
+  label: Reactive<string> | string;
+  value: (() => unknown) | Reactive<unknown>;
+  highlight?: Reactive<unknown> | unknown;
 }) {
   return html`
     <div class="metric-card ${props.highlight ? "highlight" : ""}">

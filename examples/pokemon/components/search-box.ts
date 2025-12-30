@@ -2,16 +2,11 @@
  * SearchBox Component - Search input with dropdown results
  */
 
-import { html, computed } from "../../../src/index.js";
-
-export interface SearchResult {
-  name: string;
-  url: string;
-}
+import { html } from "../../../src/index.js";
+import type { PokemonViewerState, SearchResult } from "../types.js";
 
 export interface SearchBoxProps {
-  searchQuery: string;
-  searchResults: SearchResult[];
+  state: PokemonViewerState;
   onInput: (e: Event) => void;
   onSelectResult: (result: SearchResult) => void;
 }
@@ -20,7 +15,7 @@ export interface SearchBoxProps {
  * Renders a search box with dropdown results for finding Pokemon
  */
 export function SearchBox(props: SearchBoxProps) {
-  const { searchResults, onInput, onSelectResult } = props;
+  const { state, onInput, onSelectResult } = props;
 
   return html`
     <div class="search-section">
@@ -33,12 +28,10 @@ export function SearchBox(props: SearchBoxProps) {
         />
         <div
           class="search-results"
-          style=${computed(() =>
-            searchResults.length > 0 ? "" : "display: none",
-          )}
+          style=${() => (state.searchResults.length > 0 ? "" : "display: none")}
         >
-          ${computed(() =>
-            searchResults
+          ${() =>
+            state.searchResults
               .slice(0, 8)
               .map(
                 (r) => html`
@@ -46,10 +39,11 @@ export function SearchBox(props: SearchBoxProps) {
                     ${r.name}
                   </div>
                 `,
-              ),
-          )}
+              )}
         </div>
       </div>
     </div>
   `;
 }
+
+export type { SearchResult };

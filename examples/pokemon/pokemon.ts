@@ -1,12 +1,11 @@
 import { html, computed, store, effect, scope } from "../../src/index.js";
-import type { Pokemon, FavoritePokemon } from "./types.js";
+import type { Pokemon, FavoritePokemon, SearchResult } from "./types.js";
 import { LANGUAGES, getDefaultLanguage } from "./utils/language.js";
 import { loadFavorites } from "./utils/storage.js";
 import { PokemonService } from "./services/pokemon-service.js";
 import { NavigationControls } from "./components/navigation-controls.js";
-import { SearchBox, type SearchResult } from "./components/search-box.js";
+import { SearchBox } from "./components/search-box.js";
 import { PokemonCard } from "./components/pokemon-card.js";
-import { ComparePanel } from "./components/compare-panel.js";
 import { FavoritesList } from "./components/favorites-list.js";
 
 /**
@@ -210,9 +209,7 @@ export class PokemonViewerElement extends HTMLElement {
               (lang) => html`
                 <option
                   value=${lang.code}
-                  .selected=${computed(
-                    () => this.#state.language === lang.code,
-                  )}
+                  .selected=${() => this.#state.language === lang.code}
                 >
                   ${lang.label}
                 </option>
@@ -223,64 +220,44 @@ export class PokemonViewerElement extends HTMLElement {
 
         <!-- Search Section -->
         ${SearchBox({
-          searchQuery: this.#state.searchQuery,
-          searchResults: this.#state.searchResults,
+          state: this.#state,
           onInput: onSearchInput,
           onSelectResult: selectSearchResult,
         })}
 
         <!-- Navigation Controls -->
         ${NavigationControls({
-          pokemonId: this.#state.pokemonId,
-          loading: this.#state.loading,
+          state: this.#state,
           onPrev: prev,
           onNext: next,
           onRandom: random,
         })}
 
         <!-- Error Message -->
-        ${computed(() =>
+        ${() =>
           this.#state.error
             ? html`<div class="error">${this.#state.error}</div>`
-            : null,
-        )}
+            : null}
 
         <!-- Pokemon Card with Compare Panel -->
         <div
           class="pokemon-card-wrapper"
-          style=${computed(() => (this.#state.error ? "display: none" : ""))}
+          style=${() => (this.#state.error ? "display: none" : "")}
         >
-          ${computed(() =>
-            PokemonCard({
-              pokemon: this.#state.pokemon,
-              pokemonName: this.#state.pokemonName,
-              typeNames: this.#state.typeNames,
-              shiny: this.#state.shiny,
-              loading: this.#state.loading,
-              showLoader: this.#state.showLoader,
-              error: this.#state.error,
-              isFavorite: isFavorite.value,
-              compareMode: this.#state.compareMode,
-              onToggleShiny: toggleShiny,
-              onPlayCry: playCry,
-              onToggleFavorite: toggleFavorite,
-              onToggleCompare: toggleCompare,
-              comparePokemonStats: this.#state.comparePokemon?.stats,
-              comparePanel: this.#state.compareMode
-                ? ComparePanel({
-                    comparePokemon: this.#state.comparePokemon,
-                    comparePokemonName: this.#state.comparePokemonName,
-                    compareTypeNames: this.#state.compareTypeNames,
-                    onShuffle: setComparePokemon,
-                  })
-                : undefined,
-            }),
-          )}
+          ${PokemonCard({
+            state: this.#state,
+            getIsFavorite: () => isFavorite.value,
+            onToggleShiny: toggleShiny,
+            onPlayCry: playCry,
+            onToggleFavorite: toggleFavorite,
+            onToggleCompare: toggleCompare,
+            onShuffleCompare: setComparePokemon,
+          })}
         </div>
 
         <!-- Favorites Section -->
         ${FavoritesList({
-          favorites: this.#state.favorites,
+          state: this.#state,
           onSelectFavorite: selectFavorite,
           onRemoveFavorite: removeFavorite,
         })}
