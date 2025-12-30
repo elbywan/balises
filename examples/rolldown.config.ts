@@ -1,6 +1,6 @@
 import { defineConfig } from "rolldown";
 
-const examples = ["counter", "timer", "pokemon", "todo-list"];
+const examples = ["counter", "timer", "pokemon", "todo-list", "performance"];
 
 export default defineConfig(
   examples.map((name) => ({

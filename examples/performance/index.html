@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Performance Demo - Balises</title>
+    <link rel="stylesheet" href="../example.css" />
+    <style>
+      body {
+        padding: 2rem;
+        margin: 0;
+        background: #0a0a0b;
+        color: #ededef;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .performance-demo {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: center;
+      }
+
+      .demo-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+        align-items: center;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 0;
+      }
+
+      .header h2 {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        color: #ededef;
+        font-weight: 600;
+      }
+
+      .header p {
+        font-size: 1rem;
+        color: #8b8b8d;
+        line-height: 1.6;
+        margin: 0;
+      }
+
+      .input-color {
+        color: #10b981;
+      }
+
+      .formula-color {
+        color: #a78bfa;
+      }
+
+      .multiplier-color {
+        color: #f59e0b;
+      }
+
+      .metrics {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+      }
+
+      .metric-card {
+        background: #111113;
+        border: 1px solid #1f1f23;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        transition: all 0.3s ease;
+        min-width: 120px;
+      }
+
+      .metric-card.highlight {
+        border-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.1);
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+      }
+
+      .metric-label {
+        font-size: 0.65rem;
+        color: #8b8b8d;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+      }
+
+      .metric-value {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #ededef;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric-detail {
+        font-size: 0.7rem;
+        color: #8b8b8d;
+      }
+
+      .grid-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(10, minmax(0, 60px));
+        gap: 0.4rem;
+        padding: 1rem;
+        background: #111113;
+        border: 1px solid #1f1f23;
+        border-radius: 8px;
+        justify-content: center;
+      }
+
+      .cell {
+        background: #1a1a1d;
+        border: 2px solid #1f1f23;
+        border-radius: 4px;
+        padding: 0.6rem 0.4rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        text-align: center;
+        position: relative;
+        width: 60px;
+        height: 60px;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+      }
+
+      .input-cell {
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .input-cell:hover {
+        background: rgba(16, 185, 129, 0.2);
+        border-color: #34d399;
+      }
+
+      .input-cell:active {
+        opacity: 0.8;
+      }
+
+      .formula-cell {
+        border-color: #a78bfa;
+        background: rgba(167, 139, 250, 0.1);
+      }
+
+      .multiplier-cell {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .sum-neighbors-cell {
+        border-color: #06b6d4;
+        background: rgba(6, 182, 212, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .max-cell {
+        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .min-cell {
+        border-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .average-cell {
+        border-color: #ec4899;
+        background: rgba(236, 72, 153, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .row-sum-cell {
+        border-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .column-sum-cell {
+        border-color: #14b8a6;
+        background: rgba(20, 184, 166, 0.15);
+        position: relative;
+        overflow: visible;
+      }
+
+      .special-badge {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: currentColor;
+        color: #0a0a0b;
+        font-size: 0.55rem;
+        font-weight: 900;
+        padding: 0.15rem 0.35rem;
+        border-radius: 4px;
+        z-index: 10;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        line-height: 1;
+      }
+
+      .multiplier-cell .special-badge {
+        background: #f59e0b;
+      }
+
+      .sum-neighbors-cell .special-badge {
+        background: #06b6d4;
+      }
+
+      .max-cell .special-badge {
+        background: #ef4444;
+      }
+
+      .min-cell .special-badge {
+        background: #3b82f6;
+      }
+
+      .average-cell .special-badge {
+        background: #ec4899;
+      }
+
+      .row-sum-cell .special-badge {
+        background: #8b5cf6;
+      }
+
+      .column-sum-cell .special-badge {
+        background: #14b8a6;
+      }
+
+      /* Hover states for dependency visualization */
+      .cell.is-hovering {
+        border-width: 3px;
+        z-index: 100;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+      }
+
+      /* Cells that the hovered cell depends on (inputs/sources) */
+      .cell.is-dependency {
+        border-width: 3px;
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        opacity: 1;
+        z-index: 50;
+      }
+
+      /* Cells that depend on the hovered cell (outputs/consumers) */
+      .cell.is-dependent {
+        border-width: 3px;
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
+        border-color: #22d3ee !important;
+        opacity: 1;
+        z-index: 50;
+        animation: pulse-dependent 1s ease-in-out infinite;
+      }
+
+      @keyframes pulse-dependent {
+        0%,
+        100% {
+          box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
+        }
+        50% {
+          box-shadow: 0 0 30px rgba(34, 211, 238, 0.9);
+        }
+      }
+
+      .cell:not(.is-hovering):not(.is-dependency):not(.is-dependent) {
+        transition: opacity 0.2s;
+      }
+
+      .cell.is-hovering ~ .cell:not(.is-dependency):not(.is-dependent),
+      .grid:has(.is-hovering)
+        .cell:not(.is-hovering):not(.is-dependency):not(.is-dependent) {
+        opacity: 0.3;
+      }
+
+      /* Formula display on hover */
+      .cell[data-formula]::after {
+        content: attr(data-formula);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1a1a1d;
+        color: #ededef;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        border: 1px solid #3b82f6;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        margin-bottom: 8px;
+        z-index: 200;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+      }
+
+      .cell[data-formula]::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #3b82f6;
+        margin-bottom: 2px;
+        z-index: 200;
+      }
+
+      @keyframes flash {
+        0% {
+          background: #3b82f6;
+          border-color: #60a5fa;
+          transform: scale(1.15);
+          box-shadow: 0 0 30px rgba(59, 130, 246, 0.8);
+        }
+        50% {
+          background: #2563eb;
+          border-color: #3b82f6;
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes multiplier-flash {
+        0% {
+          background: #f59e0b;
+          border-color: #fbbf24;
+          transform: scale(1.25) rotate(5deg);
+          box-shadow: 0 0 40px rgba(245, 158, 11, 1);
+        }
+        50% {
+          background: #d97706;
+          border-color: #f59e0b;
+          transform: scale(1.15) rotate(-5deg);
+          box-shadow: 0 0 30px rgba(245, 158, 11, 0.6);
+        }
+        100% {
+          transform: scale(1) rotate(0deg);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes sum-neighbors-flash {
+        0% {
+          background: #06b6d4;
+          border-color: #22d3ee;
+          transform: scale(1.25);
+          box-shadow: 0 0 40px rgba(6, 182, 212, 1);
+        }
+        50% {
+          background: #0891b2;
+          border-color: #06b6d4;
+          box-shadow: 0 0 30px rgba(6, 182, 212, 0.6);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes max-flash {
+        0% {
+          background: #ef4444;
+          border-color: #f87171;
+          transform: scale(1.3);
+          box-shadow: 0 0 40px rgba(239, 68, 68, 1);
+        }
+        50% {
+          background: #dc2626;
+          border-color: #ef4444;
+          box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes min-flash {
+        0% {
+          background: #3b82f6;
+          border-color: #60a5fa;
+          transform: scale(1.3);
+          box-shadow: 0 0 40px rgba(59, 130, 246, 1);
+        }
+        50% {
+          background: #2563eb;
+          border-color: #3b82f6;
+          box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes average-flash {
+        0% {
+          background: #ec4899;
+          border-color: #f472b6;
+          transform: scale(1.25);
+          box-shadow: 0 0 40px rgba(236, 72, 153, 1);
+        }
+        50% {
+          background: #db2777;
+          border-color: #ec4899;
+          box-shadow: 0 0 30px rgba(236, 72, 153, 0.6);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes row-sum-flash {
+        0% {
+          background: #8b5cf6;
+          border-color: #a78bfa;
+          transform: scaleX(1.3) scaleY(1.15);
+          box-shadow: 0 0 40px rgba(139, 92, 246, 1);
+        }
+        50% {
+          background: #7c3aed;
+          border-color: #8b5cf6;
+          transform: scaleX(1.2) scaleY(1.1);
+          box-shadow: 0 0 30px rgba(139, 92, 246, 0.6);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      @keyframes column-sum-flash {
+        0% {
+          background: #14b8a6;
+          border-color: #2dd4bf;
+          transform: scaleX(1.15) scaleY(1.3);
+          box-shadow: 0 0 40px rgba(20, 184, 166, 1);
+        }
+        50% {
+          background: #0f766e;
+          border-color: #14b8a6;
+          transform: scaleX(1.1) scaleY(1.2);
+          box-shadow: 0 0 30px rgba(20, 184, 166, 0.6);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
+      .legend {
+        display: flex;
+        gap: 2rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        padding: 1rem;
+        background: #111113;
+        border: 1px solid #1f1f23;
+        border-radius: 8px;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.95rem;
+        color: #8b8b8d;
+      }
+
+      .legend-box {
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 4px;
+        border: 2px solid;
+      }
+
+      .input-box {
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.2);
+      }
+
+      .formula-box {
+        border-color: #a78bfa;
+        background: rgba(167, 139, 250, 0.2);
+      }
+
+      .multiplier-box {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.2);
+      }
+
+      .cell-value {
+        font-weight: bold;
+        color: #ededef;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+        width: 100%;
+        font-size: 0.85rem;
+      }
+
+      .controls {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .main-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+        width: 100%;
+      }
+
+      .control-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .control-group h3 {
+        margin: 0;
+        font-size: 0.75rem;
+        color: #8b8b8d;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .control-desc {
+        display: none;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      button {
+        padding: 0.4rem 0.75rem;
+        border: 1px solid #1f1f23;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        background: #1a1a1d;
+        color: #ededef;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      button:hover {
+        background: #252528;
+        border-color: #3b82f6;
+      }
+
+      button:active {
+        transform: scale(0.98);
+      }
+
+      .big-button {
+        display: none;
+      }
+
+      button.primary {
+        background: #3b82f6;
+        border-color: #3b82f6;
+      }
+
+      button.primary:hover {
+        background: #60a5fa;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+      }
+
+      button.danger {
+        background: #dc2626;
+        border-color: #dc2626;
+      }
+
+      button.danger:hover {
+        background: #ef4444;
+      }
+
+      .explanation {
+        background: #111113;
+        border: 1px solid #1f1f23;
+        border-radius: 10px;
+        padding: 2rem;
+      }
+
+      .explanation h3 {
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        color: #ededef;
+        font-size: 1.5rem;
+        text-align: center;
+      }
+
+      .explanation-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+      }
+
+      .explanation-item {
+        display: flex;
+        gap: 1rem;
+        padding: 1.25rem;
+        background: #1a1a1d;
+        border-radius: 8px;
+        border: 1px solid #1f1f23;
+      }
+
+      .explanation-icon {
+        font-size: 1.75rem;
+        flex-shrink: 0;
+        width: 3rem;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(59, 130, 246, 0.1);
+        border-radius: 8px;
+      }
+
+      .explanation-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .explanation-content strong {
+        color: #ededef;
+        font-size: 1rem;
+      }
+
+      .explanation-content p {
+        margin: 0;
+        color: #8b8b8d;
+        line-height: 1.5;
+        font-size: 0.9rem;
+      }
+
+      @media (max-width: 1024px) {
+        .controls {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 1rem;
+        }
+
+        .control-group {
+          flex-direction: column;
+          align-items: stretch;
+          background: #111113;
+          border: 1px solid #1f1f23;
+          border-radius: 8px;
+          padding: 1rem;
+          gap: 0.75rem;
+        }
+
+        .control-group h3 {
+          font-size: 0.9rem;
+          margin: 0;
+        }
+
+        .button-row {
+          width: 100%;
+        }
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 1rem;
+        }
+
+        .header h2 {
+          font-size: 1.5rem;
+        }
+
+        .header p {
+          font-size: 0.9rem;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .metric-card {
+          min-width: auto;
+        }
+
+        .button-row {
+          flex-direction: column;
+        }
+
+        button {
+          width: 100%;
+        }
+
+        .explanation-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .grid {
+          grid-template-columns: repeat(10, minmax(0, 1fr));
+          max-width: 100%;
+          padding: 0.5rem;
+          gap: 0.3rem;
+        }
+
+        .cell {
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1;
+          padding: 0.3rem 0.2rem;
+          font-size: 0.7rem;
+        }
+
+        .cell-value {
+          font-size: 0.7rem;
+        }
+
+        .special-badge {
+          font-size: 0.45rem;
+          padding: 0.1rem 0.25rem;
+        }
+
+        .legend {
+          flex-wrap: wrap;
+          font-size: 0.85rem;
+        }
+      }
+    </style>
+    <script>
+      // Add animation trigger via MutationObserver
+      document.addEventListener("DOMContentLoaded", () => {
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (
+              mutation.type === "attributes" &&
+              mutation.attributeName === "data-flash"
+            ) {
+              const target = mutation.target;
+
+              // Determine animation based on cell type
+              let animation = "flash 0.5s cubic-bezier(0.4, 0, 0.2, 1)";
+
+              if (target.classList.contains("multiplier-cell")) {
+                animation =
+                  "multiplier-flash 0.6s cubic-bezier(0.4, 0, 0.2, 1)";
+              } else if (target.classList.contains("sum-neighbors-cell")) {
+                animation =
+                  "sum-neighbors-flash 0.6s cubic-bezier(0.4, 0, 0.2, 1)";
+              } else if (target.classList.contains("row-sum-cell")) {
+                animation = "row-sum-flash 0.7s cubic-bezier(0.4, 0, 0.2, 1)";
+              } else if (target.classList.contains("column-sum-cell")) {
+                animation =
+                  "column-sum-flash 0.7s cubic-bezier(0.4, 0, 0.2, 1)";
+              } else if (target.classList.contains("max-cell")) {
+                animation = "max-flash 0.7s cubic-bezier(0.4, 0, 0.2, 1)";
+              } else if (target.classList.contains("min-cell")) {
+                animation = "min-flash 0.7s cubic-bezier(0.4, 0, 0.2, 1)";
+              } else if (target.classList.contains("average-cell")) {
+                animation = "average-flash 0.6s cubic-bezier(0.4, 0, 0.2, 1)";
+              }
+
+              // Remove and re-add animation
+              target.style.animation = "none";
+              // Force reflow
+              target.offsetHeight;
+              target.style.animation = animation;
+            }
+          });
+        });
+
+        // Observe all cells
+        setTimeout(() => {
+          document.querySelectorAll(".cell").forEach((cell) => {
+            observer.observe(cell, { attributes: true });
+          });
+        }, 100);
+      });
+    </script>
+  </head>
+  <body>
+    <x-performance></x-performance>
+
+    <div class="nav-links" style="max-width: 1200px; margin: 2rem auto 0">
+      <a href="../" class="back-link">&larr; Back to Examples</a>
+      <a
+        href="https://github.com/elbywan/balises/blob/main/examples/performance/performance.ts"
+        class="source-link"
+        target="_blank"
+        >View Source &rarr;</a
+      >
+    </div>
+
+    <script type="module" src="./performance.js"></script>
+  </body>
+</html>
