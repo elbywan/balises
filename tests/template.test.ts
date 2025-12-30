@@ -788,6 +788,58 @@ describe("Template.render()", () => {
       enabled.value = true;
       assert.strictEqual(button.hasAttribute("disabled"), false);
     });
+
+    /**
+     * Function as reactive content - automatically wrapped in computed
+     */
+    it("should treat functions as reactive content", () => {
+      const count = new Signal(1);
+
+      const { fragment } = html`<div>${() => count.value * 2}</div>`.render();
+      const div = fragment.firstChild as HTMLDivElement;
+
+      assert.strictEqual(div.textContent, "2");
+
+      count.value = 5;
+      assert.strictEqual(div.textContent, "10");
+
+      count.value = 0;
+      assert.strictEqual(div.textContent, "0");
+    });
+
+    /**
+     * Function as reactive attribute - automatically wrapped in computed
+     */
+    it("should treat functions as reactive attributes", () => {
+      const count = new Signal(1);
+
+      const { fragment } = html`<div
+        class=${() => `item-${count.value}`}
+      ></div>`.render();
+      const div = fragment.firstChild as HTMLDivElement;
+
+      assert.strictEqual(div.getAttribute("class"), "item-1");
+
+      count.value = 5;
+      assert.strictEqual(div.getAttribute("class"), "item-5");
+    });
+
+    /**
+     * Function returning boolean for attribute
+     */
+    it("should handle function returning boolean for attribute", () => {
+      const enabled = new Signal(true);
+
+      const { fragment } = html`<button disabled=${() => !enabled.value}>
+        Click
+      </button>`.render();
+      const button = fragment.firstChild as HTMLButtonElement;
+
+      assert.strictEqual(button.hasAttribute("disabled"), false);
+
+      enabled.value = false;
+      assert.strictEqual(button.hasAttribute("disabled"), true);
+    });
   });
 
   describe("each() - keyed list rendering", () => {

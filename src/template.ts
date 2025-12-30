@@ -19,11 +19,21 @@ type AttrPart = string | { index: number };
 /**
  * Bind a value to an update function.
  * If reactive, subscribes and returns unsubscribe. Otherwise returns null.
+ * Functions are wrapped in computed() for automatic reactivity.
  */
 function bind(
   value: unknown,
   update: (v: unknown) => void,
 ): (() => void) | null {
+  if (typeof value === "function" && !isEach(value)) {
+    const c = computed(value as () => unknown);
+    update(c.value);
+    const unsub = c.subscribe(() => update(c.value));
+    return () => {
+      unsub();
+      c.dispose();
+    };
+  }
   if (isSignal(value)) {
     update(value.value);
     return value.subscribe(() => update((value as Reactive<unknown>).value));
@@ -86,16 +96,29 @@ export class Template {
       const dynParts = parts.filter(
         (p): p is { index: number } => typeof p !== "string",
       );
-      const sigs = dynParts
-        .map((p) => values[p.index])
-        .filter(isSignal) as Reactive<unknown>[];
+      // Wrap functions in computed, collect all reactive sources
+      const reactives: Reactive<unknown>[] = [];
+      for (const p of dynParts) {
+        const v = values[p.index];
+        if (typeof v === "function") {
+          const c = computed(v as () => unknown);
+          values[p.index] = c;
+          reactives.push(c);
+          disposers.push(() => c.dispose());
+        } else if (isSignal(v)) {
+          reactives.push(v);
+        }
+      }
       const single = parts.length === 1;
+
+      const getValue = (idx: number) => {
+        const v = values[idx];
+        return isSignal(v) ? (v as Reactive<unknown>).value : v;
+      };
 
       const update = () => {
         if (single) {
-          const val = isSignal(values[dynParts[0]!.index])
-            ? (values[dynParts[0]!.index] as Reactive<unknown>).value
-            : values[dynParts[0]!.index];
+          const val = getValue(dynParts[0]!.index);
           if (val == null || val === false) el.removeAttribute(name);
           else el.setAttribute(name, val === true ? "" : String(val));
         } else {
@@ -104,9 +127,7 @@ export class Template {
             parts
               .map((p) => {
                 if (typeof p === "string") return p;
-                const val = isSignal(values[p.index])
-                  ? (values[p.index] as Reactive<unknown>).value
-                  : values[p.index];
+                const val = getValue(p.index);
                 return val == null ? "" : String(val);
               })
               .join(""),
@@ -115,7 +136,7 @@ export class Template {
       };
 
       update();
-      for (const s of sigs) disposers.push(s.subscribe(update));
+      for (const s of reactives) disposers.push(s.subscribe(update));
     };
 
     parser.parseTemplate(this.strings, {
