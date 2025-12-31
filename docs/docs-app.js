@@ -188,6 +188,26 @@ const CODE_EXAMPLES = {
     "});\n" +
     "// Use state.count, state.doubled...\n" +
     "dispose(); // cleanup everything at once",
+
+  composable:
+    "// Define reusable UI pieces as functions\n" +
+    "function Counter({ state, onIncrement }) {\n" +
+    "  return html`\n" +
+    '    <div class="counter">\n' +
+    "      <span>Count: ${() => state.count}</span>\n" +
+    "      <button @click=${onIncrement}>+1</button>\n" +
+    "    </div>\n" +
+    "  `;\n" +
+    "}\n" +
+    "\n" +
+    "// Use in parent - pass store for reactivity\n" +
+    "const state = store({ count: 0 });\n" +
+    "\n" +
+    "html`\n" +
+    '  <div class="app">\n' +
+    "    ${Counter({ state, onIncrement: () => state.count++ })}\n" +
+    "  </div>\n" +
+    "`.render();",
 };
 
 // ============================================================================
@@ -344,6 +364,17 @@ class DocsApp extends HTMLElement {
             Node.js, Electron, or any JavaScript environment:
           </p>
           <code-block data-code="standalone"></code-block>
+        </section>
+
+        <!-- Composable Function Components Section -->
+        <section>
+          <h2>Composable Functions</h2>
+          <p>
+            Build reusable UI pieces as functions that return templates. Pass
+            the store directly to keep reactivity working - access properties
+            inside function wrappers like <code>\${() => state.count}</code>:
+          </p>
+          <code-block data-code="composable"></code-block>
         </section>
 
         <!-- API Section (data-driven) -->

@@ -149,6 +149,7 @@ The library has multiple export points for tree-shaking:
 - Events: `@event=${handler}` - addEventListener/removeEventListener
 - Nested: `${html`...`}` - Renders sub-templates
 - Arrays: `${[...]}` - Flattens and renders each item
+- Functions: `${() => value}` - Auto-wrapped in `computed()` for reactivity
 
 **Keyed list rendering (`each()`):**
 
@@ -308,6 +309,55 @@ connectedCallback() {
   };
 }
 ```
+
+### Function Component Patterns
+
+For lighter-weight composition without full web components, use **function components** that receive a store and return templates:
+
+```typescript
+// Define a function component - receives store, returns template
+function SearchBox({ state, onInput, onSelect }) {
+  return html`
+    <div class="search-box">
+      <input @input=${onInput} placeholder="Search..." />
+      <div
+        class="results"
+        style=${() => (state.results.length ? "" : "display:none")}
+      >
+        ${() =>
+          state.results.map(
+            (r) => html`<div @click=${() => onSelect(r)}>${r.name}</div>`,
+          )}
+      </div>
+    </div>
+  `;
+}
+
+// Use in parent - pass store reference, it stays reactive
+const state = store({ query: "", results: [] });
+
+html`
+  <div class="app">
+    ${SearchBox({ state, onInput: handleInput, onSelect: handleSelect })}
+  </div>
+`.render();
+```
+
+**Key principles:**
+
+1. **Pass the store, not values** - The store is a stable reference; accessing `state.property` inside function wrappers tracks dependencies
+2. **Use function wrappers for reactivity** - `${() => state.count}` creates a computed that updates when `state.count` changes
+3. **Event handlers as props** - Pass callbacks for actions, keeping logic in the parent
+4. **No lifecycle needed** - Function components render once; reactivity handles updates
+
+**When to use function components vs web components:**
+
+| Function Components      | Web Components              |
+| ------------------------ | --------------------------- |
+| Internal UI composition  | Reusable standalone widgets |
+| Shared state from parent | Self-contained state        |
+| No Shadow DOM needed     | Need style encapsulation    |
+| Quick composition        | Publishing packages         |
 
 ## Testing
 

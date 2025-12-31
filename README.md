@@ -30,6 +30,7 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Building Web Components](#building-web-components)
+- [Composable Function Components](#composable-function-components)
 - [Template Syntax](#template-syntax)
 - [Reactivity API](#reactivity-api)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
@@ -108,6 +109,21 @@ Use it in your HTML:
 
 You can build entire apps this way, or just add interactive widgets to existing pages. No build step required if you use it from a CDN.
 
+## Composable Function Components
+
+You can also use plain functions that return templates. Pass the store and access its properties in function wrappers to keep things reactive:
+
+```ts
+function Counter({ state }) {
+  return html`
+    <button @click=${() => state.count++}>${() => state.count}</button>
+  `;
+}
+
+const state = store({ count: 0 });
+html`<div>${Counter({ state })}</div>`.render();
+```
+
 ## Template Syntax
 
 The `html` tagged template creates reactive DOM fragments. When you interpolate a signal, that specific part of the DOM updates automatically when the signal changes.
@@ -123,6 +139,20 @@ The `html` tagged template creates reactive DOM fragments. When you interpolate 
 | `@event=${fn}`    | Event listener                                        |
 
 All interpolations accept reactive values (`Signal` or `Computed`) and will auto-update when they change.
+
+### Function Interpolation
+
+Functions are wrapped in `computed()` automatically:
+
+```ts
+const state = store({ count: 0 });
+
+html`
+  <p>Count: ${() => state.count}</p>
+  <p>Doubled: ${() => state.count * 2}</p>
+  ${() => (state.count > 10 ? html`<p>High score!</p>` : null)}
+`.render();
+```
 
 ### Nested Templates
 
@@ -170,32 +200,18 @@ items.value[0].name.value = "Alicia";
 items.value = [...items.value].reverse();
 ```
 
-The `each()` helper has two signatures:
-
-**With key function (use this when objects might be recreated with the same data):**
+Signatures:
 
 ```ts
-each(list, keyFn, renderFn);
+each(list, keyFn, renderFn); // keyed by keyFn(item, index)
+each(list, renderFn); // keyed by object reference or index
 ```
-
-- `list` - A reactive array (Signal, Computed, or getter function)
-- `keyFn` - Extracts a unique key from each item: `(item, index) => key`
-- `renderFn` - Renders each item (called once per unique key)
-
-**Without key function (uses object references or array indices):**
-
-```ts
-each(list, renderFn);
-```
-
-- Objects are keyed by reference (reordering works)
-- Primitives are keyed by index (duplicates work correctly)
 
 If you want to update item content without triggering list reconciliation, nest signals inside your items (like `name: signal("Alice")` above).
 
 ## Reactivity API
 
-### `signal<T>(value)` / `new Signal<T>(value)`
+### `signal<T>(value)`
 
 Wraps a value to make it reactive.
 
@@ -219,7 +235,7 @@ count.value = count.value + 1;
 count.value = count.value * 2;
 ```
 
-### `computed<T>(fn)` / `new Computed<T>(fn)`
+### `computed<T>(fn)`
 
 Derives a value from other signals. Automatically tracks dependencies.
 
