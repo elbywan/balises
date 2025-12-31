@@ -174,6 +174,7 @@ ${rankingsTable}
 \`\`\`
 
 **Scenarios:**
+
 - **S1: Layers** - Deep dependency chains (A→B→C→D...)
 - **S2: Wide** - Many independent signals updating in parallel
 - **S3: Diamond** - Multiple paths to same computed (diamond dependencies)
@@ -182,6 +183,7 @@ ${rankingsTable}
 - **S6: Batch** - Batched/transactional updates
 
 **Interpretation:**
+
 - Balises performs well across all scenarios, particularly excelling at diamond dependencies, list operations, and batching
 - These are synthetic benchmarks measuring pure reactivity - real apps should consider the whole picture (ecosystem, docs, community, etc.)
 - Lower rank = better performance
