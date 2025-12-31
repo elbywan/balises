@@ -712,6 +712,239 @@ describe("Template GC after dispose()", () => {
     });
   });
 
+  describe("composable function components", () => {
+    it("should GC function component computed when conditionally removed", async () => {
+      const tracker = createGCTracker();
+      // Signal to track - lives outside the IIFE so we can verify targets are cleaned
+      const count = signal(0);
+
+      // Composable function component using the external signal
+      function Counter({ count: countSignal }: { count: typeof count }) {
+        return html`<button>${() => countSignal.value}</button>`;
+      }
+
+      const show = signal(true);
+
+      await (async function scope() {
+        const { fragment, dispose } = html`<div>
+          ${() => (show.value ? Counter({ count }) : null)}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+
+        // Component is shown - should have computed in targets
+        assert.ok(count.targets.length >= 1, "should have computed target");
+        tracker.track(count.targets[0]!, "counterComputed");
+
+        // Hide the component - computed should be disposed and GC'd
+        show.value = false;
+
+        // Force GC and verify the computed is collected
+        await tracker.waitFor("counterComputed");
+        assert.strictEqual(
+          count.targets.length,
+          0,
+          "targets should be empty after hiding",
+        );
+
+        dispose();
+        fragment.firstElementChild?.remove();
+      })();
+    });
+
+    it("should GC function component computed after toggling multiple times", async () => {
+      const tracker = createGCTracker();
+      const value = signal("test");
+
+      function Item({ value: valueSignal }: { value: typeof value }) {
+        return html`<span>${() => valueSignal.value}</span>`;
+      }
+
+      const show = signal(true);
+
+      await (async function scope() {
+        const { fragment, dispose } = html`<div>
+          ${() => (show.value ? Item({ value }) : null)}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+
+        // Toggle multiple times - each hide should dispose the previous computed
+        show.value = false;
+        show.value = true;
+        show.value = false;
+        show.value = true;
+        show.value = false;
+        show.value = true;
+
+        // Currently shown - track the current computed
+        assert.ok(value.targets.length >= 1, "should have computed target");
+        tracker.track(value.targets[0]!, "finalComputed");
+
+        // Final hide
+        show.value = false;
+
+        await tracker.waitFor("finalComputed");
+        assert.strictEqual(
+          value.targets.length,
+          0,
+          "targets should be empty after final hide",
+        );
+
+        dispose();
+        fragment.firstElementChild?.remove();
+      })();
+    });
+
+    it("should GC nested function component computeds when parent removed", async () => {
+      const tracker = createGCTracker();
+      const outerValue = signal("outer");
+      const innerValue = signal("inner");
+
+      function Inner({ value }: { value: typeof innerValue }) {
+        return html`<span class="inner">${() => value.value}</span>`;
+      }
+
+      function Outer({
+        outerVal,
+        innerVal,
+      }: {
+        outerVal: typeof outerValue;
+        innerVal: typeof innerValue;
+      }) {
+        return html`<div class="outer">
+          ${() => outerVal.value} ${Inner({ value: innerVal })}
+        </div>`;
+      }
+
+      const show = signal(true);
+
+      await (async function scope() {
+        const { fragment, dispose } = html`<div>
+          ${() =>
+            show.value
+              ? Outer({ outerVal: outerValue, innerVal: innerValue })
+              : null}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+
+        // Both outer and inner computeds should exist
+        assert.ok(
+          outerValue.targets.length >= 1,
+          "outer should have computed target",
+        );
+        assert.ok(
+          innerValue.targets.length >= 1,
+          "inner should have computed target",
+        );
+
+        tracker.track(outerValue.targets[0]!, "outerComputed");
+        tracker.track(innerValue.targets[0]!, "innerComputed");
+
+        // Hide the parent - both should be disposed
+        show.value = false;
+
+        await tracker.waitForAll(["outerComputed", "innerComputed"]);
+        assert.strictEqual(
+          outerValue.targets.length,
+          0,
+          "outer targets should be empty",
+        );
+        assert.strictEqual(
+          innerValue.targets.length,
+          0,
+          "inner targets should be empty",
+        );
+
+        dispose();
+        fragment.firstElementChild?.remove();
+      })();
+    });
+
+    it("should GC function component with store when conditionally removed", async () => {
+      const tracker = createGCTracker();
+      // Use a signal inside the store pattern to track GC
+      const countSignal = signal(0);
+
+      // Simulate store-like usage where the signal is accessed via a getter
+      const state = {
+        get count() {
+          return countSignal.value;
+        },
+      };
+
+      function Counter({ state: s }: { state: typeof state }) {
+        return html`<button>${() => s.count}</button>`;
+      }
+
+      const show = signal(true);
+
+      await (async function scope() {
+        const { fragment, dispose } = html`<div>
+          ${() => (show.value ? Counter({ state }) : null)}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+
+        // Component is shown - computed should be tracking countSignal
+        assert.ok(
+          countSignal.targets.length >= 1,
+          "should have computed target",
+        );
+        tracker.track(countSignal.targets[0]!, "storeComputed");
+
+        // Hide the component
+        show.value = false;
+
+        await tracker.waitFor("storeComputed");
+        assert.strictEqual(
+          countSignal.targets.length,
+          0,
+          "targets should be empty after hiding",
+        );
+
+        dispose();
+        fragment.firstElementChild?.remove();
+      })();
+    });
+
+    it("should GC function component computed after DOM removal and dispose", async () => {
+      const tracker = createGCTracker();
+      const text = signal("hello");
+
+      function Message({ text: textSignal }: { text: typeof text }) {
+        return html`<p>${() => textSignal.value}</p>`;
+      }
+
+      await (async function scope() {
+        const { fragment, dispose } = html`<div id="gc-dom-test">
+          ${Message({ text })}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+
+        // Verify component is rendered and tracking
+        assert.ok(text.targets.length >= 1, "should have computed target");
+        tracker.track(text.targets[0]!, "messageComputed");
+
+        // Update works
+        text.value = "world";
+        assert.strictEqual(
+          document.querySelector("#gc-dom-test p")?.textContent,
+          "world",
+        );
+
+        // Dispose and remove from DOM
+        dispose();
+        document.getElementById("gc-dom-test")?.remove();
+      })();
+
+      await tracker.waitFor("messageComputed");
+      assert.strictEqual(text.targets.length, 0, "targets should be empty");
+    });
+  });
+
   describe("each() computed disposal", () => {
     it("should dispose computed created from getter function", async () => {
       const tracker = createGCTracker();
