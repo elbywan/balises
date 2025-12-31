@@ -191,7 +191,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
   // Handle each() - keyed list for efficient list rendering
   if (value != null && typeof value === "object" && EACH in value) {
     const cache = new Map<unknown, EachEntry>();
-    const { list, keyFn, renderFn } = value as EachDescriptor<unknown>;
+    const { list, keyFn, renderFn, dispose } = value as EachDescriptor<unknown>;
     let warned = 0;
 
     const updateList = () => {
@@ -257,6 +257,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
       }
       cache.clear();
       nodes.forEach((n) => n.parentNode?.removeChild(n));
+      dispose?.();
     };
   }
 
@@ -298,6 +299,7 @@ interface EachDescriptor<T> {
   list: Reactive<T[]>;
   keyFn: (item: T, index: number) => unknown;
   renderFn: (item: T) => Template;
+  dispose?: (() => void) | undefined;
 }
 
 /** List input type - accepts arrays, reactive arrays, or getter functions */
@@ -352,14 +354,26 @@ export function each<T>(
         (typeof item === "object" || typeof item === "function")
           ? item
           : index;
+
+  // Track if we created a computed for a getter function
+  let dispose: (() => void) | undefined;
+  let reactiveList: Reactive<T[]>;
+
+  if (Array.isArray(list)) {
+    reactiveList = signal(list);
+  } else if (typeof list === "function") {
+    const c = computed(list);
+    reactiveList = c;
+    dispose = () => c.dispose();
+  } else {
+    reactiveList = list;
+  }
+
   return {
     [EACH]: true,
-    list: Array.isArray(list)
-      ? signal(list)
-      : typeof list === "function"
-        ? computed(list)
-        : list,
+    list: reactiveList,
     keyFn,
     renderFn: renderFn ?? (keyFnOrRenderFn as (item: T) => Template),
+    dispose,
   };
 }

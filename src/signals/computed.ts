@@ -63,6 +63,9 @@ export class Computed<T> {
    * @internal
    */
   trackSource(source: Signal<unknown> | Computed<unknown>): void {
+    // Skip tracking if disposed (can happen if dispose() is called during #fn execution)
+    if (!this.#fn) return;
+
     const sources = this.#sources;
     const idx = this.#sourceIndex++;
 
@@ -73,8 +76,8 @@ export class Computed<T> {
       }
       // Different source - unlink old ones from this position
       for (let i = idx; i < sources.length; i++) {
-        const source = sources[i];
-        if (source) source.deleteTarget(this);
+        const s = sources[i];
+        if (s) s.deleteTarget(this);
       }
       sources.length = idx;
     }
@@ -160,7 +163,9 @@ export class Computed<T> {
         const sources = this.#sources;
         for (let i = newLen; i < prevLen; i++) {
           const source = sources[i];
-          if (source) source.deleteTarget(this);
+          if (source) {
+            source.deleteTarget(this);
+          }
         }
         sources.length = newLen;
       }
