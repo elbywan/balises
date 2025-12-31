@@ -15,7 +15,7 @@ Balises gives you reactive signals and HTML templates without the framework over
 ## Preamble
 
 > [!WARNING]
-> 🚧 Use at your own discretion .
+> 🚧 Use at your own discretion
 
 This library was built in a couple of days **using LLM assistance** as an experiment to see if it was possible to produce something high-quality and performant very quickly.
 

@@ -416,11 +416,11 @@ class DocsApp extends HTMLElement {
         <!-- Footer -->
         <footer>
           <p>
-            MIT License &middot; Made by
+            MIT License · Made by
             <a href="https://github.com/elbywan">@elbywan</a>
           </p>
           <p>
-            This page is built with balises &middot;
+            This page is built with balises ·
             <a
               href="https://github.com/elbywan/balises/blob/main/docs/index.html"
               >View Source</a
