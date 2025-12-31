@@ -11,10 +11,9 @@
  */
 
 import { computed, isSignal, signal, type Reactive } from "./signals/index.js";
-import { HTMLParser } from "./parser.js";
+import { HTMLParser, type Attr } from "./parser.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-type AttrPart = string | { index: number };
 
 /**
  * Bind a value to an update function.
@@ -59,13 +58,13 @@ export class Template {
     const parser = new HTMLParser();
     const values = this.values;
 
-    const handleAttribute = (el: Element, name: string, parts: AttrPart[]) => {
-      const part0 = parts[0];
+    const handleAttribute = (el: Element, [name, statics, indexes]: Attr) => {
+      const idx0 = indexes[0];
 
       // Event binding: @click=${handler}
       if (name[0] === "@") {
-        if (part0 && typeof part0 !== "string") {
-          const handler = values[part0.index] as EventListener;
+        if (idx0 !== undefined) {
+          const handler = values[idx0] as EventListener;
           el.addEventListener(name.slice(1), handler);
           disposers.push(() => el.removeEventListener(name.slice(1), handler));
         }
@@ -74,8 +73,8 @@ export class Template {
 
       // Property binding: .value=${data} - sets DOM property directly
       if (name[0] === ".") {
-        if (part0 && typeof part0 !== "string") {
-          const unsub = bind(values[part0.index], (v) => {
+        if (idx0 !== undefined) {
+          const unsub = bind(values[idx0], (v) => {
             (el as unknown as Record<string, unknown>)[name.slice(1)] = v;
           });
           if (unsub) disposers.push(unsub);
@@ -83,53 +82,46 @@ export class Template {
         return;
       }
 
-      // Dynamic attribute - collect dynamic parts
-      const dynParts: { index: number }[] = [];
-      for (const p of parts) {
-        if (typeof p !== "string") dynParts.push(p);
-      }
-
-      // Static attribute (all parts are strings)
-      if (!dynParts.length) {
-        const value = (parts as string[]).join("");
-        if (value || !parts.length) el.setAttribute(name, value);
+      // Static attribute (no dynamic parts)
+      if (!indexes.length) {
+        const value = statics[0] ?? "";
+        el.setAttribute(name, value);
         return;
       }
 
       // Wrap functions in computed, collect all reactive sources
       const reactives: Reactive<unknown>[] = [];
-      for (const p of dynParts) {
-        const v = values[p.index];
+      for (const idx of indexes) {
+        const v = values[idx];
         if (typeof v === "function") {
           const c = computed(v as () => unknown);
-          values[p.index] = c;
+          values[idx] = c;
           reactives.push(c);
           disposers.push(() => c.dispose());
         } else if (isSignal(v)) {
           reactives.push(v);
         }
       }
-      const getValue = (idx: number) => {
-        const v = values[idx];
-        return isSignal(v) ? (v as Reactive<unknown>).value : v;
-      };
 
       const update = () => {
-        if (parts.length === 1) {
-          const val = getValue(dynParts[0]!.index);
+        if (indexes.length === 1) {
+          const val = isSignal(values[idx0!])
+            ? (values[idx0!] as Reactive<unknown>).value
+            : values[idx0!];
           if (val == null || val === false) el.removeAttribute(name);
-          else el.setAttribute(name, val === true ? "" : String(val));
+          else
+            el.setAttribute(
+              name,
+              statics[0]! + (val === true ? "" : val) + statics[1]!,
+            );
         } else {
-          el.setAttribute(
-            name,
-            parts
-              .map((p) => {
-                if (typeof p === "string") return p;
-                const val = getValue(p.index);
-                return val == null ? "" : String(val);
-              })
-              .join(""),
-          );
+          let result = statics[0]!;
+          for (let i = 0; i < indexes.length; i++) {
+            const v = values[indexes[i]!];
+            const val = isSignal(v) ? (v as Reactive<unknown>).value : v;
+            result += (val ?? "") + statics[i + 1]!;
+          }
+          el.setAttribute(name, result);
         }
       };
 
@@ -150,8 +142,8 @@ export class Template {
           (parent instanceof Element && parent.namespaceURI === SVG_NS)
             ? document.createElementNS(SVG_NS, tag)
             : document.createElement(tag);
-        for (const [name, parts] of attrs) {
-          handleAttribute(el, name, parts);
+        for (const attr of attrs) {
+          handleAttribute(el, attr);
         }
         parent.appendChild(el);
         if (!selfClosing) stack.push(el);

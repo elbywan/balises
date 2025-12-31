@@ -1,17 +1,13 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import {
-  HTMLParser,
-  type AttrPart,
-  type ParseCallbacks,
-} from "../src/parser.js";
+import { HTMLParser, type Attr, type ParseCallbacks } from "../src/parser.js";
 
 describe("HTMLParser", () => {
   let parser: HTMLParser;
   let texts: string[];
   let tags: {
     tag: string;
-    attrs: [string, AttrPart[]][];
+    attrs: Attr[];
     selfClosing: boolean;
   }[];
   let closeCount: number;
@@ -19,17 +15,15 @@ describe("HTMLParser", () => {
 
   // Helper to get all attributes flattened
   const getAttributes = () =>
-    tags.flatMap((t) => t.attrs.map(([name, parts]) => ({ name, parts })));
+    tags.flatMap((t) =>
+      t.attrs.map(([name, statics, indexes]) => ({ name, statics, indexes })),
+    );
 
   const createCallbacks = (): ParseCallbacks => ({
     onText: (text: string) => {
       texts.push(text);
     },
-    onOpenTag: (
-      tag: string,
-      attrs: [string, AttrPart[]][],
-      selfClosing: boolean,
-    ) => {
+    onOpenTag: (tag: string, attrs: Attr[], selfClosing: boolean) => {
       tags.push({ tag, attrs, selfClosing });
     },
     onClose: () => {
@@ -117,28 +111,32 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl('<div class="container">'), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["container"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["container"]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, []);
     });
 
     it("should parse single-quoted attribute", () => {
       parser.parseTemplate(tmpl("<div class='container'>"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["container"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["container"]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, []);
     });
 
     it("should parse unquoted attribute", () => {
       parser.parseTemplate(tmpl("<div class=container>"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["container"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["container"]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, []);
     });
 
     it("should parse boolean attribute", () => {
       parser.parseTemplate(tmpl("<input disabled>"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "disabled");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, []);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, [""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, []);
     });
 
     it("should parse multiple attributes", () => {
@@ -148,11 +146,11 @@ describe("HTMLParser", () => {
       );
       assert.strictEqual(getAttributes().length, 3);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["a"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["a"]);
       assert.strictEqual(getAttributes()[1]!.name, "id");
-      assert.deepStrictEqual(getAttributes()[1]!.parts, ["b"]);
+      assert.deepStrictEqual(getAttributes()[1]!.statics, ["b"]);
       assert.strictEqual(getAttributes()[2]!.name, "data-x");
-      assert.deepStrictEqual(getAttributes()[2]!.parts, ["c"]);
+      assert.deepStrictEqual(getAttributes()[2]!.statics, ["c"]);
     });
 
     it("should parse attributes on self-closing element", () => {
@@ -162,7 +160,7 @@ describe("HTMLParser", () => {
       );
       assert.strictEqual(getAttributes().length, 2);
       assert.strictEqual(getAttributes()[0]!.name, "type");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["text"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["text"]);
       assert.strictEqual(getAttributes()[1]!.name, "disabled");
       assert.strictEqual(tags[0]!.selfClosing, true);
     });
@@ -224,7 +222,8 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl('<div class="', '">'), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [{ index: 0 }]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
 
     it("should handle attribute with static prefix and dynamic suffix", () => {
@@ -234,10 +233,8 @@ describe("HTMLParser", () => {
         createCallbacks(),
       );
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [
-        "prefix-",
-        { index: 0 },
-      ]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["prefix-", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
 
     it("should handle attribute with dynamic prefix and static suffix", () => {
@@ -247,17 +244,16 @@ describe("HTMLParser", () => {
         createCallbacks(),
       );
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [
-        { index: 0 },
-        "-suffix",
-      ]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", "-suffix"]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
 
     it("should handle fully dynamic attribute", () => {
       // Template: <div class=${0}>
       parser.parseTemplate(tmpl("<div class=", ">"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [{ index: 0 }]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
 
     it("should handle multiple interpolations in one attribute", () => {
@@ -267,13 +263,8 @@ describe("HTMLParser", () => {
         createCallbacks(),
       );
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [
-        { index: 0 },
-        "-",
-        { index: 1 },
-        "-",
-        { index: 2 },
-      ]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", "-", "-", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0, 1, 2]);
     });
 
     it("should handle event binding with interpolation", () => {
@@ -281,7 +272,8 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl("<button @click=", ">"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "@click");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [{ index: 0 }]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
 
     it("should handle property binding with interpolation", () => {
@@ -289,7 +281,8 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl("<input .value=", ">"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, ".value");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [{ index: 0 }]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
   });
 
@@ -322,7 +315,7 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl('<div title="a > b">'), createCallbacks());
       assert.strictEqual(tags.length, 1);
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["a > b"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["a > b"]);
     });
 
     it("should handle colons in attribute names (XML namespaces)", () => {
@@ -332,7 +325,7 @@ describe("HTMLParser", () => {
       );
       assert.strictEqual(tags.length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "xmlns:xlink");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [
+      assert.deepStrictEqual(getAttributes()[0]!.statics, [
         "http://www.w3.org/1999/xlink",
       ]);
     });
@@ -387,7 +380,7 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl('<div data-expr="a=b">'), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "data-expr");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["a=b"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["a=b"]);
     });
 
     /**
@@ -399,7 +392,8 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl('<div class="">'), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, []);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, [""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, []);
     });
 
     /**
@@ -410,7 +404,7 @@ describe("HTMLParser", () => {
     it("should handle quotes inside attribute value", () => {
       parser.parseTemplate(tmpl(`<div title="it's ok">`), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["it's ok"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["it's ok"]);
     });
 
     /**
@@ -422,7 +416,7 @@ describe("HTMLParser", () => {
         createCallbacks(),
       );
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ['say "hello"']);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ['say "hello"']);
     });
 
     /**
@@ -488,7 +482,7 @@ describe("HTMLParser", () => {
       assert.strictEqual(tags.length, 1);
       assert.strictEqual(tags[0]!.selfClosing, true);
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["text"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["text"]);
     });
 
     /**
@@ -557,7 +551,7 @@ describe("HTMLParser", () => {
       assert.strictEqual(tags.length, 1);
       assert.strictEqual(tags[0]!.selfClosing, true);
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, ["text"]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["text"]);
     });
 
     /**
@@ -569,7 +563,8 @@ describe("HTMLParser", () => {
       assert.strictEqual(tags[0]!.selfClosing, true);
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "disabled");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, []);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, [""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, []);
     });
 
     /**
@@ -655,7 +650,8 @@ describe("HTMLParser", () => {
       parser.parseTemplate(tmpl("<div class=", ">"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
       assert.strictEqual(getAttributes()[0]!.name, "class");
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [{ index: 0 }]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
 
     /**
@@ -666,7 +662,8 @@ describe("HTMLParser", () => {
       // The space after = goes into AttrEq state which skips whitespace
       parser.parseTemplate(tmpl("<div class= ", ">"), createCallbacks());
       assert.strictEqual(getAttributes().length, 1);
-      assert.deepStrictEqual(getAttributes()[0]!.parts, [{ index: 0 }]);
+      assert.deepStrictEqual(getAttributes()[0]!.statics, ["", ""]);
+      assert.deepStrictEqual(getAttributes()[0]!.indexes, [0]);
     });
   });
 });

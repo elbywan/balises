@@ -3,15 +3,12 @@
  * State machine: Text=0, TagOpen=1, TagName=2, InTag=3, AttrName=4, AttrEq=5, AttrVal=6, CloseTag=7, Comment=8
  */
 
-export type AttrPart = string | { index: number };
+/** Pre-compiled attribute: static strings interleaved with slot indexes */
+export type Attr = [name: string, statics: string[], indexes: number[]];
 
 export interface ParseCallbacks {
   onText: (text: string) => void;
-  onOpenTag: (
-    tag: string,
-    attrs: [string, AttrPart[]][],
-    selfClosing: boolean,
-  ) => void;
+  onOpenTag: (tag: string, attrs: Attr[], selfClosing: boolean) => void;
   onClose: () => void;
   onSlot: (index: number) => void;
 }
@@ -20,8 +17,9 @@ export class HTMLParser {
   private s = 0; // state
   private tag = "";
   private attr = "";
-  private parts: AttrPart[] = [];
-  private attrs: [string, AttrPart[]][] = [];
+  private statics: string[] = [];
+  private indexes: number[] = [];
+  private attrs: Attr[] = [];
   private text = "";
   private q = "";
 
@@ -87,7 +85,8 @@ export class HTMLParser {
           this.emit(cb, true);
         } else {
           this.attr = ch;
-          this.parts = [];
+          this.statics = [""];
+          this.indexes = [];
           this.s = 4;
         }
       } else if (this.s === 4) {
@@ -112,7 +111,7 @@ export class HTMLParser {
           this.s = 6;
         } else if (!this.isW(ch)) {
           this.q = "";
-          this.parts.push(ch);
+          this.statics[0] += ch;
           this.s = 6;
         }
       } else if (this.s === 6) {
@@ -130,10 +129,7 @@ export class HTMLParser {
             this.emit(cb, true);
           }
         } else {
-          const last = this.parts[this.parts.length - 1];
-          if (typeof last === "string")
-            this.parts[this.parts.length - 1] = last + ch;
-          else this.parts.push(ch);
+          this.statics[this.statics.length - 1] += ch;
         }
       } else if (this.s === 7) {
         // CloseTag
@@ -153,7 +149,8 @@ export class HTMLParser {
 
   private slot(index: number, cb: ParseCallbacks) {
     if (this.s === 5 || this.s === 6) {
-      this.parts.push({ index });
+      this.indexes.push(index);
+      this.statics.push("");
       if (this.s === 5) this.s = 6;
     } else {
       if (this.text) {
@@ -172,9 +169,10 @@ export class HTMLParser {
   }
 
   private emitAttr() {
-    if (this.attr) this.attrs.push([this.attr, this.parts]);
+    if (this.attr) this.attrs.push([this.attr, this.statics, this.indexes]);
     this.attr = "";
-    this.parts = [];
+    this.statics = [];
+    this.indexes = [];
   }
 
   private isA(c: string) {
