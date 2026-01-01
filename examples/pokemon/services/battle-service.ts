@@ -5,10 +5,50 @@ import type {
   PokemonType,
   EffectResult,
 } from "../types.js";
+import { isPokemonType } from "../types.js";
 import { TYPE_CHART, TYPE_MOVES, UTILITY_MOVES } from "../data/moves.js";
+import { capitalize } from "../utils/format.js";
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
 /** Fraction of max HP dealt as status damage (burn/poison) */
 const STATUS_DAMAGE_FRACTION = 16;
+
+/** Critical hit chance (1/16 = 6.25%) */
+const CRITICAL_HIT_CHANCE = 0.0625;
+
+/** Critical hit damage multiplier */
+const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
+
+/** STAB (Same Type Attack Bonus) multiplier */
+const STAB_MULTIPLIER = 1.5;
+
+/** Burn reduces physical attack by this factor */
+const BURN_ATTACK_PENALTY = 0.5;
+
+/** Paralysis reduces speed by this factor */
+const PARALYSIS_SPEED_PENALTY = 0.5;
+
+/** Chance that paralysis prevents action (25%) */
+const PARALYSIS_IMMOBILITY_CHANCE = 0.25;
+
+/** Minimum random damage factor */
+const DAMAGE_RANDOM_MIN = 0.85;
+
+/** Sleep duration range (1-3 turns) */
+const SLEEP_TURNS_MIN = 1;
+const SLEEP_TURNS_MAX = 3;
+
+/** AI difficulty thresholds */
+const AI_NORMAL_OPTIMAL_CHANCE = 0.7;
+const AI_STATUS_MOVE_SCORE = 30;
+const AI_KO_BONUS_MULTIPLIER = 1.5;
+
+// ============================================================================
+// BATTLE SERVICE
+// ============================================================================
 
 export class BattleService {
   /**
@@ -60,7 +100,7 @@ export class BattleService {
         this.getStatModifier(defender.statModifiers.defense);
       // Burn reduces physical attack
       if (attacker.statusCondition === "burn") {
-        attack *= 0.5;
+        attack *= BURN_ATTACK_PENALTY;
       }
     } else {
       attack = attacker.baseStats.specialAttack;
@@ -71,14 +111,14 @@ export class BattleService {
     const effectiveness = this.getTypeEffectiveness(move.type, defender.types);
 
     // Critical hit (6.25% chance, 1.5x damage)
-    const critical = Math.random() < 0.0625;
-    const critMultiplier = critical ? 1.5 : 1;
+    const critical = Math.random() < CRITICAL_HIT_CHANCE;
+    const critMultiplier = critical ? CRITICAL_DAMAGE_MULTIPLIER : 1;
 
     // STAB (Same Type Attack Bonus)
-    const stab = attacker.types.includes(move.type) ? 1.5 : 1;
+    const stab = attacker.types.includes(move.type) ? STAB_MULTIPLIER : 1;
 
     // Random factor (85-100%)
-    const random = 0.85 + Math.random() * 0.15;
+    const random = DAMAGE_RANDOM_MIN + Math.random() * (1 - DAMAGE_RANDOM_MIN);
 
     // Damage formula (simplified version of the official formula)
     const baseDamage =
@@ -107,7 +147,7 @@ export class BattleService {
     return (
       pokemon.baseStats.speed *
       this.getStatModifier(pokemon.statModifiers.speed) *
-      (pokemon.statusCondition === "paralyze" ? 0.5 : 1)
+      (pokemon.statusCondition === "paralyze" ? PARALYSIS_SPEED_PENALTY : 1)
     );
   }
 
@@ -130,7 +170,7 @@ export class BattleService {
    */
   canAct(pokemon: BattlePokemon): { canAct: boolean; reason?: string } {
     if (pokemon.statusCondition === "paralyze") {
-      if (Math.random() < 0.25) {
+      if (Math.random() < PARALYSIS_IMMOBILITY_CHANCE) {
         return { canAct: false, reason: "is fully paralyzed!" };
       }
     }
@@ -199,7 +239,10 @@ export class BattleService {
         if (effect.condition && !target.statusCondition) {
           target.statusCondition = effect.condition;
           if (effect.condition === "sleep") {
-            target.sleepTurns = Math.floor(Math.random() * 3) + 1;
+            target.sleepTurns =
+              Math.floor(
+                Math.random() * (SLEEP_TURNS_MAX - SLEEP_TURNS_MIN + 1),
+              ) + SLEEP_TURNS_MIN;
           }
           return {
             effectApplied: true,
@@ -250,7 +293,7 @@ export class BattleService {
     const moveScores = availableMoves.map((move) => {
       if (move.category === "status") {
         // Status moves get lower priority
-        return { move, score: 30 };
+        return { move, score: AI_STATUS_MOVE_SCORE };
       }
       const { damage, effectiveness } = this.calculateDamage(
         attacker,
@@ -261,7 +304,7 @@ export class BattleService {
 
       // Bonus for moves that could KO
       if (damage >= defender.currentHp) {
-        score *= 1.5;
+        score *= AI_KO_BONUS_MULTIPLIER;
       }
 
       return { move, score };
@@ -269,7 +312,7 @@ export class BattleService {
 
     if (difficulty === "normal") {
       // Sometimes pick optimal, sometimes random
-      if (Math.random() < 0.7) {
+      if (Math.random() < AI_NORMAL_OPTIMAL_CHANCE) {
         moveScores.sort((a, b) => b.score - a.score);
         return moveScores[0]!.move;
       }
@@ -289,7 +332,7 @@ export class BattleService {
     level: number,
     isPlayer: boolean,
   ): BattlePokemon {
-    const types = pokemon.types.map((t) => t.type.name as PokemonType);
+    const types = pokemon.types.map((t) => t.type.name).filter(isPokemonType);
 
     // Get base stats
     const stats = {
@@ -317,7 +360,7 @@ export class BattleService {
     return {
       id: pokemon.id,
       name: pokemon.name,
-      displayName: pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1),
+      displayName: capitalize(pokemon.name),
       localizedNames: {},
       sprite:
         pokemon.sprites.other?.["official-artwork"]?.front_default ||

@@ -1,30 +1,24 @@
 import type { Pokemon, PokemonSpecies, TypeData, MoveData } from "../types.js";
+import { capitalize } from "../utils/format.js";
 
 // Cache for species data to avoid duplicate fetches
 const speciesCache = new Map<string, PokemonSpecies>();
 // Cache for move data to avoid duplicate fetches
 const moveCache = new Map<string, MoveData>();
+// Cache for Pokemon name list (used by search)
+let pokemonListCache: { name: string; url: string }[] | null = null;
 
-/**
- * Map our language codes to PokeAPI language codes
- * PokeAPI uses specific language codes that may differ from ours
- */
-function mapLanguageCode(lang: string): string {
-  // Most codes match directly, but add mappings here if needed
-  const mapping: Record<string, string> = {
-    // PokeAPI uses "zh-Hans" for Simplified Chinese
-    "zh-Hans": "zh-Hans",
-    "zh-Hant": "zh-Hant",
-  };
-  return mapping[lang] ?? lang;
-}
+// Note: PokeAPI language codes match our app's language codes directly
+// (en, fr, de, es, it, ja, ko, zh-Hans, zh-Hant)
+
+/** Maximum Pokemon ID supported by PokeAPI */
+export const POKEMON_LIMIT = 1025;
 
 /**
  * Service for fetching Pokemon data from PokeAPI
  */
 export class PokemonService {
   private readonly BASE_URL = "https://pokeapi.co/api/v2";
-  private readonly POKEMON_LIMIT = 1025;
 
   /**
    * Fetch a Pokemon by ID
@@ -37,8 +31,7 @@ export class PokemonService {
       }
       const data = await response.json();
       // Add display name and localized names map
-      const displayName =
-        data.name.charAt(0).toUpperCase() + data.name.slice(1);
+      const displayName = capitalize(data.name);
       return {
         ...data,
         displayName,
@@ -78,9 +71,8 @@ export class PokemonService {
     const species = await this.fetchSpecies(speciesUrl);
     if (!species) return fallback;
 
-    const langCode = mapLanguageCode(language);
     const localizedName = species.names.find(
-      (n) => n.language.name === langCode,
+      (n) => n.language.name === language,
     )?.name;
     return localizedName ?? fallback;
   }
@@ -115,27 +107,32 @@ export class PokemonService {
     const move = await this.fetchMove(moveName);
     if (!move) return fallback;
 
-    const langCode = mapLanguageCode(language);
     const localizedName = move.names.find(
-      (n) => n.language.name === langCode,
+      (n) => n.language.name === language,
     )?.name;
     return localizedName ?? fallback;
   }
 
   /**
-   * Search Pokemon by name
+   * Search Pokemon by name (uses cached name list)
    */
   async searchPokemon(query: string): Promise<{ name: string; url: string }[]> {
     try {
-      const response = await fetch(
-        `${this.BASE_URL}/pokemon?limit=${this.POKEMON_LIMIT}`,
-      );
-      if (!response.ok) {
-        return [];
+      // Fetch and cache the full Pokemon list on first search
+      if (!pokemonListCache) {
+        const response = await fetch(
+          `${this.BASE_URL}/pokemon?limit=${POKEMON_LIMIT}`,
+        );
+        if (!response.ok) {
+          return [];
+        }
+        const data = await response.json();
+        pokemonListCache = data.results as { name: string; url: string }[];
       }
-      const data = await response.json();
-      return data.results.filter((p: { name: string }) =>
-        p.name.toLowerCase().includes(query.toLowerCase()),
+
+      const lowerQuery = query.toLowerCase();
+      return pokemonListCache.filter((p) =>
+        p.name.toLowerCase().includes(lowerQuery),
       );
     } catch {
       return [];

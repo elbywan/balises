@@ -1,3 +1,15 @@
+/**
+ * Pokemon Game Type Definitions
+ *
+ * Central type definitions for the Pokemon viewer and battle game.
+ * Includes PokeAPI response types, game state interfaces, and battle mechanics.
+ */
+
+// ============================================================================
+// POKEAPI RESPONSE TYPES
+// ============================================================================
+
+/** Pokemon data from the PokeAPI */
 export interface Pokemon {
   id: number;
   name: string;
@@ -24,44 +36,46 @@ export interface Pokemon {
   moves?: { move: { name: string; url: string } }[];
 }
 
+/** Pokemon species data for localized names */
 export interface PokemonSpecies {
   names: { language: { name: string }; name: string }[];
 }
 
+/** Pokemon type data for localized names */
 export interface TypeData {
   names: { language: { name: string }; name: string }[];
-  damage_relations?: {
-    double_damage_to: { name: string }[];
-    half_damage_to: { name: string }[];
-    no_damage_to: { name: string }[];
-    double_damage_from: { name: string }[];
-    half_damage_from: { name: string }[];
-    no_damage_from: { name: string }[];
-  };
 }
 
+/** Move data from the PokeAPI */
+export interface MoveData {
+  names: { language: { name: string }; name: string }[];
+}
+
+// ============================================================================
+// APP STATE TYPES
+// ============================================================================
+
+/** Saved favorite Pokemon */
 export interface FavoritePokemon {
   id: number;
   name: string;
   sprite: string;
 }
 
-export interface Language {
-  code: string;
-  label: string;
-}
-
+/** Search result from Pokemon name search */
 export interface SearchResult {
   name: string;
   url: string;
 }
 
+/** Display info for a Pokemon type (key for styling, name for display) */
 export interface TypeDisplay {
   key: string;
   name: string;
 }
 
-export interface PokemonViewerState {
+/** State for the Pokemon viewer/Pokedex UI (local to Pokedex component) */
+export interface PokedexState {
   pokemonId: number;
   pokemon: Pokemon | null;
   pokemonName: string;
@@ -70,18 +84,26 @@ export interface PokemonViewerState {
   showLoader: boolean;
   error: string | null;
   shiny: boolean;
-  favorites: FavoritePokemon[];
   searchQuery: string;
   searchResults: SearchResult[];
   compareMode: boolean;
   comparePokemon: Pokemon | null;
   comparePokemonName: string;
   compareTypeNames: TypeDisplay[];
-  language: string;
 }
 
-// ========== BATTLE GAME TYPES ==========
+/** Shared state across all tabs (favorites, language, roster) */
+export interface SharedAppState {
+  favorites: FavoritePokemon[];
+  language: string;
+  rosterIds: number[];
+}
 
+// ============================================================================
+// BATTLE GAME TYPES
+// ============================================================================
+
+/** All Pokemon types */
 export type PokemonType =
   | "normal"
   | "fire"
@@ -102,14 +124,37 @@ export type PokemonType =
   | "steel"
   | "fairy";
 
-export interface MoveData {
-  names: { language: { name: string }; name: string }[];
+/** Set of valid Pokemon types for runtime validation */
+const POKEMON_TYPES: ReadonlySet<string> = new Set<PokemonType>([
+  "normal",
+  "fire",
+  "water",
+  "electric",
+  "grass",
+  "ice",
+  "fighting",
+  "poison",
+  "ground",
+  "flying",
+  "psychic",
+  "bug",
+  "rock",
+  "ghost",
+  "dragon",
+  "dark",
+  "steel",
+  "fairy",
+]);
+
+/** Type guard for PokemonType */
+export function isPokemonType(value: string): value is PokemonType {
+  return POKEMON_TYPES.has(value);
 }
 
+/** Battle move definition */
 export interface Move {
   name: string;
   displayName: string;
-  /** Localized names keyed by language code (populated at runtime via API) */
   localizedNames?: Record<string, string>;
   type: PokemonType;
   power: number;
@@ -120,21 +165,25 @@ export interface Move {
   effect?: MoveEffect;
 }
 
+/** Secondary effect that a move can apply */
 export interface MoveEffect {
   type: "heal" | "stat_change" | "status_condition";
   target: "self" | "opponent";
   stat?: "attack" | "defense" | "speed";
   stages?: number;
   healPercent?: number;
-  condition?: "burn" | "paralyze" | "poison" | "sleep";
+  condition?: StatusCondition;
   chance?: number;
 }
 
+/** Status conditions that can affect Pokemon */
+export type StatusCondition = "burn" | "paralyze" | "poison" | "sleep";
+
+/** Pokemon prepared for battle with calculated stats and state */
 export interface BattlePokemon {
   id: number;
   name: string;
   displayName: string;
-  /** Localized names keyed by language code */
   localizedNames: Record<string, string>;
   sprite: string;
   spriteBack: string | undefined;
@@ -158,11 +207,12 @@ export interface BattlePokemon {
     defense: number;
     speed: number;
   };
-  statusCondition: "burn" | "paralyze" | "poison" | "sleep" | null;
+  statusCondition: StatusCondition | null;
   sleepTurns?: number;
   isPlayer: boolean;
 }
 
+/** Entry in the battle log */
 export interface BattleLogEntry {
   id: number;
   message: string;
@@ -183,15 +233,17 @@ export type EffectResultData =
   | {
       type: "status_condition";
       pokemon: string;
-      condition: "burn" | "paralyze" | "poison" | "sleep";
+      condition: StatusCondition;
     }
   | null;
 
+/** Result of applying a move effect */
 export interface EffectResult {
   effectApplied: boolean;
   data: EffectResultData;
 }
 
+/** Current phase of the battle */
 export type BattlePhase =
   | "splash"
   | "team_select"
@@ -200,6 +252,7 @@ export type BattlePhase =
   | "game_over"
   | "victory";
 
+/** Full battle game state */
 export interface BattleState {
   phase: BattlePhase;
   playerTeam: BattlePokemon[];
@@ -216,8 +269,6 @@ export interface BattleState {
   selectedForTeam: number[];
   teamSize: number;
   difficulty: "easy" | "normal" | "hard";
-  /** Current action message to display as overlay */
   actionMessage: string | null;
-  /** Type of action message for styling */
   actionMessageType: "action" | "damage" | "heal" | "effect" | "info" | null;
 }

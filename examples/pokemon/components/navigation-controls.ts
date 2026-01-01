@@ -3,10 +3,10 @@
  */
 
 import { html } from "../../../src/index.js";
-import type { PokemonViewerState } from "../types.js";
+import type { PokedexState } from "../types.js";
 
 export interface NavigationControlsProps {
-  state: PokemonViewerState;
+  state: PokedexState;
   onPrev: () => void;
   onNext: () => void;
   onRandom: () => void;

@@ -1,337 +1,384 @@
-import { html, computed, store, effect, scope } from "../../src/index.js";
-import type { Pokemon, FavoritePokemon, SearchResult } from "./types.js";
-import { LANGUAGES, getDefaultLanguage } from "./utils/language.js";
-import { loadFavorites } from "./utils/storage.js";
+/**
+ * Pokemon App - Unified Pokemon Viewer and Battle Game
+ *
+ * Features:
+ * - Tab-based navigation between Pokedex and Battle modes
+ * - Shared state (favorites, language) across tabs
+ * - Favorites from Pokedex are pre-selected for Battle team
+ * - Cross-tab bridges: "Add to Team" from Pokedex, "View in Pokedex" from Battle
+ */
+
+import { html, store, effect, scope } from "../../src/index.js";
+import type { FavoritePokemon } from "./types.js";
+import { getDefaultLanguage } from "./utils/language.js";
+import {
+  loadFavorites,
+  loadRoster,
+  MAX_ROSTER_SIZE,
+  DEFAULT_ROSTER_IDS,
+} from "./utils/storage.js";
 import { PokemonService } from "./services/pokemon-service.js";
-import { NavigationControls } from "./components/navigation-controls.js";
-import { SearchBox } from "./components/search-box.js";
-import { PokemonCard } from "./components/pokemon-card.js";
-import { FavoritesList } from "./components/favorites-list.js";
+import { Pokedex, type PokedexState } from "./components/pokedex.js";
+import { Battle, type BattleComponentState } from "./components/battle.js";
+
+type AppTab = "pokedex" | "battle";
+
+// ============================================================================
+// SIMPLE ROUTER
+// ============================================================================
+
+const VALID_TABS: AppTab[] = ["pokedex", "battle"];
+
+interface RouteState {
+  tab: AppTab;
+  pokemonId?: number;
+}
 
 /**
- * Pokemon Viewer - A feature-rich example showcasing:
- *
- * - store() for complex reactive state
- * - computed() for derived values
- * - each() for efficient list rendering with favorites
- * - Event handling (@click, @input, @change)
- * - Conditional rendering
- * - Dynamic attributes and styles
- * - Async data fetching with loading states
- * - LocalStorage persistence
- * - Audio playback
- * - Internationalization (i18n)
+ * Parse the URL hash into route state
+ * Formats: #pokedex, #pokedex/25, #battle
  */
-export class PokemonViewerElement extends HTMLElement {
-  #state = store({
-    pokemonId: 1,
-    pokemon: null as Pokemon | null,
-    pokemonName: "", // Localized name
-    typeNames: [] as { key: string; name: string }[], // Localized type names with keys
-    loading: false,
-    showLoader: false,
-    error: null as string | null,
-    shiny: false,
+function parseUrl(): RouteState {
+  const hash = window.location.hash.slice(1); // Remove the '#'
+  const parts = hash.split("/");
+  const tab = VALID_TABS.includes(parts[0] as AppTab)
+    ? (parts[0] as AppTab)
+    : "pokedex";
+
+  const result: RouteState = { tab };
+
+  // Parse Pokemon ID for pokedex tab
+  if (tab === "pokedex" && parts[1]) {
+    const id = parseInt(parts[1], 10);
+    if (!isNaN(id) && id > 0) {
+      result.pokemonId = id;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Update the URL hash without triggering a page reload
+ */
+function updateUrl(
+  tab: AppTab,
+  options: { pokemonId?: number | undefined; replace?: boolean } = {},
+): void {
+  let newUrl = `#${tab}`;
+  if (tab === "pokedex" && options.pokemonId) {
+    newUrl += `/${options.pokemonId}`;
+  }
+
+  const state: RouteState = { tab };
+  if (options.pokemonId !== undefined) {
+    state.pokemonId = options.pokemonId;
+  }
+
+  if (options.replace) {
+    history.replaceState(state, "", newUrl);
+  } else {
+    history.pushState(state, "", newUrl);
+  }
+}
+
+/**
+ * Main Pokemon App - Custom Element with tab navigation
+ */
+export class PokemonAppElement extends HTMLElement {
+  // Shared state across tabs
+  #sharedState = store({
     favorites: [] as FavoritePokemon[],
-    searchQuery: "",
-    searchResults: [] as SearchResult[],
-    compareMode: false,
-    comparePokemon: null as Pokemon | null,
-    comparePokemonName: "",
-    compareTypeNames: [] as { key: string; name: string }[],
     language: getDefaultLanguage(),
+    rosterIds: [] as number[],
   });
 
-  #loaderTimeout: ReturnType<typeof setTimeout> | null = null;
-  #searchTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Current active tab - initialized from URL
+  #appState = store({
+    activeTab: parseUrl().tab as AppTab,
+  });
+
+  // Handler for popstate events (back/forward navigation)
+  #handlePopState = (event: PopStateEvent) => {
+    const route = (event.state as RouteState) ?? parseUrl();
+    if (VALID_TABS.includes(route.tab)) {
+      this.#appState.activeTab = route.tab;
+      // Restore Pokemon ID if navigating to pokedex
+      if (route.tab === "pokedex" && route.pokemonId) {
+        this.#pokedexState.pokemonId = route.pokemonId;
+      }
+    }
+  };
+
+  // Pokedex-specific state - initialize pokemonId from URL
+  #pokedexState = store<PokedexState>({
+    pokemonId: parseUrl().pokemonId ?? 1,
+    pokemon: null,
+    pokemonName: "",
+    typeNames: [],
+    loading: false,
+    showLoader: false,
+    error: null,
+    shiny: false,
+    searchQuery: "",
+    searchResults: [],
+    compareMode: false,
+    comparePokemon: null,
+    comparePokemonName: "",
+    compareTypeNames: [],
+  });
+
+  // Battle-specific state
+  #battleState = store<BattleComponentState>({
+    phase: "splash",
+    playerTeam: [],
+    enemyTeam: [],
+    activePlayerPokemon: 0,
+    activeEnemyPokemon: 0,
+    battleLog: [],
+    currentTurn: 1,
+    isPlayerTurn: true,
+    isAnimating: false,
+    selectedMove: null,
+    winner: null,
+    availablePokemon: [],
+    selectedForTeam: [],
+    teamSize: 3,
+    difficulty: "normal",
+    actionMessage: null,
+    actionMessageType: null,
+    isMuted: false,
+    loadingError: null,
+  });
+
   #dispose: (() => void) | null = null;
   #disposeEffects: (() => void) | null = null;
-  #audio: HTMLAudioElement | null = null;
   #pokemonService = new PokemonService();
 
   connectedCallback() {
-    // Load favorites from localStorage
-    this.#state.favorites = loadFavorites();
+    // Load favorites and roster from localStorage
+    this.#sharedState.favorites = loadFavorites();
+    this.#sharedState.rosterIds = loadRoster();
 
-    // Create a scope for effects that auto-sync to localStorage
+    // Set up router - listen for back/forward navigation
+    window.addEventListener("popstate", this.#handlePopState);
+
+    // Initialize URL if no hash present (replace to avoid extra history entry)
+    if (!window.location.hash) {
+      updateUrl(this.#appState.activeTab, {
+        pokemonId: this.#pokedexState.pokemonId,
+        replace: true,
+      });
+    }
+
+    // Create effects for auto-syncing to localStorage
     this.#disposeEffects = scope(() => {
-      // Auto-sync favorites to localStorage whenever they change
       effect(() => {
         localStorage.setItem(
           "pokemon-favorites",
-          JSON.stringify(this.#state.favorites),
+          JSON.stringify(this.#sharedState.favorites),
         );
       });
 
-      // Auto-sync language preference
       effect(() => {
-        localStorage.setItem("pokemon-language", this.#state.language);
+        localStorage.setItem("pokemon-language", this.#sharedState.language);
+      });
+
+      effect(() => {
+        localStorage.setItem(
+          "pokemon-roster",
+          JSON.stringify(this.#sharedState.rosterIds),
+        );
       });
     })[1];
 
-    // Event handlers
-    const prev = () => {
-      if (this.#state.pokemonId > 1) {
-        this.#state.pokemonId--;
-        this.fetchPokemon();
-      }
+    const handleLanguageChange = (lang: string) => {
+      this.#sharedState.language = lang;
     };
 
-    const next = () => {
-      this.#state.pokemonId++;
-      this.fetchPokemon();
+    // Update URL when Pokemon changes in Pokedex
+    const handlePokemonChange = (pokemonId: number) => {
+      updateUrl("pokedex", { pokemonId, replace: true });
     };
 
-    const random = () => {
-      this.#state.pokemonId = Math.floor(Math.random() * 1025) + 1;
-      this.fetchPokemon();
-    };
-
-    const toggleShiny = () => {
-      this.#state.shiny = !this.#state.shiny;
-    };
-
-    const playCry = () => {
-      const cryUrl = this.#state.pokemon?.cries?.latest;
-      if (cryUrl) {
-        if (this.#audio) {
-          this.#audio.pause();
+    const switchTab = (tab: AppTab) => {
+      if (this.#appState.activeTab !== tab) {
+        this.#appState.activeTab = tab;
+        if (tab === "pokedex") {
+          updateUrl(tab, { pokemonId: this.#pokedexState.pokemonId });
+        } else {
+          updateUrl(tab);
         }
-        this.#audio = new Audio(cryUrl);
-        this.#audio.volume = 0.3;
-        this.#audio.play();
       }
     };
 
-    const toggleFavorite = () => {
-      const pokemon = this.#state.pokemon;
-      if (!pokemon) return;
+    const getRootElement = () => this as HTMLElement;
 
-      const index = this.#state.favorites.findIndex((f) => f.id === pokemon.id);
-      if (index >= 0) {
-        this.#state.favorites = this.#state.favorites.filter(
-          (f) => f.id !== pokemon.id,
-        );
-      } else {
-        this.#state.favorites = [
-          ...this.#state.favorites,
-          {
-            id: pokemon.id,
-            name: pokemon.name,
-            sprite: pokemon.sprites.front_default,
-          },
-        ];
-      }
-      // localStorage sync happens automatically via effect()
+    // Bridge: Add Pokemon to battle team from Pokedex
+    const addToTeam = (pokemonId: number) => {
+      // Check if Pokemon is in the battle roster
+      if (!this.#sharedState.rosterIds.includes(pokemonId)) return false;
+
+      // Check if already selected
+      if (this.#battleState.selectedForTeam.includes(pokemonId)) return false;
+
+      // Check if team is full
+      if (
+        this.#battleState.selectedForTeam.length >= this.#battleState.teamSize
+      )
+        return false;
+
+      // Add to team
+      this.#battleState.selectedForTeam = [
+        ...this.#battleState.selectedForTeam,
+        pokemonId,
+      ];
+      return true;
     };
 
-    const selectFavorite = (fav: FavoritePokemon) => {
-      this.#state.pokemonId = fav.id;
-      this.fetchPokemon();
+    // Bridge: Remove Pokemon from battle team
+    const removeFromTeam = (pokemonId: number) => {
+      if (!this.#battleState.selectedForTeam.includes(pokemonId)) return false;
+      this.#battleState.selectedForTeam =
+        this.#battleState.selectedForTeam.filter((id) => id !== pokemonId);
+      return true;
     };
 
-    const removeFavorite = (fav: FavoritePokemon, e: Event) => {
-      e.stopPropagation();
-      this.#state.favorites = this.#state.favorites.filter(
-        (f) => f.id !== fav.id,
+    // Bridge: Check if team is full
+    const isTeamFull = () => {
+      return (
+        this.#battleState.selectedForTeam.length >= this.#battleState.teamSize
       );
-      // localStorage sync happens automatically via effect()
     };
 
-    const onSearchInput = (e: Event) => {
-      const query = (e.target as HTMLInputElement).value;
-      this.#state.searchQuery = query;
+    // Bridge: Get selected team IDs array (for reactivity tracking)
+    const getSelectedForTeam = () => this.#battleState.selectedForTeam;
 
-      if (this.#searchTimeout) {
-        clearTimeout(this.#searchTimeout);
+    // Bridge: View Pokemon in Pokedex from Battle
+    const viewInPokedex = (pokemonId: number) => {
+      this.#pokedexState.pokemonId = pokemonId;
+      this.#appState.activeTab = "pokedex";
+      updateUrl("pokedex", { pokemonId });
+    };
+
+    // Bridge: Go to battle with current team (skip splash screen)
+    const goToBattle = () => {
+      this.#appState.activeTab = "battle";
+      // Skip splash screen and go directly to team selection
+      this.#battleState.phase = "team_select";
+      updateUrl("battle");
+    };
+
+    // Bridge: Add Pokemon to roster
+    const addToRoster = (pokemonId: number) => {
+      if (this.#sharedState.rosterIds.includes(pokemonId)) return false;
+      if (this.#sharedState.rosterIds.length >= MAX_ROSTER_SIZE) return false;
+      this.#sharedState.rosterIds = [...this.#sharedState.rosterIds, pokemonId];
+      return true;
+    };
+
+    // Bridge: Remove Pokemon from roster
+    const removeFromRoster = (pokemonId: number) => {
+      if (!this.#sharedState.rosterIds.includes(pokemonId)) return false;
+      // Also remove from team if selected
+      if (this.#battleState.selectedForTeam.includes(pokemonId)) {
+        this.#battleState.selectedForTeam =
+          this.#battleState.selectedForTeam.filter((id) => id !== pokemonId);
       }
-
-      if (query.length >= 2) {
-        this.#searchTimeout = setTimeout(() => this.searchPokemon(query), 300);
-      } else {
-        this.#state.searchResults = [];
-      }
+      // Also remove from available Pokemon list
+      this.#battleState.availablePokemon =
+        this.#battleState.availablePokemon.filter((p) => p.id !== pokemonId);
+      // Update roster IDs
+      this.#sharedState.rosterIds = this.#sharedState.rosterIds.filter(
+        (id) => id !== pokemonId,
+      );
+      return true;
     };
 
-    const selectSearchResult = (result: SearchResult) => {
-      const id = parseInt(result.url.split("/").filter(Boolean).pop()!);
-      this.#state.pokemonId = id;
-      this.#state.searchQuery = "";
-      this.#state.searchResults = [];
-      // Clear the input element
-      const input = this.querySelector<HTMLInputElement>(".search-box input");
-      if (input) input.value = "";
-      this.fetchPokemon();
+    // Bridge: Reset roster to default
+    const resetRoster = () => {
+      this.#sharedState.rosterIds = [...DEFAULT_ROSTER_IDS];
+      // Clear team selection since roster changed
+      this.#battleState.selectedForTeam = [];
     };
 
-    const onLanguageChange = (e: Event) => {
-      const lang = (e.target as HTMLSelectElement).value;
-      this.#state.language = lang;
-      // localStorage sync happens automatically via effect()
-      // Refetch to get localized names
-      this.fetchPokemon();
-      if (this.#state.comparePokemon) {
-        this.fetchLocalizedNames(this.#state.comparePokemon, true);
-      }
+    // Grouped roster actions for cleaner prop passing
+    const rosterActions = {
+      addToRoster,
+      removeFromRoster,
+      addToTeam,
+      removeFromTeam,
+      getSelectedForTeam,
+      isTeamFull,
+      goToBattle,
     };
-
-    const setComparePokemon = async () => {
-      const randomId = Math.floor(Math.random() * 1025) + 1;
-      const pokemon = await this.#pokemonService.fetchPokemon(randomId);
-      if (pokemon) {
-        this.#state.comparePokemon = pokemon;
-        this.fetchLocalizedNames(pokemon, true);
-      }
-    };
-
-    const toggleCompare = () => {
-      this.#state.compareMode = !this.#state.compareMode;
-      if (this.#state.compareMode) {
-        // Auto-load a random Pokemon for comparison
-        setComparePokemon();
-      } else {
-        this.#state.comparePokemon = null;
-        this.#state.comparePokemonName = "";
-        this.#state.compareTypeNames = [];
-      }
-    };
-
-    const isFavorite = computed(() =>
-      this.#state.favorites.some((f) => f.id === this.#state.pokemon?.id),
-    );
 
     const { fragment, dispose } = html`
-      <div class="pokemon-viewer">
-        <div class="header">
-          <h2>Pokemon Viewer</h2>
-          <select class="language-select" @change=${onLanguageChange}>
-            ${LANGUAGES.map(
-              (lang) => html`
-                <option
-                  value=${lang.code}
-                  .selected=${() => this.#state.language === lang.code}
-                >
-                  ${lang.label}
-                </option>
-              `,
-            )}
-          </select>
+      <div class="pokemon-app">
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+          <button
+            class=${() =>
+              "tab-btn" +
+              (this.#appState.activeTab === "pokedex" ? " active" : "")}
+            @click=${() => switchTab("pokedex")}
+          >
+            <span class="tab-icon">📖</span>
+            <span class="tab-label">Pokedex</span>
+          </button>
+          <button
+            class=${() =>
+              "tab-btn" +
+              (this.#appState.activeTab === "battle" ? " active" : "")}
+            @click=${() => switchTab("battle")}
+          >
+            <span class="tab-icon">⚔️</span>
+            <span class="tab-label">Battle</span>
+          </button>
+        </nav>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+          ${() => {
+            if (this.#appState.activeTab === "pokedex") {
+              return Pokedex({
+                state: this.#pokedexState,
+                sharedState: this.#sharedState,
+                pokemonService: this.#pokemonService,
+                onLanguageChange: handleLanguageChange,
+                onPokemonChange: handlePokemonChange,
+                getRootElement,
+                rosterActions,
+              });
+            } else {
+              return Battle({
+                state: this.#battleState,
+                sharedState: this.#sharedState,
+                pokemonService: this.#pokemonService,
+                onLanguageChange: handleLanguageChange,
+                getRootElement,
+                // Bridge props
+                viewInPokedex,
+                // Roster props
+                removeFromRoster,
+                resetRoster,
+              });
+            }
+          }}
         </div>
-
-        <!-- Search Section -->
-        ${SearchBox({
-          state: this.#state,
-          onInput: onSearchInput,
-          onSelectResult: selectSearchResult,
-        })}
-
-        <!-- Navigation Controls -->
-        ${NavigationControls({
-          state: this.#state,
-          onPrev: prev,
-          onNext: next,
-          onRandom: random,
-        })}
-
-        <!-- Error Message -->
-        ${() =>
-          this.#state.error
-            ? html`<div class="error">${this.#state.error}</div>`
-            : null}
-
-        <!-- Pokemon Card with Compare Panel -->
-        <div
-          class="pokemon-card-wrapper"
-          style=${() => (this.#state.error ? "display: none" : "")}
-        >
-          ${PokemonCard({
-            state: this.#state,
-            getIsFavorite: () => isFavorite.value,
-            onToggleShiny: toggleShiny,
-            onPlayCry: playCry,
-            onToggleFavorite: toggleFavorite,
-            onToggleCompare: toggleCompare,
-            onShuffleCompare: setComparePokemon,
-          })}
-        </div>
-
-        <!-- Favorites Section -->
-        ${FavoritesList({
-          state: this.#state,
-          onSelectFavorite: selectFavorite,
-          onRemoveFavorite: removeFavorite,
-        })}
       </div>
     `.render();
 
     this.#dispose = dispose;
     this.appendChild(fragment);
-    this.fetchPokemon();
-  }
-
-  async searchPokemon(query: string) {
-    const results = await this.#pokemonService.searchPokemon(query);
-    this.#state.searchResults = results;
-  }
-
-  async fetchPokemon() {
-    if (this.#loaderTimeout) {
-      clearTimeout(this.#loaderTimeout);
-    }
-
-    this.#state.loading = true;
-    this.#state.error = null;
-
-    this.#loaderTimeout = setTimeout(() => {
-      if (this.#state.loading) {
-        this.#state.showLoader = true;
-      }
-    }, 300);
-
-    try {
-      const pokemon = await this.#pokemonService.fetchPokemon(
-        this.#state.pokemonId,
-      );
-      if (!pokemon) {
-        throw new Error(`Pokemon #${this.#state.pokemonId} not found`);
-      }
-      this.#state.pokemon = pokemon;
-
-      // Fetch localized names
-      this.fetchLocalizedNames(pokemon, false);
-    } catch (e) {
-      this.#state.error = e instanceof Error ? e.message : "Failed to fetch";
-    } finally {
-      if (this.#loaderTimeout) {
-        clearTimeout(this.#loaderTimeout);
-        this.#loaderTimeout = null;
-      }
-      this.#state.loading = false;
-      this.#state.showLoader = false;
-    }
-  }
-
-  async fetchLocalizedNames(pokemon: Pokemon, isCompare: boolean) {
-    const lang = this.#state.language;
-
-    const names = await this.#pokemonService.fetchLocalizedNames(pokemon, lang);
-
-    if (isCompare) {
-      this.#state.comparePokemonName = names.pokemonName;
-      this.#state.compareTypeNames = names.typeNames;
-    } else {
-      this.#state.pokemonName = names.pokemonName;
-      this.#state.typeNames = names.typeNames;
-    }
   }
 
   disconnectedCallback() {
-    if (this.#loaderTimeout) clearTimeout(this.#loaderTimeout);
-    if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
-    if (this.#audio) this.#audio.pause();
+    // Clean up router listener
+    window.removeEventListener("popstate", this.#handlePopState);
     this.#disposeEffects?.();
     this.#dispose?.();
   }
 }
 
-customElements.define("x-pokemon-viewer", PokemonViewerElement);
+customElements.define("x-pokemon-app", PokemonAppElement);

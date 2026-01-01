@@ -6,17 +6,11 @@
  */
 
 import type { Move, PokemonType, MoveEffect } from "../types.js";
+import { formatName } from "../utils/format.js";
 
 // =============================================================================
 // Move Factory Functions
 // =============================================================================
-
-/** Capitalize first letter of each word */
-const capitalize = (s: string) =>
-  s
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 
 /** Create a basic move with common defaults */
 function move(
@@ -29,7 +23,7 @@ function move(
 ): Move {
   const base: Move = {
     name,
-    displayName: capitalize(name),
+    displayName: formatName(name),
     type,
     power,
     accuracy: options.accuracy ?? 100,
@@ -53,7 +47,7 @@ function statusMove(
 ): Move {
   return {
     name,
-    displayName: capitalize(name),
+    displayName: formatName(name),
     type,
     power: 0,
     accuracy,

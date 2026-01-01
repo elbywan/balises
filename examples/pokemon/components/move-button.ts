@@ -49,7 +49,6 @@ export interface MovePanelProps {
   disabled: () => boolean;
   onSelectMove: (index: number) => void;
   getMoveName: (move: Move) => string;
-  onBack?: () => void;
 }
 
 /**
@@ -60,7 +59,6 @@ export function MovePanel({
   disabled,
   onSelectMove,
   getMoveName,
-  onBack,
 }: MovePanelProps) {
   return html`
     <div class="move-panel">
@@ -76,11 +74,6 @@ export function MovePanel({
             }),
           )}
       </div>
-      ${onBack
-        ? html`<button class="back-btn" @click=${onBack} .disabled=${disabled}>
-            Back
-          </button>`
-        : null}
     </div>
   `;
 }

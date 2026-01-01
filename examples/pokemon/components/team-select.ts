@@ -23,6 +23,11 @@ export interface TeamSelectProps {
   onStartBattle: () => void;
   onChangeDifficulty: (difficulty: "easy" | "normal" | "hard") => void;
   getPokemonName: (pokemon: Pokemon) => string;
+  onViewInPokedex: (pokemonId: number) => void;
+  onRemoveFromRoster: (pokemonId: number) => boolean;
+  onResetRoster: () => void;
+  rosterCount: () => number;
+  defaultRosterIds: Set<number>;
 }
 
 /**
@@ -35,9 +40,15 @@ export function TeamSelect({
   onStartBattle,
   onChangeDifficulty,
   getPokemonName,
+  onViewInPokedex,
+  onRemoveFromRoster,
+  onResetRoster,
+  rosterCount,
+  defaultRosterIds,
 }: TeamSelectProps) {
   const t = () => translations().teamSelect;
   const isSelected = (id: number) => state.selectedForTeam.includes(id);
+  const isCustom = (id: number) => !defaultRosterIds.has(id);
   const canStartBattle = () => state.selectedForTeam.length === state.teamSize;
   const isLoading = () => state.availablePokemon.length === 0;
   const selectionCount = () =>
@@ -88,6 +99,18 @@ export function TeamSelect({
         </div>
       </div>
 
+      <!-- Roster Management -->
+      <div class="roster-management">
+        <span class="roster-count">Roster: ${rosterCount}/60</span>
+        <button
+          class="reset-roster-btn"
+          @click=${onResetRoster}
+          title="Reset roster to default Pokemon"
+        >
+          Reset Roster
+        </button>
+      </div>
+
       <div class="pokemon-grid">
         ${each(
           () => state.availablePokemon,
@@ -105,10 +128,14 @@ export function TeamSelect({
                 class=${() =>
                   "pokemon-select-card" +
                   (selected() ? " selected" : "") +
-                  (disabled() ? " disabled" : "")}
+                  (disabled() ? " disabled" : "") +
+                  (isCustom(pokemon.id) ? " custom" : "")}
                 @click=${() => !disabled() && onTogglePokemon(pokemon.id)}
                 .disabled=${disabled}
               >
+                ${isCustom(pokemon.id)
+                  ? html`<div class="custom-badge">+</div>`
+                  : null}
                 <img
                   src=${pokemon.sprites.other?.["official-artwork"]
                     ?.front_default || pokemon.sprites.front_default}
@@ -128,6 +155,26 @@ export function TeamSelect({
                 </div>
                 ${() =>
                   selected() ? html`<div class="selected-badge"></div>` : null}
+                <button
+                  class="view-pokedex-btn"
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    onViewInPokedex(pokemon.id);
+                  }}
+                  title="View in Pokedex"
+                >
+                  📖
+                </button>
+                <button
+                  class="remove-roster-btn"
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    onRemoveFromRoster(pokemon.id);
+                  }}
+                  title="Remove from Roster"
+                >
+                  ✕
+                </button>
                 <div class="stats-tooltip">
                   <div class="stats-tooltip-header">
                     <span class="stats-tooltip-name"

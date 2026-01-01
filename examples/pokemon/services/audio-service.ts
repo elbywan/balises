@@ -29,7 +29,6 @@ export class AudioService {
   #masterGain: GainNode | null = null;
   #currentMusic: AudioBufferSourceNode | null = null;
   #currentMusicElement: HTMLAudioElement | null = null;
-  #musicOscillators: OscillatorNode[] = [];
   #isMuted = false;
   #musicVolume = 0.3;
   #sfxVolume = 0.5;
@@ -82,14 +81,6 @@ export class AudioService {
     if (this.#audioContext?.state === "suspended") {
       await this.#audioContext.resume();
     }
-  }
-
-  /**
-   * Ensure audio context is ready (call after user interaction)
-   */
-  async ensureReady(): Promise<void> {
-    if (!this.#audioContext) return;
-    await this.resume();
   }
 
   /**
@@ -235,14 +226,6 @@ export class AudioService {
   stopMusic(): void {
     this.#isPlayingMusic = false;
     this.#currentTrack = null;
-    this.#musicOscillators.forEach((osc) => {
-      try {
-        osc.stop();
-      } catch {
-        // Already stopped
-      }
-    });
-    this.#musicOscillators = [];
     if (this.#currentMusic) {
       try {
         this.#currentMusic.stop();
@@ -522,108 +505,7 @@ export class AudioService {
       this.#scheduleNote(freq, now + i * 0.08, 0.1, "square", 0.2);
     });
   }
-
-  // ============ Battle Music Generation ============
-
-  #playBattleMusicLoop(): void {
-    if (!this.#audioContext || !this.#musicGain || !this.#isPlayingMusic)
-      return;
-
-    // Simple 8-bar battle theme
-    const bpm = 140;
-    const beatDuration = 60 / bpm;
-    const barDuration = beatDuration * 4;
-
-    // Bass line pattern (root notes)
-    const bassPattern = [
-      { note: 110, beats: 1 }, // A2
-      { note: 110, beats: 1 },
-      { note: 130.81, beats: 1 }, // C3
-      { note: 130.81, beats: 1 },
-      { note: 146.83, beats: 1 }, // D3
-      { note: 146.83, beats: 1 },
-      { note: 130.81, beats: 1 }, // C3
-      { note: 123.47, beats: 1 }, // B2
-    ];
-
-    // Melody pattern
-    const melodyPattern = [
-      { note: 440, beats: 0.5 }, // A4
-      { note: 523, beats: 0.5 }, // C5
-      { note: 587, beats: 0.5 }, // D5
-      { note: 523, beats: 0.5 }, // C5
-      { note: 440, beats: 1 }, // A4
-      { note: 392, beats: 0.5 }, // G4
-      { note: 440, beats: 0.5 }, // A4
-      { note: 523, beats: 0.5 }, // C5
-      { note: 587, beats: 1 }, // D5
-      { note: 523, beats: 0.5 }, // C5
-      { note: 440, beats: 1 }, // A4
-      { note: 392, beats: 1 }, // G4
-    ];
-
-    const now = this.#audioContext.currentTime;
-    let bassTime = now;
-    let melodyTime = now;
-
-    // Schedule bass
-    bassPattern.forEach(({ note, beats }) => {
-      const osc = this.#audioContext!.createOscillator();
-      const gain = this.#audioContext!.createGain();
-
-      osc.type = "square";
-      osc.frequency.value = note;
-
-      const duration = beats * beatDuration;
-      gain.gain.setValueAtTime(0.15, bassTime);
-      gain.gain.setValueAtTime(0.15, bassTime + duration * 0.8);
-      gain.gain.exponentialRampToValueAtTime(0.001, bassTime + duration);
-
-      osc.connect(gain);
-      gain.connect(this.#musicGain!);
-
-      osc.start(bassTime);
-      osc.stop(bassTime + duration);
-      this.#musicOscillators.push(osc);
-
-      bassTime += duration;
-    });
-
-    // Schedule melody
-    melodyPattern.forEach(({ note, beats }) => {
-      const osc = this.#audioContext!.createOscillator();
-      const gain = this.#audioContext!.createGain();
-
-      osc.type = "square";
-      osc.frequency.value = note;
-
-      const duration = beats * beatDuration;
-      gain.gain.setValueAtTime(0.1, melodyTime);
-      gain.gain.exponentialRampToValueAtTime(
-        0.001,
-        melodyTime + duration * 0.9,
-      );
-
-      osc.connect(gain);
-      gain.connect(this.#musicGain!);
-
-      osc.start(melodyTime);
-      osc.stop(melodyTime + duration);
-      this.#musicOscillators.push(osc);
-
-      melodyTime += duration;
-    });
-
-    // Schedule next loop
-    const loopDuration = barDuration * 2;
-    setTimeout(() => {
-      this.#musicOscillators = [];
-      if (this.#isPlayingMusic) {
-        this.#playBattleMusicLoop();
-      }
-    }, loopDuration * 1000);
-  }
 }
 
-// Singleton instance
+/** Singleton audio service instance */
 export const audioService = new AudioService();

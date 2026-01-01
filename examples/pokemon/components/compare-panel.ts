@@ -3,10 +3,10 @@
  */
 
 import { html } from "../../../src/index.js";
-import type { PokemonViewerState } from "../types.js";
+import type { PokedexState } from "../types.js";
 
 export interface ComparePanelProps {
-  state: PokemonViewerState;
+  state: PokedexState;
   onShuffle: () => void;
 }
 

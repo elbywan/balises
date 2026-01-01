@@ -2,19 +2,33 @@
  * PokemonCard Component - Main Pokemon display with sprite, stats, and actions
  */
 
-import { html } from "../../../src/index.js";
-import type { PokemonViewerState } from "../types.js";
+import { html, computed } from "../../../src/index.js";
+import type { PokedexState, SharedAppState } from "../types.js";
+import { MAX_ROSTER_SIZE } from "../utils/storage.js";
 import { StatBar } from "./stat-bar.js";
 import { ComparePanel } from "./compare-panel.js";
 
+/** Actions for managing roster and team selection */
+export interface RosterActions {
+  addToRoster: (pokemonId: number) => boolean;
+  removeFromRoster: (pokemonId: number) => boolean;
+  addToTeam: (pokemonId: number) => boolean;
+  removeFromTeam: (pokemonId: number) => boolean;
+  getSelectedForTeam: () => number[];
+  isTeamFull: () => boolean;
+  goToBattle: () => void;
+}
+
 export interface PokemonCardProps {
-  state: PokemonViewerState;
+  state: PokedexState;
+  sharedState: SharedAppState;
   getIsFavorite: () => boolean;
   onToggleShiny: () => void;
   onPlayCry: () => void;
   onToggleFavorite: () => void;
   onToggleCompare: () => void;
   onShuffleCompare: () => void;
+  rosterActions: RosterActions;
 }
 
 /**
@@ -23,12 +37,14 @@ export interface PokemonCardProps {
 export function PokemonCard(props: PokemonCardProps) {
   const {
     state,
+    sharedState,
     getIsFavorite,
     onToggleShiny,
     onPlayCry,
     onToggleFavorite,
     onToggleCompare,
     onShuffleCompare,
+    rosterActions,
   } = props;
 
   const spriteUrl = () => {
@@ -43,6 +59,38 @@ export function PokemonCard(props: PokemonCardProps) {
 
   const totalStats = () =>
     state.pokemon?.stats.reduce((sum, s) => sum + s.base_stat, 0) ?? 0;
+
+  // Derived state - computed once, used everywhere
+  const pokemonId = computed(() => state.pokemon?.id ?? 0);
+  const inRoster = computed(() => {
+    const id = pokemonId.value;
+    return id > 0 && sharedState.rosterIds.includes(id);
+  });
+  const inTeam = computed(() => {
+    const id = pokemonId.value;
+    return id > 0 && rosterActions.getSelectedForTeam().includes(id);
+  });
+  const rosterCount = computed(() => sharedState.rosterIds.length);
+
+  const handleTeamToggle = () => {
+    const id = pokemonId.value;
+    if (id <= 0) return;
+    if (inTeam.value) {
+      rosterActions.removeFromTeam(id);
+    } else {
+      rosterActions.addToTeam(id);
+    }
+  };
+
+  const handleRosterToggle = () => {
+    const id = pokemonId.value;
+    if (id <= 0) return;
+    if (inRoster.value) {
+      rosterActions.removeFromRoster(id);
+    } else {
+      rosterActions.addToRoster(id);
+    }
+  };
 
   const mainTypeDisplay = () =>
     (state.pokemon?.types ?? []).map((t) => {
@@ -90,7 +138,49 @@ export function PokemonCard(props: PokemonCardProps) {
         <button class="icon-btn" @click=${onToggleCompare} title="Compare Mode">
           ${() => (state.compareMode ? "📊" : "📈")}
         </button>
+        <button
+          class=${() =>
+            "icon-btn roster-btn" + (inRoster.value ? " in-roster" : "")}
+          @click=${handleRosterToggle}
+          title=${() =>
+            inRoster.value
+              ? "Remove from Battle Roster"
+              : `Add to Battle Roster (${rosterCount.value}/${MAX_ROSTER_SIZE})`}
+          .disabled=${() =>
+            !inRoster.value && rosterCount.value >= MAX_ROSTER_SIZE}
+        >
+          ${() => (inRoster.value ? "📋" : "📝")}
+        </button>
+        ${() => {
+          if (!inRoster.value) return null;
+          return html`
+            <button
+              class=${"icon-btn team-btn" + (inTeam.value ? " in-team" : "")}
+              @click=${handleTeamToggle}
+              title=${inTeam.value ? "Remove from Team" : "Add to Team"}
+              .disabled=${!inTeam.value && rosterActions.isTeamFull()}
+            >
+              ${inTeam.value ? "⚔️" : "🎯"}
+            </button>
+          `;
+        }}
       </div>
+
+      <!-- Battle Team Indicator -->
+      ${() =>
+        inTeam.value
+          ? html`
+              <div class="team-indicator">
+                <span>In Battle Team</span>
+                <button
+                  class="go-battle-btn"
+                  @click=${rosterActions.goToBattle}
+                >
+                  Go to Battle →
+                </button>
+              </div>
+            `
+          : null}
 
       <!-- Main Pokemon Display -->
       <div

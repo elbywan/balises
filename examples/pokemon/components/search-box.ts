@@ -3,10 +3,13 @@
  */
 
 import { html } from "../../../src/index.js";
-import type { PokemonViewerState, SearchResult } from "../types.js";
+import type { PokedexState, SearchResult } from "../types.js";
+
+/** Maximum search results to display */
+const MAX_SEARCH_RESULTS = 8;
 
 export interface SearchBoxProps {
-  state: PokemonViewerState;
+  state: PokedexState;
   onInput: (e: Event) => void;
   onSelectResult: (result: SearchResult) => void;
 }
@@ -32,7 +35,7 @@ export function SearchBox(props: SearchBoxProps) {
         >
           ${() =>
             state.searchResults
-              .slice(0, 8)
+              .slice(0, MAX_SEARCH_RESULTS)
               .map(
                 (r) => html`
                   <div class="search-result" @click=${() => onSelectResult(r)}>
@@ -45,5 +48,3 @@ export function SearchBox(props: SearchBoxProps) {
     </div>
   `;
 }
-
-export type { SearchResult };
