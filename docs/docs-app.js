@@ -103,6 +103,11 @@ const EXAMPLES = [
     desc: "Async data fetching",
   },
   {
+    href: "./examples/pokemon/battle.html",
+    name: "Pokemon Battle",
+    desc: "Turn-based battle game with AI",
+  },
+  {
     href: "./examples/performance/",
     name: "Performance Demo",
     desc: "Surgical reactivity at high speed",

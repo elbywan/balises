@@ -1,4 +1,23 @@
-import type { Pokemon, PokemonSpecies, TypeData } from "../types.js";
+import type { Pokemon, PokemonSpecies, TypeData, MoveData } from "../types.js";
+
+// Cache for species data to avoid duplicate fetches
+const speciesCache = new Map<string, PokemonSpecies>();
+// Cache for move data to avoid duplicate fetches
+const moveCache = new Map<string, MoveData>();
+
+/**
+ * Map our language codes to PokeAPI language codes
+ * PokeAPI uses specific language codes that may differ from ours
+ */
+function mapLanguageCode(lang: string): string {
+  // Most codes match directly, but add mappings here if needed
+  const mapping: Record<string, string> = {
+    // PokeAPI uses "zh-Hans" for Simplified Chinese
+    "zh-Hans": "zh-Hans",
+    "zh-Hant": "zh-Hant",
+  };
+  return mapping[lang] ?? lang;
+}
 
 /**
  * Service for fetching Pokemon data from PokeAPI
@@ -16,10 +35,91 @@ export class PokemonService {
       if (!response.ok) {
         return null;
       }
-      return response.json();
+      const data = await response.json();
+      // Add display name and localized names map
+      const displayName =
+        data.name.charAt(0).toUpperCase() + data.name.slice(1);
+      return {
+        ...data,
+        displayName,
+        localizedNames: { en: displayName },
+      };
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Fetch species data (cached)
+   */
+  async fetchSpecies(url: string): Promise<PokemonSpecies | null> {
+    if (speciesCache.has(url)) {
+      return speciesCache.get(url)!;
+    }
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const species: PokemonSpecies = await response.json();
+      speciesCache.set(url, species);
+      return species;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get localized name from species for a specific language
+   */
+  async getLocalizedName(
+    speciesUrl: string,
+    language: string,
+    fallback: string,
+  ): Promise<string> {
+    const species = await this.fetchSpecies(speciesUrl);
+    if (!species) return fallback;
+
+    const langCode = mapLanguageCode(language);
+    const localizedName = species.names.find(
+      (n) => n.language.name === langCode,
+    )?.name;
+    return localizedName ?? fallback;
+  }
+
+  /**
+   * Fetch move data (cached)
+   */
+  async fetchMove(moveName: string): Promise<MoveData | null> {
+    const url = `${this.BASE_URL}/move/${moveName}`;
+    if (moveCache.has(url)) {
+      return moveCache.get(url)!;
+    }
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const move: MoveData = await response.json();
+      moveCache.set(url, move);
+      return move;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get localized move name for a specific language
+   */
+  async getMoveLocalizedName(
+    moveName: string,
+    language: string,
+    fallback: string,
+  ): Promise<string> {
+    const move = await this.fetchMove(moveName);
+    if (!move) return fallback;
+
+    const langCode = mapLanguageCode(language);
+    const localizedName = move.names.find(
+      (n) => n.language.name === langCode,
+    )?.name;
+    return localizedName ?? fallback;
   }
 
   /**
