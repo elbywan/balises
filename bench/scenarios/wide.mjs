@@ -13,6 +13,8 @@ import * as preact from "@preact/signals-core";
 import * as vue from "@vue/reactivity";
 import * as solid from "solid-js/dist/solid.js";
 import hyperactiv from "hyperactiv";
+import * as usignal from "usignal";
+import * as angular from "@angular/core";
 import { signal, computed } from "../../dist/esm/index.js";
 
 /**
@@ -123,6 +125,28 @@ export const wideBenchmarks = {
         resolve({ time, result: results });
       });
     });
+  },
+
+  usignal: (width) => {
+    const signals = Array.from({ length: width }, (_, i) => usignal.signal(i));
+    const computeds = signals.map((s) => usignal.computed(() => s.value * 2));
+    const start_time = performance.now();
+    signals.forEach((s, i) => (s.value = i + 100));
+    const results = computeds.map((c) => c.value);
+    const time = performance.now() - start_time;
+
+    return { time, result: results };
+  },
+
+  angular: (width) => {
+    const signals = Array.from({ length: width }, (_, i) => angular.signal(i));
+    const computeds = signals.map((s) => angular.computed(() => s() * 2));
+    const start_time = performance.now();
+    signals.forEach((s, i) => s.set(i + 100));
+    const results = computeds.map((c) => c());
+    const time = performance.now() - start_time;
+
+    return { time, result: results };
   },
 };
 

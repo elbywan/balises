@@ -27,6 +27,8 @@ import {
 import * as preact from "@preact/signals-core";
 import * as vue from "@vue/reactivity";
 import * as solid from "solid-js/dist/solid.js";
+import * as usignal from "usignal";
+import * as angular from "@angular/core";
 import {
   signal,
   computed,
@@ -290,6 +292,72 @@ function balisesBatching(count) {
   return result;
 }
 
+function usignalBatching(count) {
+  const signals = Array.from({ length: count }, () => usignal.signal(0));
+  let sum = 0;
+  let computeCount = 0;
+
+  const sumComputed = usignal.computed(() => {
+    sum = signals.reduce((acc, s) => acc + s.value, 0);
+    computeCount++;
+    return sum;
+  });
+
+  // Initialize the computed
+  sumComputed.value;
+
+  const startTime = performance.now();
+
+  // usignal has no batch API - updates are synchronous
+  // Computeds are lazy, so it won't recompute until we access .value
+  for (let i = 0; i < count; i++) {
+    signals[i].value = i + 1;
+  }
+
+  // Access the computed to get the final result (triggers recomputation)
+  const finalSum = sumComputed.value;
+
+  const endTime = performance.now();
+
+  return {
+    time: endTime - startTime,
+    result: { sum, computeCount },
+  };
+}
+
+function angularBatching(count) {
+  const signals = Array.from({ length: count }, () => angular.signal(0));
+  let sum = 0;
+  let computeCount = 0;
+
+  const sumComputed = angular.computed(() => {
+    sum = signals.reduce((acc, s) => acc + s(), 0);
+    computeCount++;
+    return sum;
+  });
+
+  // Initialize the computed
+  sumComputed();
+
+  const startTime = performance.now();
+
+  // Angular signals have no batch API - updates are synchronous
+  // Computeds are lazy, so it won't recompute until we access it
+  for (let i = 0; i < count; i++) {
+    signals[i].set(i + 1);
+  }
+
+  // Access the computed to get the final result (triggers recomputation)
+  const finalSum = sumComputed();
+
+  const endTime = performance.now();
+
+  return {
+    time: endTime - startTime,
+    result: { sum, computeCount },
+  };
+}
+
 export const batchingBenchmarks = {
   hyperactiv: hyperactivBatching,
   maverick: maverickBatching,
@@ -297,6 +365,8 @@ export const batchingBenchmarks = {
   preact: preactBatching,
   vue: vueBatching,
   solid: solidBatching,
+  usignal: usignalBatching,
+  angular: angularBatching,
   balises: balisesBatching,
 };
 

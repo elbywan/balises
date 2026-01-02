@@ -15,6 +15,8 @@ import * as preact from "@preact/signals-core";
 import * as vue from "@vue/reactivity";
 import * as solid from "solid-js/dist/solid.js";
 import hyperactiv from "hyperactiv";
+import * as usignal from "usignal";
+import * as angular from "@angular/core";
 import { signal, computed, batch } from "../../dist/esm/index.js";
 
 /**
@@ -253,5 +255,59 @@ export const conditionalBenchmarks = {
         resolve({ time, result: finalResult });
       });
     });
+  },
+
+  usignal: (count) => {
+    const condition = usignal.signal(true);
+    const sources = Array.from({ length: count }, () => usignal.signal(0));
+
+    const computeds = sources.map((source) =>
+      usignal.computed(() => (condition.value ? source.value * 2 : 0)),
+    );
+
+    const total = usignal.computed(() =>
+      computeds.reduce((sum, c) => sum + c.value, 0),
+    );
+
+    const start_time = performance.now();
+
+    condition.value = false;
+    sources.forEach((s, i) => (s.value = i));
+    condition.value = true;
+    sources.forEach((s, i) => (s.value = i * 2));
+    condition.value = false;
+    condition.value = true;
+
+    const finalResult = total.value;
+    const time = performance.now() - start_time;
+
+    return { time, result: finalResult };
+  },
+
+  angular: (count) => {
+    const condition = angular.signal(true);
+    const sources = Array.from({ length: count }, () => angular.signal(0));
+
+    const computeds = sources.map((source) =>
+      angular.computed(() => (condition() ? source() * 2 : 0)),
+    );
+
+    const total = angular.computed(() =>
+      computeds.reduce((sum, c) => sum + c(), 0),
+    );
+
+    const start_time = performance.now();
+
+    condition.set(false);
+    sources.forEach((s, i) => s.set(i));
+    condition.set(true);
+    sources.forEach((s, i) => s.set(i * 2));
+    condition.set(false);
+    condition.set(true);
+
+    const finalResult = total();
+    const time = performance.now() - start_time;
+
+    return { time, result: finalResult };
   },
 };

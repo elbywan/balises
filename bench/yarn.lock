@@ -5,6 +5,18 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
+"@angular/core@npm:^19.2.0":
+  version: 19.2.17
+  resolution: "@angular/core@npm:19.2.17"
+  dependencies:
+    tslib: "npm:^2.3.0"
+  peerDependencies:
+    rxjs: ^6.5.3 || ^7.4.0
+    zone.js: ~0.15.0
+  checksum: 10c0/b0cb59a0cc78ce7d6c09260a5af4e09cc986c5c57cf578cccd47bd8f3e0fd105f49e38aaed359d3b81324be1b7eb68bc9b3c7d7f367631da25135d3516ef722c
+  languageName: node
+  linkType: hard
+
 "@maverick-js/signals@npm:^6.0.0":
   version: 6.0.0
   resolution: "@maverick-js/signals@npm:6.0.0"
@@ -39,6 +51,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "benchmarks@workspace:."
   dependencies:
+    "@angular/core": "npm:^19.2.0"
     "@maverick-js/signals": "npm:^6.0.0"
     "@preact/signals-core": "npm:^1.12.1"
     "@vue/reactivity": "npm:^3.5.13"
@@ -46,7 +59,9 @@ __metadata:
     hyperactiv: "npm:^0.11.3"
     kleur: "npm:^4.1.5"
     mobx: "npm:^6.15.0"
+    rxjs: "npm:^7.8.0"
     solid-js: "npm:^1.9.5"
+    usignal: "npm:^0.10.0"
   languageName: unknown
   linkType: soft
 
@@ -103,6 +118,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"rxjs@npm:^7.8.0":
+  version: 7.8.2
+  resolution: "rxjs@npm:7.8.2"
+  dependencies:
+    tslib: "npm:^2.1.0"
+  checksum: 10c0/1fcd33d2066ada98ba8f21fcbbcaee9f0b271de1d38dc7f4e256bfbc6ffcdde68c8bfb69093de7eeb46f24b1fb820620bf0223706cff26b4ab99a7ff7b2e2c45
+  languageName: node
+  linkType: hard
+
 "seroval-plugins@npm:~1.3.0":
   version: 1.3.3
   resolution: "seroval-plugins@npm:1.3.3"
@@ -127,5 +151,19 @@ __metadata:
     seroval: "npm:~1.3.0"
     seroval-plugins: "npm:~1.3.0"
   checksum: 10c0/ec397466b29ac36af79dfb8363ccdd79bdf77f8a12f16c740ab714c5b23207bc3961cd1171f488cf37b5d59baf28098db96e73a0c49a644e1b147f237f507357
+  languageName: node
+  linkType: hard
+
+"tslib@npm:^2.1.0, tslib@npm:^2.3.0":
+  version: 2.8.1
+  resolution: "tslib@npm:2.8.1"
+  checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
+  languageName: node
+  linkType: hard
+
+"usignal@npm:^0.10.0":
+  version: 0.10.0
+  resolution: "usignal@npm:0.10.0"
+  checksum: 10c0/7fe98614452ddfe4969fa1338d04aba4fcdfc58c1e3b2c825e30940c2df8a6577070fb036cdf2a7d4e5e43c46cd01adbe105b6f29188f1038e0ccb896c397933
   languageName: node
   linkType: hard

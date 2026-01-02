@@ -244,15 +244,15 @@ export function displayFinalSummary(allResults) {
   const minRank = Math.min(...avgRanks);
   const maxRank = Math.max(...avgRanks);
 
-  // Calculate combined score (50% rank, 50% normalized time)
+  // Calculate combined score (25% rank, 75% normalized time)
   for (const lib of libNames) {
     const normalizedRank =
       (scores[lib].avgRank - minRank) / (maxRank - minRank);
     const normalizedTime =
       (scores[lib].avgTime - minTime) / (maxTime - minTime);
 
-    // Combined score: 50% rank weight, 50% time weight (lower is better)
-    scores[lib].combinedScore = normalizedRank * 0.5 + normalizedTime * 0.5;
+    // Combined score: 25% rank weight, 75% time weight (lower is better)
+    scores[lib].combinedScore = normalizedRank * 0.25 + normalizedTime * 0.75;
   }
 
   // Sort by combined score (lower is better)
@@ -260,13 +260,13 @@ export function displayFinalSummary(allResults) {
     (a, b) => scores[a].combinedScore - scores[b].combinedScore,
   );
 
-  // Create summary table with rank as primary metric
+  // Create summary table with combined score as primary metric
   const fastestAvg = scores[sortedLibs[0]].avgTime;
   const table = new Table({
     head: [
       kleur.bold("Rank"),
       kleur.bold("Library"),
-      kleur.bold("Avg Rank"),
+      kleur.bold("Score"),
       kleur.bold("Avg Time (μs)"),
       kleur.bold("vs Fastest"),
     ],
@@ -277,8 +277,11 @@ export function displayFinalSummary(allResults) {
     const isFirst = index === 0;
     const isLast = index === sortedLibs.length - 1;
 
-    const avgRankDisplay =
-      score.avgRank < Infinity ? score.avgRank.toFixed(1) : "N/A";
+    // Display combined score (0-1 scale, lower is better)
+    const scoreDisplay =
+      score.combinedScore !== undefined
+        ? score.combinedScore.toFixed(3)
+        : "N/A";
     const avgTimeDisplay = score.avgTime > 0 ? score.avgTime.toFixed(2) : "N/A";
     const relative = score.avgTime / fastestAvg;
     const relDisplay =
@@ -290,10 +293,10 @@ export function displayFinalSummary(allResults) {
       isFirst ? kleur.green(`#${index + 1} 🏆`) : `#${index + 1}`,
       kleur.magenta(lib),
       isFirst
-        ? kleur.green(avgRankDisplay)
+        ? kleur.green(scoreDisplay)
         : isLast
-          ? kleur.red(avgRankDisplay)
-          : avgRankDisplay,
+          ? kleur.red(scoreDisplay)
+          : scoreDisplay,
       avgTimeDisplay,
       relative === 1
         ? kleur.green(relDisplay)

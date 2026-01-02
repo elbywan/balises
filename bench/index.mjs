@@ -38,6 +38,8 @@ async function main() {
   const selfOnly = process.argv.includes("--self");
   const scenarioArg = process.argv.find((arg) => arg.startsWith("--scenario="));
   const scenario = scenarioArg ? scenarioArg.split("=")[1] : "all";
+  const libsArg = process.argv.find((arg) => arg.startsWith("--libs="));
+  const libs = libsArg ? libsArg.split("=")[1].split(",") : null;
   const isolated = process.argv.includes("--isolated");
 
   // Default to verbose when running a single scenario, unless explicitly set to quiet
@@ -48,6 +50,9 @@ async function main() {
   console.log(kleur.bold("\n🚀 Comprehensive Reactivity Benchmark Suite\n"));
   if (selfOnly) {
     console.log(kleur.yellow("Running in self-only mode (balises only)\n"));
+  }
+  if (libs) {
+    console.log(kleur.cyan(`Running libraries: ${libs.join(", ")}\n`));
   }
   if (scenario !== "all") {
     console.log(kleur.cyan(`Running scenario: ${scenario}\n`));
@@ -76,6 +81,7 @@ async function main() {
         getExpectedLayers,
         join(__dirname, "scenarios/layers.mjs"),
         isolated,
+        libs,
       );
       allResults.push(result);
       displayResults(result.report, result.tiers, result.name, verbose);
@@ -90,6 +96,7 @@ async function main() {
         getExpectedWide,
         join(__dirname, "scenarios/wide.mjs"),
         isolated,
+        libs,
       );
       allResults.push(result);
       displayResults(result.report, result.tiers, result.name, verbose);
@@ -104,6 +111,7 @@ async function main() {
         getExpectedDiamond,
         join(__dirname, "scenarios/diamond.mjs"),
         isolated,
+        libs,
       );
       allResults.push(result);
       displayResults(result.report, result.tiers, result.name, verbose);
@@ -118,6 +126,7 @@ async function main() {
         getExpectedConditional,
         join(__dirname, "scenarios/conditional.mjs"),
         isolated,
+        libs,
       );
       allResults.push(result);
       displayResults(result.report, result.tiers, result.name, verbose);
@@ -132,6 +141,7 @@ async function main() {
         getExpectedList,
         join(__dirname, "scenarios/list.mjs"),
         isolated,
+        libs,
       );
       allResults.push(result);
       displayResults(result.report, result.tiers, result.name, verbose);
@@ -146,6 +156,7 @@ async function main() {
         getExpectedBatching,
         join(__dirname, "scenarios/batching.mjs"),
         isolated,
+        libs,
       );
       allResults.push(result);
       displayResults(result.report, result.tiers, result.name, verbose);

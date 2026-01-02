@@ -15,6 +15,8 @@ import * as preact from "@preact/signals-core";
 import * as vue from "@vue/reactivity";
 import * as solid from "solid-js/dist/solid.js";
 import hyperactiv from "hyperactiv";
+import * as usignal from "usignal";
+import * as angular from "@angular/core";
 import { signal, computed, batch } from "../../dist/esm/index.js";
 
 /**
@@ -476,5 +478,103 @@ export const listBenchmarks = {
         });
       });
     });
+  },
+
+  usignal: (count) => {
+    const items = Array.from({ length: count }, (_, i) => ({
+      id: usignal.signal(i),
+      value: usignal.signal(i),
+      visible: usignal.signal(true),
+    }));
+
+    const sum = usignal.computed(() =>
+      items
+        .filter((item) => item.visible.value)
+        .reduce((acc, item) => acc + item.value.value, 0),
+    );
+
+    const visibleCount = usignal.computed(
+      () => items.filter((item) => item.visible.value).length,
+    );
+
+    const removeCount = Math.max(1, Math.floor(count * 0.1));
+    const addCount = Math.max(1, Math.floor(count * 0.1));
+    const updateCount = Math.max(1, Math.floor(count * 0.1));
+
+    const start_time = performance.now();
+
+    for (let i = 0; i < removeCount; i++) {
+      items[i].visible.value = false;
+    }
+
+    const startIdx = Math.max(0, count - addCount);
+    for (let i = startIdx; i < count; i++) {
+      items[i].visible.value = true;
+      items[i].value.value = (i + 100) * 10;
+    }
+
+    const midStart = Math.floor(count * 0.45);
+    const midEnd = Math.min(count, midStart + updateCount);
+    for (let i = midStart; i < midEnd; i++) {
+      items[i].value.value = i * 3;
+    }
+
+    const finalSum = sum.value;
+    const finalCount = visibleCount.value;
+    const time = performance.now() - start_time;
+
+    return {
+      time,
+      result: { count: finalCount, sum: finalSum },
+    };
+  },
+
+  angular: (count) => {
+    const items = Array.from({ length: count }, (_, i) => ({
+      id: angular.signal(i),
+      value: angular.signal(i),
+      visible: angular.signal(true),
+    }));
+
+    const sum = angular.computed(() =>
+      items
+        .filter((item) => item.visible())
+        .reduce((acc, item) => acc + item.value(), 0),
+    );
+
+    const visibleCount = angular.computed(
+      () => items.filter((item) => item.visible()).length,
+    );
+
+    const removeCount = Math.max(1, Math.floor(count * 0.1));
+    const addCount = Math.max(1, Math.floor(count * 0.1));
+    const updateCount = Math.max(1, Math.floor(count * 0.1));
+
+    const start_time = performance.now();
+
+    for (let i = 0; i < removeCount; i++) {
+      items[i].visible.set(false);
+    }
+
+    const startIdx = Math.max(0, count - addCount);
+    for (let i = startIdx; i < count; i++) {
+      items[i].visible.set(true);
+      items[i].value.set((i + 100) * 10);
+    }
+
+    const midStart = Math.floor(count * 0.45);
+    const midEnd = Math.min(count, midStart + updateCount);
+    for (let i = midStart; i < midEnd; i++) {
+      items[i].value.set(i * 3);
+    }
+
+    const finalSum = sum();
+    const finalCount = visibleCount();
+    const time = performance.now() - start_time;
+
+    return {
+      time,
+      result: { count: finalCount, sum: finalSum },
+    };
   },
 };

@@ -13,6 +13,8 @@ import * as preact from "@preact/signals-core";
 import * as vue from "@vue/reactivity";
 import * as solid from "solid-js/dist/solid.js";
 import hyperactiv from "hyperactiv";
+import * as usignal from "usignal";
+import * as angular from "@angular/core";
 import { signal, computed } from "../../dist/esm/index.js";
 
 /**
@@ -210,6 +212,50 @@ export const diamondBenchmarks = {
         resolve({ time, result: finalResult });
       });
     });
+  },
+
+  usignal: (depth) => {
+    const source = usignal.signal(1);
+
+    let leftBranch = source;
+    let rightBranch = source;
+
+    for (let i = 0; i < depth; i++) {
+      const lb = leftBranch;
+      const rb = rightBranch;
+      leftBranch = usignal.computed(() => lb.value + 1);
+      rightBranch = usignal.computed(() => rb.value * 2);
+    }
+
+    const result = usignal.computed(() => leftBranch.value + rightBranch.value);
+    const start_time = performance.now();
+    source.value = 5;
+    const finalResult = result.value;
+    const time = performance.now() - start_time;
+
+    return { time, result: finalResult };
+  },
+
+  angular: (depth) => {
+    const source = angular.signal(1);
+
+    let leftBranch = source;
+    let rightBranch = source;
+
+    for (let i = 0; i < depth; i++) {
+      const lb = leftBranch;
+      const rb = rightBranch;
+      leftBranch = angular.computed(() => lb() + 1);
+      rightBranch = angular.computed(() => rb() * 2);
+    }
+
+    const result = angular.computed(() => leftBranch() + rightBranch());
+    const start_time = performance.now();
+    source.set(5);
+    const finalResult = result();
+    const time = performance.now() - start_time;
+
+    return { time, result: finalResult };
   },
 };
 

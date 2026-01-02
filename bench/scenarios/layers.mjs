@@ -14,6 +14,8 @@ import * as preact from "@preact/signals-core";
 import * as vue from "@vue/reactivity";
 import * as solid from "solid-js/dist/solid.js";
 import hyperactiv from "hyperactiv";
+import * as usignal from "usignal";
+import * as angular from "@angular/core";
 import { signal, computed, batch } from "../../dist/esm/index.js";
 
 /**
@@ -278,5 +280,67 @@ export const layersBenchmarks = {
         resolve({ time, result: solution });
       });
     });
+  },
+
+  usignal: (layers) => {
+    const start = {
+      a: usignal.signal(1),
+      b: usignal.signal(2),
+      c: usignal.signal(3),
+      d: usignal.signal(4),
+    };
+
+    let layer = start;
+    for (let i = layers; i--; ) {
+      layer = ((m) => ({
+        a: usignal.computed(() => m.b.value),
+        b: usignal.computed(() => m.a.value - m.c.value),
+        c: usignal.computed(() => m.b.value + m.d.value),
+        d: usignal.computed(() => m.c.value),
+      }))(layer);
+    }
+    const end = layer;
+
+    const start_time = performance.now();
+    start.a.value = 4;
+    start.b.value = 3;
+    start.c.value = 2;
+    start.d.value = 1;
+
+    const solution = [end.a.value, end.b.value, end.c.value, end.d.value];
+    const time = performance.now() - start_time;
+
+    return { time, result: solution };
+  },
+
+  angular: (layers) => {
+    const start = {
+      a: angular.signal(1),
+      b: angular.signal(2),
+      c: angular.signal(3),
+      d: angular.signal(4),
+    };
+
+    let layer = start;
+    for (let i = layers; i--; ) {
+      layer = ((m) => ({
+        a: angular.computed(() => m.b()),
+        b: angular.computed(() => m.a() - m.c()),
+        c: angular.computed(() => m.b() + m.d()),
+        d: angular.computed(() => m.c()),
+      }))(layer);
+    }
+    const end = layer;
+
+    const start_time = performance.now();
+    start.a.set(4);
+    start.b.set(3);
+    start.c.set(2);
+    start.d.set(1);
+
+    const solution = [end.a(), end.b(), end.c(), end.d()];
+    const time = performance.now() - start_time;
+
+    return { time, result: solution };
   },
 };

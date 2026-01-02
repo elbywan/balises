@@ -73,6 +73,7 @@ export async function runBenchmarkSuite(
   expectedFn = null,
   scenarioFile = null,
   isolated = false,
+  filterLibs = null,
 ) {
   console.log(kleur.bold(`\n${name}`));
 
@@ -84,9 +85,17 @@ export async function runBenchmarkSuite(
     "maverick",
     "mobx",
     "hyperactiv",
+    "usignal",
+    "angular",
   ];
 
-  const librariesToTest = selfOnly ? ["balises"] : allLibraries;
+  let librariesToTest = selfOnly ? ["balises"] : allLibraries;
+
+  // Filter by --libs if provided
+  if (filterLibs && !selfOnly) {
+    librariesToTest = librariesToTest.filter((lib) => filterLibs.includes(lib));
+  }
+
   const report = {};
 
   for (const lib of librariesToTest) {
@@ -102,7 +111,9 @@ export async function runBenchmarkSuite(
                   ? "@vue/reactivity"
                   : lib === "solid"
                     ? "solid-js"
-                    : lib,
+                    : lib === "angular"
+                      ? "@angular/core"
+                      : lib,
           );
     report[`${lib}@${version}`] = { times: [] };
   }
