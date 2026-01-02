@@ -20,18 +20,17 @@ const WHITESPACE_LOOKUP = new Uint8Array(256);
 
 // Initialize lookup tables (runs once at module load)
 for (let i = 0; i < 256; i++) {
-  const c = i;
   // ALPHA: a-z, A-Z
-  if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90)) {
+  if ((i >= 97 && i <= 122) || (i >= 65 && i <= 90)) {
     ALPHA_LOOKUP[i] = 1;
     TAG_LOOKUP[i] = 1;
   }
   // TAG: a-z, A-Z, 0-9, -, :
-  if ((c >= 48 && c <= 57) || c === 45 || c === 58) {
+  if ((i >= 48 && i <= 57) || i === 45 || i === 58) {
     TAG_LOOKUP[i] = 1;
   }
   // WHITESPACE: space, tab, newline, carriage return
-  if (c <= 32 && c !== 0) {
+  if (i <= 32 && i !== 0) {
     WHITESPACE_LOOKUP[i] = 1;
   }
 }
@@ -199,12 +198,15 @@ export class HTMLParser {
   }
 
   private isA(c: string) {
+    // Mask to 8 bits to safely handle any character code
     return ALPHA_LOOKUP[c.charCodeAt(0) & 255] === 1;
   }
   private isT(c: string) {
+    // Mask to 8 bits to safely handle any character code
     return TAG_LOOKUP[c.charCodeAt(0) & 255] === 1;
   }
   private isW(c: string) {
+    // Mask to 8 bits to safely handle any character code
     return WHITESPACE_LOOKUP[c.charCodeAt(0) & 255] === 1;
   }
 }

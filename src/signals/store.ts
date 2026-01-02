@@ -15,8 +15,8 @@ export function store<T extends object>(obj: T): T {
 
   /** Recursively wrap nested objects and arrays */
   const wrap = (value: unknown): unknown => {
-    // Fast path for primitives and null
-    if (value == null || typeof value !== "object") {
+    // Fast path for primitives and null/undefined
+    if (value === null || value === undefined || typeof value !== "object") {
       return value;
     }
     // Already a store
