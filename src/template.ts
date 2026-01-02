@@ -91,13 +91,19 @@ export class Template {
 
       // Wrap functions in computed, collect all reactive sources
       const reactives: Reactive<unknown>[] = [];
-      for (const idx of indexes) {
+      for (let i = 0; i < indexes.length; i++) {
+        const idx = indexes[i]!;
         const v = values[idx];
         if (typeof v === "function") {
-          const c = computed(v as () => unknown);
-          values[idx] = c;
-          reactives.push(c);
-          disposers.push(() => c.dispose());
+          // Only wrap if not already wrapped
+          if (!isSignal(v)) {
+            const c = computed(v as () => unknown);
+            values[idx] = c;
+            reactives.push(c);
+            disposers.push(() => c.dispose());
+          } else {
+            reactives.push(v as Reactive<unknown>);
+          }
         } else if (isSignal(v)) {
           reactives.push(v);
         }
@@ -197,10 +203,11 @@ function bindContent(marker: Comment, value: unknown): () => void {
     const updateList = () => {
       const parent = marker.parentNode!;
       const items = list.value;
+      const itemsLength = items.length;
       const newKeys = new Set<unknown>();
       const newNodes: Node[] = [];
 
-      for (let i = 0; i < items.length; i++) {
+      for (let i = 0; i < itemsLength; i++) {
         const item = items[i]!;
         const key = keyFn(item, i);
 
@@ -215,7 +222,10 @@ function bindContent(marker: Comment, value: unknown): () => void {
           // First time seeing this key, or item at this key changed → render template
           if (entry) {
             // Dispose old entry for this key
-            entry.nodes.forEach((n) => n.parentNode?.removeChild(n));
+            const entryNodes = entry.nodes;
+            for (let j = 0; j < entryNodes.length; j++) {
+              entryNodes[j]!.parentNode?.removeChild(entryNodes[j]!);
+            }
             entry.dispose();
           }
           const { fragment, dispose } = renderFn(item).render();
@@ -228,7 +238,10 @@ function bindContent(marker: Comment, value: unknown): () => void {
       // Remove nodes for deleted keys
       for (const [key, entry] of cache) {
         if (!newKeys.has(key)) {
-          entry.nodes.forEach((n) => n.parentNode?.removeChild(n));
+          const entryNodes = entry.nodes;
+          for (let j = 0; j < entryNodes.length; j++) {
+            entryNodes[j]!.parentNode?.removeChild(entryNodes[j]!);
+          }
           entry.dispose();
           cache.delete(key);
         }

@@ -52,10 +52,11 @@ export class Signal<T> {
     }
 
     // Notify subscribers
-    if (this.#subs.length) {
+    if (this.#subs.length > 0) {
       if (isBatching()) {
         enqueueBatchAll(this.#subs);
       } else {
+        // Iterate over growing array to call subscribers added during notification
         for (let i = 0; i < this.#subs.length; i++) this.#subs[i]!();
       }
     }

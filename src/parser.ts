@@ -13,6 +13,29 @@ export interface ParseCallbacks {
   onSlot: (index: number) => void;
 }
 
+// Lookup tables for fast character classification
+const ALPHA_LOOKUP = new Uint8Array(256);
+const TAG_LOOKUP = new Uint8Array(256);
+const WHITESPACE_LOOKUP = new Uint8Array(256);
+
+// Initialize lookup tables (runs once at module load)
+for (let i = 0; i < 256; i++) {
+  const c = i;
+  // ALPHA: a-z, A-Z
+  if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90)) {
+    ALPHA_LOOKUP[i] = 1;
+    TAG_LOOKUP[i] = 1;
+  }
+  // TAG: a-z, A-Z, 0-9, -, :
+  if ((c >= 48 && c <= 57) || c === 45 || c === 58) {
+    TAG_LOOKUP[i] = 1;
+  }
+  // WHITESPACE: space, tab, newline, carriage return
+  if (c <= 32 && c !== 0) {
+    WHITESPACE_LOOKUP[i] = 1;
+  }
+}
+
 export class HTMLParser {
   private s = 0; // state
   private tag = "";
@@ -176,18 +199,12 @@ export class HTMLParser {
   }
 
   private isA(c: string) {
-    return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
+    return ALPHA_LOOKUP[c.charCodeAt(0) & 255] === 1;
   }
   private isT(c: string) {
-    return (
-      (c >= "a" && c <= "z") ||
-      (c >= "A" && c <= "Z") ||
-      (c >= "0" && c <= "9") ||
-      c === "-" ||
-      c === ":"
-    );
+    return TAG_LOOKUP[c.charCodeAt(0) & 255] === 1;
   }
   private isW(c: string) {
-    return c <= " " && c !== "";
+    return WHITESPACE_LOOKUP[c.charCodeAt(0) & 255] === 1;
   }
 }
