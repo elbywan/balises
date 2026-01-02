@@ -91,7 +91,8 @@ export class Template {
 
       // Wrap functions in computed, collect all reactive sources
       const reactives: Reactive<unknown>[] = [];
-      for (let i = 0; i < indexes.length; i++) {
+      const indexesLength = indexes.length;
+      for (let i = 0; i < indexesLength; i++) {
         const idx = indexes[i]!;
         const v = values[idx];
         if (typeof v === "function") {
