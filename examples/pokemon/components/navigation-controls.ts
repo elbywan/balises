@@ -4,19 +4,22 @@
 
 import { html } from "../../../src/index.js";
 import type { PokedexState } from "../types.js";
+import type { PokedexTranslations } from "../utils/pokedex-translations.js";
 
 export interface NavigationControlsProps {
   state: PokedexState;
   onPrev: () => void;
   onNext: () => void;
   onRandom: () => void;
+  getTranslations: () => PokedexTranslations;
 }
 
 /**
  * Renders navigation controls for browsing Pokemon
  */
 export function NavigationControls(props: NavigationControlsProps) {
-  const { state, onPrev, onNext, onRandom } = props;
+  const { state, onPrev, onNext, onRandom, getTranslations } = props;
+  const t = () => getTranslations();
 
   return html`
     <div class="controls">
@@ -31,7 +34,7 @@ export function NavigationControls(props: NavigationControlsProps) {
       >
       <button @click=${onNext} .disabled=${() => state.loading}>→</button>
       <button @click=${onRandom} .disabled=${() => state.loading}>
-        Random
+        ${() => t().random}
       </button>
     </div>
   `;

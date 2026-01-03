@@ -4,18 +4,22 @@
 
 import { html, each } from "../../../src/index.js";
 import type { FavoritePokemon, SharedAppState } from "../types.js";
+import type { PokedexTranslations } from "../utils/pokedex-translations.js";
 
 export interface FavoritesListProps {
   sharedState: SharedAppState;
   onSelectFavorite: (fav: FavoritePokemon) => void;
   onRemoveFavorite: (fav: FavoritePokemon, e: Event) => void;
+  getTranslations: () => PokedexTranslations;
 }
 
 /**
  * Renders the favorites list section with add/remove functionality
  */
 export function FavoritesList(props: FavoritesListProps) {
-  const { sharedState, onSelectFavorite, onRemoveFavorite } = props;
+  const { sharedState, onSelectFavorite, onRemoveFavorite, getTranslations } =
+    props;
+  const t = () => getTranslations();
 
   const renderFavorite = (fav: FavoritePokemon) => html`
     <div class="favorite-item" @click=${() => onSelectFavorite(fav)}>
@@ -24,6 +28,7 @@ export function FavoritesList(props: FavoritesListProps) {
       <button
         class="remove-btn"
         @click=${(e: Event) => onRemoveFavorite(fav, e)}
+        title=${() => t().removeFavorite}
       >
         ×
       </button>
@@ -33,14 +38,14 @@ export function FavoritesList(props: FavoritesListProps) {
   return html`
     <div class="favorites-section">
       <h3>
-        Favorites
+        ${() => t().favorites}
         <span class="favorites-count"
           >(${() => sharedState.favorites.length})</span
         >
       </h3>
       ${() =>
         sharedState.favorites.length === 0
-          ? html`<p class="no-favorites">No favorites yet. Click ❤️ to add!</p>`
+          ? html`<p class="no-favorites">${() => t().noFavorites}</p>`
           : null}
       <div class="favorites-list">
         ${each(

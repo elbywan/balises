@@ -4,21 +4,24 @@
 
 import { html } from "../../../src/index.js";
 import type { PokedexState } from "../types.js";
+import type { PokedexTranslations } from "../utils/pokedex-translations.js";
 
 export interface ComparePanelProps {
   state: PokedexState;
   onShuffle: () => void;
+  getTranslations: () => PokedexTranslations;
 }
 
 /**
  * Renders the comparison Pokemon panel that appears beside the main Pokemon
  */
 export function ComparePanel(props: ComparePanelProps) {
-  const { state, onShuffle } = props;
+  const { state, onShuffle, getTranslations } = props;
+  const t = () => getTranslations();
 
   const compareTypeDisplay = () =>
-    (state.comparePokemon?.types ?? []).map((t) => {
-      const typeKey = t.type.name;
+    (state.comparePokemon?.types ?? []).map((type) => {
+      const typeKey = type.type.name;
       const found = state.compareTypeNames.find((tn) => tn.key === typeKey);
       return { key: typeKey, name: found ? found.name : typeKey };
     });
@@ -35,7 +38,7 @@ export function ComparePanel(props: ComparePanelProps) {
               <button
                 class="shuffle-btn"
                 @click=${onShuffle}
-                title="Random Pokemon"
+                title=${() => t().shuffleCompare}
               >
                 🔀
               </button>
@@ -47,10 +50,12 @@ export function ComparePanel(props: ComparePanelProps) {
               <h3>${state.comparePokemonName || state.comparePokemon.name}</h3>
               <div class="types">
                 ${() =>
-                  compareTypeDisplay().map((t) => renderType(t.key, t.name))}
+                  compareTypeDisplay().map((type) =>
+                    renderType(type.key, type.name),
+                  )}
               </div>
             `
-          : html`<div class="compare-loading">Loading...</div>`}
+          : html`<div class="compare-loading">${() => t().loading}</div>`}
     </div>
   `;
 }

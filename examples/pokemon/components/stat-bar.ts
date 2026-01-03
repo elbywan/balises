@@ -3,6 +3,7 @@
  */
 
 import { html } from "../../../src/index.js";
+import type { PokedexTranslations } from "../utils/pokedex-translations.js";
 
 export interface StatBarProps {
   stat: {
@@ -10,20 +11,27 @@ export interface StatBarProps {
     stat: { name: string };
   };
   compareStat?: number | undefined;
+  getTranslations: () => PokedexTranslations;
 }
 
 /**
  * Renders a single stat bar with value, percentage fill, and optional comparison diff
  */
 export function StatBar(props: StatBarProps) {
-  const { stat, compareStat } = props;
+  const { stat, compareStat, getTranslations } = props;
   const percentage = Math.min(stat.base_stat, 150) / 1.5;
   const hue = Math.min(stat.base_stat, 150) * 0.8;
   const diff = compareStat !== undefined ? stat.base_stat - compareStat : 0;
 
+  const statName = () => {
+    const t = getTranslations();
+    const key = stat.stat.name as keyof typeof t.statNames;
+    return t.statNames[key] ?? stat.stat.name;
+  };
+
   return html`
     <div class="stat">
-      <span class="stat-name">${stat.stat.name}</span>
+      <span class="stat-name">${statName}</span>
       <div class="stat-bar">
         <div
           class="stat-fill"

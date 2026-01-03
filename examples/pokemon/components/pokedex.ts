@@ -12,6 +12,10 @@ import type {
   SharedAppState,
 } from "../types.js";
 import { LANGUAGES } from "../utils/language.js";
+import {
+  getPokedexTranslations,
+  type PokedexTranslations,
+} from "../utils/pokedex-translations.js";
 import { PokemonService, POKEMON_LIMIT } from "../services/pokemon-service.js";
 import { NavigationControls } from "./navigation-controls.js";
 import { SearchBox } from "./search-box.js";
@@ -56,6 +60,12 @@ export function Pokedex(props: PokedexProps) {
   } = props;
 
   let audio: HTMLAudioElement | null = null;
+
+  // Translation helper - reactive based on sharedState.language
+  const getTranslations = (): PokedexTranslations =>
+    getPokedexTranslations(sharedState.language);
+
+  const t = () => getTranslations();
 
   // Fetch Pokemon data with loader delay handling
   const fetchPokemon = async () => {
@@ -256,7 +266,7 @@ export function Pokedex(props: PokedexProps) {
   return html`
     <div class="pokemon-viewer">
       <div class="header">
-        <h2>Pokedex</h2>
+        <h2>${() => t().title}</h2>
         <select class="language-select" @change=${handleLanguageChange}>
           ${LANGUAGES.map(
             (lang) => html`
@@ -276,6 +286,7 @@ export function Pokedex(props: PokedexProps) {
         state,
         onInput: onSearchInput,
         onSelectResult: selectSearchResult,
+        getTranslations,
       })}
 
       <!-- Navigation Controls -->
@@ -284,6 +295,7 @@ export function Pokedex(props: PokedexProps) {
         onPrev: prev,
         onNext: next,
         onRandom: random,
+        getTranslations,
       })}
 
       <!-- Error Message -->
@@ -305,6 +317,7 @@ export function Pokedex(props: PokedexProps) {
           onToggleCompare: toggleCompare,
           onShuffleCompare: setComparePokemon,
           rosterActions,
+          getTranslations,
         })}
       </div>
 
@@ -313,6 +326,7 @@ export function Pokedex(props: PokedexProps) {
         sharedState,
         onSelectFavorite: selectFavorite,
         onRemoveFavorite: removeFavorite,
+        getTranslations,
       })}
     </div>
   `;

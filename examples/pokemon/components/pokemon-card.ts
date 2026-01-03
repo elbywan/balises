@@ -5,6 +5,7 @@
 import { html, computed } from "../../../src/index.js";
 import type { PokedexState, SharedAppState } from "../types.js";
 import { MAX_ROSTER_SIZE } from "../utils/storage.js";
+import type { PokedexTranslations } from "../utils/pokedex-translations.js";
 import { StatBar } from "./stat-bar.js";
 import { ComparePanel } from "./compare-panel.js";
 
@@ -29,6 +30,7 @@ export interface PokemonCardProps {
   onToggleCompare: () => void;
   onShuffleCompare: () => void;
   rosterActions: RosterActions;
+  getTranslations: () => PokedexTranslations;
 }
 
 /**
@@ -45,7 +47,10 @@ export function PokemonCard(props: PokemonCardProps) {
     onToggleCompare,
     onShuffleCompare,
     rosterActions,
+    getTranslations,
   } = props;
+
+  const t = () => getTranslations();
 
   const spriteUrl = () => {
     const pokemon = state.pokemon;
@@ -93,8 +98,8 @@ export function PokemonCard(props: PokemonCardProps) {
   };
 
   const mainTypeDisplay = () =>
-    (state.pokemon?.types ?? []).map((t) => {
-      const typeKey = t.type.name;
+    (state.pokemon?.types ?? []).map((type) => {
+      const typeKey = type.type.name;
       const found = state.typeNames.find((tn) => tn.key === typeKey);
       return { key: typeKey, name: found ? found.name : typeKey };
     });
@@ -117,13 +122,17 @@ export function PokemonCard(props: PokemonCardProps) {
 
       <!-- Action Buttons -->
       <div class="action-buttons">
-        <button class="icon-btn" @click=${onToggleShiny} title="Toggle Shiny">
+        <button
+          class="icon-btn"
+          @click=${onToggleShiny}
+          title=${() => t().toggleShiny}
+        >
           ${() => (state.shiny ? "★" : "☆")}
         </button>
         <button
           class="icon-btn"
           @click=${onPlayCry}
-          title="Play Cry"
+          title=${() => t().playCry}
           .disabled=${() => !state.pokemon?.cries?.latest}
         >
           🔊
@@ -131,11 +140,15 @@ export function PokemonCard(props: PokemonCardProps) {
         <button
           class=${() => "icon-btn" + (getIsFavorite() ? " active" : "")}
           @click=${onToggleFavorite}
-          title="Toggle Favorite"
+          title=${() => t().toggleFavorite}
         >
           ${() => (getIsFavorite() ? "❤️" : "🤍")}
         </button>
-        <button class="icon-btn" @click=${onToggleCompare} title="Compare Mode">
+        <button
+          class="icon-btn"
+          @click=${onToggleCompare}
+          title=${() => t().compareMode}
+        >
           ${() => (state.compareMode ? "📊" : "📈")}
         </button>
         <button
@@ -144,8 +157,8 @@ export function PokemonCard(props: PokemonCardProps) {
           @click=${handleRosterToggle}
           title=${() =>
             inRoster.value
-              ? "Remove from Battle Roster"
-              : `Add to Battle Roster (${rosterCount.value}/${MAX_ROSTER_SIZE})`}
+              ? t().removeFromRoster
+              : `${t().addToRoster} (${rosterCount.value}/${MAX_ROSTER_SIZE})`}
           .disabled=${() =>
             !inRoster.value && rosterCount.value >= MAX_ROSTER_SIZE}
         >
@@ -157,7 +170,7 @@ export function PokemonCard(props: PokemonCardProps) {
             <button
               class=${"icon-btn team-btn" + (inTeam.value ? " in-team" : "")}
               @click=${handleTeamToggle}
-              title=${inTeam.value ? "Remove from Team" : "Add to Team"}
+              title=${() => (inTeam.value ? t().removeFromTeam : t().addToTeam)}
               .disabled=${!inTeam.value && rosterActions.isTeamFull()}
             >
               ${inTeam.value ? "⚔️" : "🎯"}
@@ -171,12 +184,12 @@ export function PokemonCard(props: PokemonCardProps) {
         inTeam.value
           ? html`
               <div class="team-indicator">
-                <span>In Battle Team</span>
+                <span>${() => t().inBattleTeam}</span>
                 <button
                   class="go-battle-btn"
                   @click=${rosterActions.goToBattle}
                 >
-                  Go to Battle →
+                  ${() => t().goToBattle} →
                 </button>
               </div>
             `
@@ -199,7 +212,8 @@ export function PokemonCard(props: PokemonCardProps) {
               state.shiny ? html`<span class="shiny-badge">✨</span>` : null}
           </h3>
           <div class="types">
-            ${() => mainTypeDisplay().map((t) => renderType(t.key, t.name))}
+            ${() =>
+              mainTypeDisplay().map((type) => renderType(type.key, type.name))}
           </div>
           <div class="measurements">
             <span>
@@ -222,15 +236,19 @@ export function PokemonCard(props: PokemonCardProps) {
         <!-- Compare Panel -->
         ${() =>
           state.compareMode
-            ? ComparePanel({ state, onShuffle: onShuffleCompare })
+            ? ComparePanel({
+                state,
+                onShuffle: onShuffleCompare,
+                getTranslations,
+              })
             : null}
       </div>
 
       <!-- Stats -->
       <div class="stats">
         <div class="stats-header">
-          <span>Stats</span>
-          <span class="total-stats">Total: ${totalStats}</span>
+          <span>${() => t().stats}</span>
+          <span class="total-stats">${() => t().total}: ${totalStats}</span>
         </div>
         ${() => {
           const stats = state.pokemon?.stats ?? [];
@@ -239,6 +257,7 @@ export function PokemonCard(props: PokemonCardProps) {
             StatBar({
               stat,
               compareStat: compareStats?.[i]?.base_stat,
+              getTranslations,
             }),
           );
         }}
