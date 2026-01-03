@@ -3,7 +3,7 @@
  */
 
 import { computed } from "./computed.js";
-import { context, setContext } from "./context.js";
+import { context, setContext, registerDisposer } from "./context.js";
 
 /**
  * Create a reactive effect that automatically tracks dependencies
@@ -37,6 +37,7 @@ import { context, setContext } from "./context.js";
  */
 export function effect(fn: () => void | (() => void)): () => void {
   let cleanup: (() => void) | undefined;
+  let disposed = false;
 
   const c = computed(() => {
     // Run cleanup outside of tracking context to avoid
@@ -55,10 +56,18 @@ export function effect(fn: () => void | (() => void)): () => void {
   });
   // Subscribe to make it reactive (rerun on dependency changes)
   const unsub = c.subscribe(() => {});
-  // Disposal already registered by computed constructor
-  return () => {
+
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     unsub();
     c.dispose();
     cleanup?.();
   };
+
+  // Register full effect dispose (with cleanup) in current scope
+  // This overrides the computed's auto-registration with a more complete cleanup
+  registerDisposer(dispose);
+
+  return dispose;
 }

@@ -10,27 +10,67 @@
  * - Arrays: ${items.map(i => html`<li>${i}</li>`)}
  */
 
-import { computed, isSignal, signal, type Reactive } from "./signals/index.js";
+import {
+  computed,
+  isSignal,
+  scope,
+  signal,
+  type Reactive,
+} from "./signals/index.js";
 import { HTMLParser, type Attr } from "./parser.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /**
+ * Create a computed that wraps function execution in a scope.
+ * Nested computeds/effects are automatically disposed on re-run.
+ * Returns the computed and a dispose function that cleans up both
+ * the computed and any nested reactives from the last run.
+ */
+function scopedComputed<T>(fn: () => T): {
+  c: {
+    value: T;
+    subscribe: (fn: () => void) => () => void;
+    dispose: () => void;
+  };
+  dispose: () => void;
+} {
+  let disposeScope: (() => void) | undefined;
+
+  const c = computed(() => {
+    disposeScope?.();
+    const [result, dispose] = scope(fn);
+    disposeScope = dispose;
+    return result;
+  });
+
+  return {
+    c,
+    dispose: () => {
+      c.dispose();
+      disposeScope?.();
+    },
+  };
+}
+
+/**
  * Bind a value to an update function.
  * If reactive, subscribes and returns unsubscribe. Otherwise returns null.
  * Functions are wrapped in computed() for automatic reactivity.
+ * Nested computeds/effects created inside functions are automatically
+ * disposed when the function re-runs or the binding is disposed.
  */
 function bind(
   value: unknown,
   update: (v: unknown) => void,
 ): (() => void) | null | undefined {
   if (typeof value === "function") {
-    const c = computed(value as () => unknown);
+    const { c, dispose } = scopedComputed(value as () => unknown);
     update(c.value);
     const unsub = c.subscribe(() => update(c.value));
     return () => {
       unsub();
-      c.dispose();
+      dispose();
     };
   }
   if (isSignal(value)) {
@@ -89,15 +129,15 @@ export class Template {
         return;
       }
 
-      // Wrap functions in computed, collect all reactive sources
+      // Wrap functions in scoped computed, collect all reactive sources
       const reactives: Reactive<unknown>[] = [];
       for (const idx of indexes) {
         const v = values[idx];
         if (typeof v === "function") {
-          const c = computed(v as () => unknown);
+          const { c, dispose } = scopedComputed(v as () => unknown);
           values[idx] = c;
           reactives.push(c);
-          disposers.push(() => c.dispose());
+          disposers.push(dispose);
         } else if (isSignal(v)) {
           reactives.push(v);
         }

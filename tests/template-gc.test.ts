@@ -12,7 +12,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { html, each } from "../src/template.js";
-import { signal, store } from "../src/signals/index.js";
+import { signal, store, effect, computed } from "../src/signals/index.js";
 import v8 from "node:v8";
 import vm from "node:vm";
 
@@ -1002,6 +1002,179 @@ describe("Template GC after dispose()", () => {
       assert.strictEqual(updateCount, 5);
 
       unsub();
+    });
+  });
+
+  describe("nested reactives in function slots", () => {
+    it("should dispose nested computed when function slot re-runs", () => {
+      const mode = signal(0);
+      const source = signal(100);
+      let nestedComputedCreated = 0;
+
+      const { dispose } = html`<div>
+        ${() => {
+          nestedComputedCreated++;
+          void mode.value; // track mode to trigger re-runs
+
+          // Create a nested computed that depends on source
+          const nested = computed(() => source.value * 2);
+
+          return html`<span>${nested}</span>`;
+        }}
+      </div>`.render();
+
+      assert.strictEqual(
+        nestedComputedCreated,
+        1,
+        "should create once initially",
+      );
+      assert.strictEqual(
+        source.targets.length,
+        1,
+        "source should have 1 target initially",
+      );
+
+      // Trigger re-run - previous nested computed should be disposed
+      mode.value = 1;
+      assert.strictEqual(
+        nestedComputedCreated,
+        2,
+        "should create new nested on re-run",
+      );
+      // The old computed should be disposed, new one created
+      assert.strictEqual(
+        source.targets.length,
+        1,
+        "source should still have 1 target (old disposed, new created)",
+      );
+
+      mode.value = 2;
+      assert.strictEqual(
+        nestedComputedCreated,
+        3,
+        "should create new nested again",
+      );
+      assert.strictEqual(
+        source.targets.length,
+        1,
+        "source should still have 1 target",
+      );
+
+      dispose();
+      // After full dispose, no targets should remain
+      assert.strictEqual(
+        source.targets.length,
+        0,
+        "source should have 0 targets after dispose",
+      );
+    });
+
+    it("should dispose nested effect when function slot re-runs", () => {
+      const mode = signal("a");
+      let effectRuns = 0;
+      let cleanupRuns = 0;
+
+      // Import effect dynamically to avoid circular issues
+
+      const { dispose } = html`<div>
+        ${() => {
+          const currentMode = mode.value;
+          effect(() => {
+            effectRuns++;
+            return () => {
+              cleanupRuns++;
+            };
+          });
+          return html`<span>${currentMode}</span>`;
+        }}
+      </div>`.render();
+
+      assert.strictEqual(effectRuns, 1, "effect should run once initially");
+      assert.strictEqual(cleanupRuns, 0, "no cleanup yet");
+
+      // Trigger re-run - previous effect should be disposed
+      mode.value = "b";
+      assert.strictEqual(effectRuns, 2, "new effect should run");
+      assert.strictEqual(cleanupRuns, 1, "previous effect cleanup should run");
+
+      mode.value = "c";
+      assert.strictEqual(effectRuns, 3, "another new effect");
+      assert.strictEqual(cleanupRuns, 2, "another cleanup");
+
+      dispose();
+      // Final cleanup should run
+      assert.strictEqual(cleanupRuns, 3, "final effect cleanup on dispose");
+    });
+
+    it("should dispose nested computed in attribute function when it re-runs", () => {
+      const count = signal(0);
+      let nestedCreations = 0;
+
+      const { dispose } = html`<div
+        class=${() => {
+          nestedCreations++;
+          // This would be unusual but should still work
+          return `count-${count.value}`;
+        }}
+      ></div>`.render();
+
+      assert.strictEqual(nestedCreations, 1, "should create once initially");
+
+      count.value = 1;
+      assert.strictEqual(nestedCreations, 2, "should recreate on change");
+
+      count.value = 2;
+      assert.strictEqual(nestedCreations, 3, "should recreate again");
+
+      dispose();
+    });
+
+    it("should handle deeply nested function components with cleanup", () => {
+      const outer = signal(0);
+      const effectLog: string[] = [];
+
+      const InnerComponent = (id: number) => {
+        effect(() => {
+          effectLog.push(`effect-${id}-run`);
+          return () => effectLog.push(`effect-${id}-cleanup`);
+        });
+        return html`<span>inner-${id}</span>`;
+      };
+
+      const { dispose } = html`<div>
+        ${() => {
+          const id = outer.value;
+          return InnerComponent(id);
+        }}
+      </div>`.render();
+
+      assert.deepStrictEqual(effectLog, ["effect-0-run"]);
+
+      outer.value = 1;
+      assert.deepStrictEqual(effectLog, [
+        "effect-0-run",
+        "effect-0-cleanup",
+        "effect-1-run",
+      ]);
+
+      outer.value = 2;
+      assert.deepStrictEqual(effectLog, [
+        "effect-0-run",
+        "effect-0-cleanup",
+        "effect-1-run",
+        "effect-1-cleanup",
+        "effect-2-run",
+      ]);
+
+      dispose();
+      assert.deepStrictEqual(effectLog, [
+        "effect-0-run",
+        "effect-0-cleanup",
+        "effect-1-run",
+        "effect-1-cleanup",
+        "effect-2-run",
+        "effect-2-cleanup",
+      ]);
     });
   });
 });

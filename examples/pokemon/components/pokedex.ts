@@ -3,7 +3,7 @@
  * Refactored from PokemonViewerElement to be a function component
  */
 
-import { html, computed } from "../../../src/index.js";
+import { html, computed, effect } from "../../../src/index.js";
 import type {
   Pokemon,
   FavoritePokemon,
@@ -55,20 +55,15 @@ export function Pokedex(props: PokedexProps) {
     rosterActions,
   } = props;
 
-  let loaderTimeout: ReturnType<typeof setTimeout> | null = null;
-  let searchTimeout: ReturnType<typeof setTimeout> | null = null;
   let audio: HTMLAudioElement | null = null;
 
-  // Fetch Pokemon data
+  // Fetch Pokemon data with loader delay handling
   const fetchPokemon = async () => {
-    if (loaderTimeout) {
-      clearTimeout(loaderTimeout);
-    }
-
     state.loading = true;
     state.error = null;
 
-    loaderTimeout = setTimeout(() => {
+    // Set up loader delay - show spinner only if loading takes a while
+    let loaderTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       if (state.loading) {
         state.showLoader = true;
       }
@@ -187,20 +182,26 @@ export function Pokedex(props: PokedexProps) {
   const onSearchInput = (e: Event) => {
     const query = (e.target as HTMLInputElement).value;
     state.searchQuery = query;
-
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    if (query.length >= 2) {
-      searchTimeout = setTimeout(
-        () => searchPokemon(query),
-        SEARCH_DEBOUNCE_MS,
-      );
-    } else {
-      state.searchResults = [];
-    }
   };
+
+  // Debounced search effect - automatically cleans up timeout on re-run or dispose
+  effect(() => {
+    const query = state.searchQuery;
+
+    // Clear results immediately if query is too short
+    if (query.length < 2) {
+      state.searchResults = [];
+      return;
+    }
+
+    // Debounce the search
+    const timeout = setTimeout(() => {
+      searchPokemon(query);
+    }, SEARCH_DEBOUNCE_MS);
+
+    // Cleanup: cancel pending search when query changes or component unmounts
+    return () => clearTimeout(timeout);
+  });
 
   const selectSearchResult = (result: SearchResult) => {
     const id = parseInt(result.url.split("/").filter(Boolean).pop()!);
