@@ -255,6 +255,8 @@ Computed values are lazy - they only recalculate when accessed and a dependency 
 
 Runs a side effect whenever its dependencies change. Under the hood, `effect()` is a computed with an automatic subscription, which makes it run eagerly on every dependency change rather than waiting to be accessed.
 
+The effect function can optionally return a cleanup function that will be called before the effect re-runs and when the effect is disposed.
+
 ```ts
 import { signal, effect } from "balises";
 
@@ -268,6 +270,23 @@ const dispose = effect(() => {
 
 count.value = 1; // Logs "Count is now: 1" and updates title
 dispose(); // Stop the effect
+```
+
+**Cleanup function:**
+
+```ts
+const userId = signal(1);
+
+const dispose = effect(() => {
+  const id = userId.value;
+  const subscription = api.subscribe(id);
+
+  // Cleanup: runs before next effect execution and on dispose
+  return () => subscription.unsubscribe();
+});
+
+userId.value = 2; // Unsubscribes from user 1, subscribes to user 2
+dispose(); // Final cleanup: unsubscribes from user 2
 ```
 
 Good for things like:

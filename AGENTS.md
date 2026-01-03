@@ -255,6 +255,12 @@ const dispose = effect(() => {
   console.log(count.value);
   // Side effects here
 });
+
+// With cleanup function - runs before re-execution and on dispose
+const dispose = effect(() => {
+  const subscription = api.subscribe(userId.value);
+  return () => subscription.unsubscribe(); // cleanup
+});
 ```
 
 **Store caveats:**

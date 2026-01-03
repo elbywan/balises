@@ -1595,6 +1595,111 @@ describe("effect", () => {
     assert.strictEqual(runCount, 2);
     dispose();
   });
+
+  it("should run cleanup before re-execution", () => {
+    const s = signal(0);
+    const log: string[] = [];
+
+    const dispose = effect(() => {
+      const currentValue = s.value; // capture value at effect run time
+      log.push(`run:${currentValue}`);
+      return () => log.push(`cleanup:${currentValue}`);
+    });
+
+    assert.deepStrictEqual(log, ["run:0"]);
+
+    s.value = 1;
+    assert.deepStrictEqual(log, ["run:0", "cleanup:0", "run:1"]);
+
+    s.value = 2;
+    assert.deepStrictEqual(log, [
+      "run:0",
+      "cleanup:0",
+      "run:1",
+      "cleanup:1",
+      "run:2",
+    ]);
+
+    dispose();
+  });
+
+  it("should run cleanup on dispose", () => {
+    const s = signal(0);
+    const log: string[] = [];
+
+    const dispose = effect(() => {
+      log.push(`run:${s.value}`);
+      return () => log.push("cleanup");
+    });
+
+    assert.deepStrictEqual(log, ["run:0"]);
+
+    dispose();
+    assert.deepStrictEqual(log, ["run:0", "cleanup"]);
+  });
+
+  it("should handle effect returning void", () => {
+    const s = signal(0);
+    let runCount = 0;
+
+    const dispose = effect(() => {
+      runCount++;
+      void s.value;
+      // No return - should work fine
+    });
+
+    assert.strictEqual(runCount, 1);
+
+    s.value = 1;
+    assert.strictEqual(runCount, 2);
+
+    dispose();
+
+    s.value = 2;
+    assert.strictEqual(runCount, 2);
+  });
+
+  it("should handle dynamic cleanup (sometimes returns cleanup, sometimes not)", () => {
+    const s = signal(0);
+    const log: string[] = [];
+
+    const dispose = effect(() => {
+      const val = s.value;
+      log.push(`run:${val}`);
+      // Only return cleanup for even values
+      if (val % 2 === 0) {
+        return () => log.push(`cleanup:${val}`);
+      }
+    });
+
+    assert.deepStrictEqual(log, ["run:0"]);
+
+    s.value = 1; // cleanup:0 runs, no new cleanup registered
+    assert.deepStrictEqual(log, ["run:0", "cleanup:0", "run:1"]);
+
+    s.value = 2; // no cleanup to run (1 didn't register one)
+    assert.deepStrictEqual(log, ["run:0", "cleanup:0", "run:1", "run:2"]);
+
+    s.value = 3; // cleanup:2 runs
+    assert.deepStrictEqual(log, [
+      "run:0",
+      "cleanup:0",
+      "run:1",
+      "run:2",
+      "cleanup:2",
+      "run:3",
+    ]);
+
+    dispose(); // no cleanup (3 didn't register one)
+    assert.deepStrictEqual(log, [
+      "run:0",
+      "cleanup:0",
+      "run:1",
+      "run:2",
+      "cleanup:2",
+      "run:3",
+    ]);
+  });
 });
 
 describe("Signal.update", () => {
