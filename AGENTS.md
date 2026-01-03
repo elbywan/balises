@@ -318,7 +318,7 @@ connectedCallback() {
 
 ### Function Component Patterns
 
-For lighter-weight composition without full web components, use **function components** that receive a store and return templates:
+For lighter-weight composition without full web components, use **function components** that receive a store and return templates. This is the recommended approach for most UIs as it's simpler and works better with future SSR support:
 
 ```typescript
 // Define a function component - receives store, returns template
@@ -364,6 +364,146 @@ html`
 | Shared state from parent | Self-contained state        |
 | No Shadow DOM needed     | Need style encapsulation    |
 | Quick composition        | Publishing packages         |
+| Better SSR compatibility | Browser-native lifecycle    |
+
+### Async Generator Patterns
+
+Async generator functions enable progressive loading and automatic dependency-driven restarts:
+
+```typescript
+// Basic async generator - yields loading state, then content
+html`
+  ${async function* () {
+    const id = userId.value; // Track dependency - restarts when userId changes
+
+    yield html`<div class="loading">Loading...</div>`;
+
+    const user = await fetchUser(id);
+    yield html`<div class="user">${user.name}</div>`;
+  }}
+`.render();
+```
+
+**Progressive loading** (loading → content → posts):
+
+```typescript
+async function* loadUserProfile() {
+  const id = userId.value; // Track dependency
+
+  yield html`<div class="loading">Loading user...</div>`;
+
+  const user = await fetchUser(id);
+  yield html`
+    <div class="user">
+      <h2>${user.name}</h2>
+      <p>Loading posts...</p>
+    </div>
+  `;
+
+  const posts = await fetchUserPosts(id);
+  return html`
+    <div class="user">
+      <h2>${user.name}</h2>
+      <ul>
+        ${posts.map((p) => html`<li>${p.title}</li>`)}
+      </ul>
+    </div>
+  `;
+}
+```
+
+**Key behaviors:**
+
+1. **Dependency tracking** - Reading `.value` during generator execution tracks dependencies
+2. **Auto-restart** - When tracked signals change, the generator is disposed and restarted
+3. **Cleanup** - `generator.return()` is called on dispose/restart, triggering `finally` blocks
+4. **Stale iteration handling** - If a signal changes mid-iteration, stale yields are ignored
+
+**When to use async generators vs reactive bindings:**
+
+| Async Generators                      | Reactive Bindings                    |
+| ------------------------------------- | ------------------------------------ |
+| Loading → Content → Error transitions | Data changes within stable structure |
+| Progressive/streaming content         | High-frequency updates               |
+| Structural changes on each step       | Surgical DOM updates                 |
+| `yield html\`<NewStructure />\``      | `${() => state.value}`               |
+
+**Important:** Async generators **replace the entire yielded content** on each yield. For surgical updates within a stable DOM structure (like updating a name or count), use reactive bindings instead:
+
+```typescript
+// ❌ Avoid: Re-yields entire card on every name update
+async function* loadUser() {
+  const user = await fetchUser();
+  yield html`<div>${user.name}</div>`;
+  // If you yield again, the whole div is replaced
+}
+
+// ✅ Better: Yield once, let reactive bindings handle updates
+async function* loadUser() {
+  const user = await fetchUser();
+  state.userName = user.name;
+  yield html`<div>${() => state.userName}</div>`;
+  // Now state.userName changes trigger surgical text updates
+}
+```
+
+**DOM Preservation on Restart:**
+
+When a signal changes, the generator restarts. To preserve existing DOM instead of re-rendering, use the `settled` parameter:
+
+```typescript
+import { html, signal, store, type RenderedContent } from "balises";
+
+const userId = signal(1);
+const state = store({ user: null, loading: false, error: null });
+
+async function* loadUser(settled?: RenderedContent) {
+  const id = userId.value; // Track dependency
+
+  // Fetch data (works for both first load and restarts)
+  state.loading = true;
+  state.error = null;
+
+  try {
+    const user = await fetchUser(id);
+    state.user = user;
+  } catch (e) {
+    state.error = e instanceof Error ? e.message : "Failed to fetch";
+  } finally {
+    state.loading = false;
+  }
+
+  // On restart: preserve existing DOM
+  if (settled) return settled;
+
+  // First load: render with reactive bindings
+  return html`
+    <div class="profile">
+      <h2>${() => state.user?.name ?? "Unknown"}</h2>
+      <p class="loading" style=${() => (state.loading ? "" : "display:none")}>
+        Updating...
+      </p>
+      <p class="error" style=${() => (state.error ? "" : "display:none")}>
+        ${() => state.error}
+      </p>
+    </div>
+  `;
+}
+```
+
+The `settled` parameter:
+
+- Is `undefined` on first run
+- Contains an opaque `RenderedContent` handle on restarts
+- When returned, preserves existing DOM and reactive bindings
+- Enables surgical updates via reactive bindings instead of full re-renders
+
+**Why this pattern is simpler:**
+
+1. **Single code path for fetching** - Same logic runs on first load and restarts
+2. **Reactive bindings handle all UI states** - Loading, error, and content are all reactive
+3. **`settled` check at the end** - Only decides whether to preserve DOM or render new content
+4. **No need for `Promise.race`** - Skip delayed skeleton if reactive bindings already show loading state
 
 ## Testing
 

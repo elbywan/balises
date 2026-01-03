@@ -94,32 +94,6 @@ describe("Signal", () => {
   });
 
   /**
-   * Edge case: Subscribing during notification
-   *
-   * New subscribers added during notification are appended to the array.
-   * Since the implementation iterates with a cached loop, new subscribers
-   * WILL be called in the same notification cycle (the array grows).
-   * This documents the actual behavior.
-   */
-  it("should call subscribers added during notification in same cycle", () => {
-    const s = signal(0);
-    let newSubCalled = false;
-
-    s.subscribe(() => {
-      // Add a new subscriber during notification
-      s.subscribe(() => {
-        newSubCalled = true;
-      });
-    });
-
-    s.value = 1;
-
-    // The new subscriber IS called during this cycle because
-    // the loop iterates over the growing array
-    assert.strictEqual(newSubCalled, true);
-  });
-
-  /**
    * Edge case: Signal with object values using reference equality
    *
    * Signals use strict equality (===) to check if value changed.
@@ -409,6 +383,39 @@ describe("Computed", () => {
     // Reading again should not recompute
     assert.strictEqual(constant.value, 42);
     assert.strictEqual(computeCount, 1);
+  });
+
+  /**
+   * Edge case: Subscribers added during notification
+   *
+   * If a subscriber adds a new subscriber during notification, that subscriber
+   * will NOT be called in the same notification cycle. The subscriber array
+   * is copied before iteration to prevent issues with modifications during
+   * iteration (both additions and removals via swap-and-pop).
+   *
+   * This is safer behavior that prevents potential infinite loops and ensures
+   * consistent notification when subscribers unsubscribe each other.
+   */
+  it("should not call subscribers added during notification in same cycle", () => {
+    const s = signal(0);
+    let newSubCalled = false;
+
+    s.subscribe(() => {
+      // Add a new subscriber during notification
+      s.subscribe(() => {
+        newSubCalled = true;
+      });
+    });
+
+    s.value = 1;
+
+    // The new subscriber is NOT called during this cycle because
+    // the subscriber array is copied before iteration
+    assert.strictEqual(newSubCalled, false);
+
+    // But it WILL be called on the next change
+    s.value = 2;
+    assert.strictEqual(newSubCalled, true);
   });
 
   /**

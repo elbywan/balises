@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import { html, Template, each } from "../src/template.js";
+import { html, Template, each, type RenderedContent } from "../src/template.js";
 import { signal, store, computed, batch } from "../src/signals/index.js";
 
 describe("html template tag", () => {
@@ -1817,6 +1817,735 @@ describe("Template.render()", () => {
       assert.strictEqual(ul.children[0]!.textContent, "Alice Updated");
 
       ul.remove();
+    });
+  });
+
+  describe("async generator templates", () => {
+    /**
+     * Helper to wait for async updates to complete
+     */
+    const tick = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it("should render yielded content", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield html`<span>Hello</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(div.querySelector("span")?.textContent, "Hello");
+    });
+
+    it("should update DOM on each yield", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield html`<span>Loading...</span>`;
+          await tick(50);
+          yield html`<span>Done!</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick(5);
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(div.querySelector("span")?.textContent, "Loading...");
+
+      await tick(100);
+      assert.strictEqual(div.querySelector("span")?.textContent, "Done!");
+    });
+
+    it("should use return value over last yield when return value defined", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield html`<span>Loading...</span>`;
+          await tick(5);
+          return html`<span>Final!</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick(20);
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(div.querySelector("span")?.textContent, "Final!");
+    });
+
+    it("should render null/undefined as empty", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield null;
+          await tick(50);
+          yield html`<span>Done</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick(5);
+
+      const div = document.body.querySelector("div")!;
+      // Initially empty (null rendered as nothing)
+      assert.strictEqual(div.querySelector("span"), null);
+
+      await tick(100);
+      assert.strictEqual(div.querySelector("span")?.textContent, "Done");
+    });
+
+    it("should render strings", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield "Hello World";
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      assert.ok(div.textContent?.includes("Hello World"));
+    });
+
+    it("should render numbers", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield 42;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      assert.ok(div.textContent?.includes("42"));
+    });
+
+    it("should track signal dependencies and restart on change", async () => {
+      const userId = signal(1);
+      const renderCount = { value: 0 };
+
+      const { fragment } = html`<div>
+        ${async function* () {
+          renderCount.value++;
+          yield html`<span>Loading user ${userId.value}...</span>`;
+          await tick(50);
+          yield html`<span>User ${userId.value} loaded</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick(100);
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "User 1 loaded",
+      );
+      assert.strictEqual(renderCount.value, 1);
+
+      // Change signal - should restart generator
+      userId.value = 2;
+      await tick(5);
+
+      // Should show loading for new user
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "Loading user 2...",
+      );
+
+      await tick(100);
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "User 2 loaded",
+      );
+      assert.strictEqual(renderCount.value, 2);
+    });
+
+    it("should call generator.return() on dispose", async () => {
+      let finallyRan = false;
+
+      const { fragment, dispose } = html`<div>
+        ${async function* () {
+          try {
+            yield html`<span>Step 1</span>`;
+            await tick(50);
+            yield html`<span>Step 2</span>`;
+          } finally {
+            finallyRan = true;
+          }
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(div.querySelector("span")?.textContent, "Step 1");
+      assert.strictEqual(finallyRan, false);
+
+      // Dispose while generator is awaiting tick(50)
+      dispose();
+      // Wait for the tick(50) to complete so finally can run
+      await tick(100);
+
+      // Finally block runs when generator.return() is called
+      assert.strictEqual(finallyRan, true);
+    });
+
+    it("should run finally block on restart", async () => {
+      const userId = signal(1);
+      const finallyIds: number[] = [];
+
+      const { fragment, dispose } = html`<div>
+        ${async function* () {
+          const id = userId.value;
+          try {
+            yield html`<span>User ${id}</span>`;
+            await tick(50);
+            yield html`<span>Done ${id}</span>`;
+            await tick(1000); // Long wait - won't complete during test
+          } finally {
+            finallyIds.push(id);
+          }
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      assert.deepStrictEqual(finallyIds, []);
+
+      // Change signal while generator is awaiting - should restart and run finally
+      userId.value = 2;
+      // Wait for the old generator's tick(50) to complete so its finally runs
+      await tick(100);
+
+      // Old generator's finally should have run (id=1)
+      assert.deepStrictEqual(finallyIds, [1]);
+
+      // Clean up
+      dispose();
+    });
+
+    it("should abort in-flight requests via AbortController pattern", async () => {
+      const userId = signal(1);
+      const abortedIds: number[] = [];
+
+      const { fragment, dispose } = html`<div>
+        ${async function* () {
+          const id = userId.value;
+          const controller = new AbortController();
+          controller.signal.addEventListener("abort", () => {
+            abortedIds.push(id);
+          });
+          try {
+            yield html`<span>User ${id}</span>`;
+            await tick(50);
+            yield html`<span>Done ${id}</span>`;
+            await tick(1000); // Long wait - won't complete during test
+          } finally {
+            controller.abort();
+          }
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      assert.deepStrictEqual(abortedIds, []);
+
+      // Change signal - should restart and abort old generator
+      userId.value = 2;
+      await tick(100);
+
+      // Old generator's finally should have aborted (id=1)
+      assert.deepStrictEqual(abortedIds, [1]);
+
+      // Clean up
+      dispose();
+    });
+
+    it("should handle nested async generators", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield html`<div class="outer">
+            ${async function* () {
+              yield html`<span>Inner Loading...</span>`;
+              await tick(20);
+              yield html`<span>Inner Done!</span>`;
+            }}
+          </div>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      const outer = div.querySelector(".outer");
+      assert.ok(outer);
+      assert.strictEqual(
+        outer!.querySelector("span")?.textContent,
+        "Inner Loading...",
+      );
+
+      await tick(50);
+      assert.strictEqual(
+        outer!.querySelector("span")?.textContent,
+        "Inner Done!",
+      );
+    });
+
+    // Errors thrown in generators become unhandled rejections.
+    // When disposed, errors are suppressed.
+    it("should suppress errors when disposed before error is thrown", async () => {
+      let beforeError = false;
+
+      const { fragment, dispose } = html`<div>
+        ${async function* () {
+          yield html`<span>Before error</span>`;
+          beforeError = true;
+          await tick(50); // Longer wait
+          throw new Error("Test error");
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      // First yield should work
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "Before error",
+      );
+      assert.strictEqual(beforeError, true);
+
+      // Dispose before the error is thrown
+      dispose();
+      // Don't wait for the error - it should be suppressed because disposed
+    });
+
+    it("should handle generator that yields once and returns", async () => {
+      const { fragment } = html`<div>
+        ${async function* () {
+          yield html`<span>Only yield</span>`;
+          return undefined;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      // Should use last yielded since return is undefined
+      assert.strictEqual(div.querySelector("span")?.textContent, "Only yield");
+    });
+
+    it("should handle generator that only returns (no yields)", async () => {
+      const { fragment } = html`<div>
+        ${
+          // eslint-disable-next-line require-yield
+          async function* () {
+            await tick(5);
+            return html`<span>Direct return</span>`;
+          }
+        }
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick(20);
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "Direct return",
+      );
+    });
+
+    it("should ignore stale iterations after restart", async () => {
+      const userId = signal(1);
+
+      const { fragment } = html`<div>
+        ${async function* () {
+          const id = userId.value;
+          yield html`<span>Loading ${id}...</span>`;
+          // Longer delay for user 1
+          await tick(id === 1 ? 50 : 5);
+          yield html`<span>User ${id}</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "Loading 1...",
+      );
+
+      // Quickly change before first request completes
+      userId.value = 2;
+      await tick(30);
+
+      // User 2 should complete first (faster) and be displayed
+      assert.strictEqual(div.querySelector("span")?.textContent, "User 2");
+
+      // Wait for user 1 to "complete" - DOM should still show User 2
+      await tick(50);
+      assert.strictEqual(div.querySelector("span")?.textContent, "User 2");
+    });
+
+    it("should handle async generator inside each()", async () => {
+      const items = signal([1, 2]);
+
+      const { fragment } = html`<ul>
+        ${each(
+          items,
+          (id) => id,
+          (id) =>
+            html`<li>
+              ${async function* () {
+                yield html`<span>Loading ${id}...</span>`;
+                await tick(5);
+                yield html`<span>Item ${id}</span>`;
+              }}
+            </li>`,
+        )}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      const ul = document.body.querySelector("ul")!;
+      assert.strictEqual(ul.children.length, 2);
+
+      await tick(20);
+      assert.strictEqual(
+        ul.children[0]!.querySelector("span")?.textContent,
+        "Item 1",
+      );
+      assert.strictEqual(
+        ul.children[1]!.querySelector("span")?.textContent,
+        "Item 2",
+      );
+    });
+
+    describe("DOM preservation (settled parameter)", () => {
+      it("should pass undefined as settled on first run", async () => {
+        let receivedSettled: RenderedContent | undefined = undefined;
+        let called = false;
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            called = true;
+            receivedSettled = settled;
+            yield html`<span>Done</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        assert.strictEqual(called, true);
+        assert.strictEqual(receivedSettled, undefined);
+      });
+
+      it("should pass previous settled content on restart", async () => {
+        const userId = signal(1);
+        const settledValues: (RenderedContent | undefined)[] = [];
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            settledValues.push(settled);
+            const id = userId.value;
+            yield html`<span>User ${id}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        assert.strictEqual(settledValues.length, 1);
+        assert.strictEqual(settledValues[0], undefined);
+
+        userId.value = 2;
+        await tick();
+
+        assert.strictEqual(settledValues.length, 2);
+        assert.notStrictEqual(settledValues[1], undefined);
+        assert.ok(typeof settledValues[1] === "object");
+      });
+
+      it("should preserve DOM when returning settled", async () => {
+        const userId = signal(1);
+        let spanElement: Element | null = null;
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            const id = userId.value;
+
+            if (settled) {
+              // Return settled to preserve DOM
+              return settled;
+            }
+
+            yield html`<span data-id="${id}">User ${id}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        const div = document.body.querySelector("div")!;
+        spanElement = div.querySelector("span");
+        assert.ok(spanElement);
+        assert.strictEqual(spanElement.getAttribute("data-id"), "1");
+
+        // Change signal - should preserve DOM
+        userId.value = 2;
+        await tick();
+
+        // Same DOM node should still be there
+        const currentSpan = div.querySelector("span");
+        assert.strictEqual(currentSpan, spanElement); // Same reference!
+        // data-id is still "1" because we preserved, not re-rendered
+        assert.strictEqual(currentSpan!.getAttribute("data-id"), "1");
+      });
+
+      it("should allow surgical updates via reactive bindings when preserving DOM", async () => {
+        const userId = signal(1);
+        const userName = signal("Alice");
+        let spanElement: Element | null = null;
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            const id = userId.value;
+
+            if (settled) {
+              // Update state, preserve DOM
+              await tick(5);
+              userName.value = id === 2 ? "Bob" : "Charlie";
+              return settled;
+            }
+
+            // First render with reactive binding
+            yield html`<span>${userName}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        const div = document.body.querySelector("div")!;
+        spanElement = div.querySelector("span");
+        assert.strictEqual(spanElement!.textContent, "Alice");
+
+        // Change signal - should preserve DOM but update via reactive binding
+        userId.value = 2;
+        await tick(20);
+
+        // Same DOM node
+        assert.strictEqual(div.querySelector("span"), spanElement);
+        // But text updated via reactive binding
+        assert.strictEqual(spanElement!.textContent, "Bob");
+      });
+
+      it("should replace DOM when not returning settled", async () => {
+        const userId = signal(1);
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            void settled; // Ignore settled, always yield new content
+            const id = userId.value;
+            yield html`<span data-id="${id}">User ${id}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        const div = document.body.querySelector("div")!;
+        const span1 = div.querySelector("span");
+        assert.strictEqual(span1!.getAttribute("data-id"), "1");
+
+        userId.value = 2;
+        await tick();
+
+        const span2 = div.querySelector("span");
+        assert.notStrictEqual(span2, span1); // Different element!
+        assert.strictEqual(span2!.getAttribute("data-id"), "2");
+      });
+
+      it("should handle multiple restarts with preservation", async () => {
+        const userId = signal(1);
+        let renderCount = 0;
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            renderCount++;
+            const id = userId.value;
+
+            if (settled) return settled;
+
+            yield html`<span>${id}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        const div = document.body.querySelector("div")!;
+        const originalSpan = div.querySelector("span");
+        assert.strictEqual(renderCount, 1);
+
+        // Multiple restarts
+        userId.value = 2;
+        await tick();
+        userId.value = 3;
+        await tick();
+        userId.value = 4;
+        await tick();
+
+        assert.strictEqual(renderCount, 4);
+        // Same DOM element throughout
+        assert.strictEqual(div.querySelector("span"), originalSpan);
+      });
+
+      it("should clean up properly on dispose when using preservation", async () => {
+        const userId = signal(1);
+        const userName = signal("Alice");
+
+        const { fragment, dispose } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            void userId.value; // Track dependency
+
+            if (settled) return settled;
+
+            // Create a reactive binding to track
+            yield html`<span>${userName}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        const div = document.body.querySelector("div")!;
+        assert.strictEqual(div.querySelector("span")?.textContent, "Alice");
+
+        // Trigger a restart with preservation
+        userId.value = 2;
+        await tick();
+
+        // Verify reactive binding still works after preservation
+        userName.value = "Bob";
+        assert.strictEqual(div.querySelector("span")?.textContent, "Bob");
+
+        // Dispose everything
+        dispose();
+
+        // After dispose, changing the signal should not cause issues
+        // (no errors thrown, binding is cleaned up)
+        userName.value = "Charlie";
+        // The span should still show "Bob" (no update after dispose)
+        // Note: The DOM might be removed depending on implementation
+      });
+
+      it("should support switching from preservation back to new content", async () => {
+        const userId = signal(1);
+        const forceRefresh = signal(false);
+
+        const { fragment } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            const id = userId.value;
+            const refresh = forceRefresh.value;
+
+            if (settled && !refresh) {
+              return settled;
+            }
+
+            // Reset refresh flag if it was set
+            if (refresh) {
+              forceRefresh.value = false;
+            }
+
+            yield html`<span data-id="${id}">User ${id}</span>`;
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick();
+
+        const div = document.body.querySelector("div")!;
+        const span1 = div.querySelector("span");
+        assert.strictEqual(span1!.getAttribute("data-id"), "1");
+
+        // Normal restart with preservation
+        userId.value = 2;
+        await tick();
+        assert.strictEqual(div.querySelector("span"), span1); // Same element
+        assert.strictEqual(span1!.getAttribute("data-id"), "1"); // Old value
+
+        // Force refresh - should create new DOM
+        forceRefresh.value = true;
+        await tick();
+
+        const span2 = div.querySelector("span");
+        assert.notStrictEqual(span2, span1); // Different element!
+        // The span should reflect the current userId
+        assert.strictEqual(span2!.getAttribute("data-id"), "2");
+      });
+
+      it("should clean up generators on dispose with preservation", async () => {
+        const userId = signal(1);
+        const finallyCalledFor: number[] = [];
+
+        const { fragment, dispose } = html`<div>
+          ${async function* (settled?: RenderedContent) {
+            const id = userId.value;
+
+            try {
+              if (settled) {
+                // Preserve DOM, do a short operation
+                await tick(20);
+                return settled;
+              }
+              yield html`<span>${id}</span>`;
+              await tick(20);
+            } finally {
+              finallyCalledFor.push(id);
+            }
+          }}
+        </div>`.render();
+
+        document.body.appendChild(fragment);
+        await tick(50);
+
+        // First generator completed
+        assert.deepStrictEqual(finallyCalledFor, [1]);
+
+        // Trigger restart with preservation
+        userId.value = 2;
+        await tick(50);
+
+        // Second generator also completed (returned settled)
+        assert.deepStrictEqual(finallyCalledFor, [1, 2]);
+
+        // Dispose
+        dispose();
+        await tick();
+
+        // Everything cleaned up
+        assert.deepStrictEqual(finallyCalledFor, [1, 2]);
+      });
     });
   });
 });

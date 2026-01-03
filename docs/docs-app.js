@@ -21,6 +21,10 @@ const FEATURES = [
     desc: "Automatic dependency tracking with lazy evaluation",
   },
   {
+    title: "Async generators",
+    desc: "Progressive loading with automatic dependency restart",
+  },
+  {
     title: "Keyed list rendering",
     desc: "Efficient <code>each()</code> with DOM node recycling",
   },
@@ -70,6 +74,11 @@ const API_ITEMS = [
     desc: "Efficient keyed list rendering. Reuses DOM nodes when items are reordered.",
   },
   {
+    title: "async function* ()",
+    code: "asyncgen",
+    desc: "Async generators for progressive loading. Automatically restarts when tracked signals change.",
+  },
+  {
     title: "batch(fn)",
     code: "batch",
     desc: "Batches multiple signal updates into a single notification pass.",
@@ -96,6 +105,11 @@ const EXAMPLES = [
     href: "./examples/todo-list/",
     name: "Todo List",
     desc: "CRUD with keyed list rendering",
+  },
+  {
+    href: "./examples/async-data/",
+    name: "Async Data",
+    desc: "Progressive loading with async generators",
   },
   {
     href: "./examples/pokemon/",
@@ -171,6 +185,20 @@ const CODE_EXAMPLES = {
     "\n" +
     "// With getter function (for stores)\n" +
     "${each(() => state.items, i => html`<li>${i}</li>`)}",
+
+  asyncgen:
+    "// Progressive loading with automatic restart\n" +
+    "html`\n" +
+    "  ${async function* () {\n" +
+    "    const id = userId.value; // Track dependency\n" +
+    "\n" +
+    "    yield html`<div>Loading...</div>`;\n" +
+    "\n" +
+    "    const user = await fetchUser(id);\n" +
+    "    yield html`<div>${user.name}</div>`;\n" +
+    "  }}\n" +
+    "`\n" +
+    "// Generator restarts when userId changes",
 
   batch:
     "batch(() => {\n" +
@@ -368,13 +396,29 @@ class DocsApp extends HTMLElement {
 
         <!-- Composable Function Components Section -->
         <section>
-          <h2>Composable Functions</h2>
+          <h2>Function Components</h2>
           <p>
-            Build reusable UI pieces as functions that return templates. Pass
-            the store directly to keep reactivity working - access properties
-            inside function wrappers like <code>\${() => state.count}</code>:
+            The recommended way to build UIs - plain functions that return
+            templates. Pass the store directly to keep reactivity working.
+            Better for composition and future SSR support:
           </p>
           <code-block data-code="composable"></code-block>
+        </section>
+
+        <!-- Async Generators Section -->
+        <section>
+          <h2>Async Generators</h2>
+          <p>
+            Progressive loading with automatic dependency tracking. The
+            generator restarts when any tracked signal changes:
+          </p>
+          <code-block data-code="asyncgen"></code-block>
+          <p class="note">
+            <strong>Tip:</strong> Use async generators for loading states and
+            structural transitions. For surgical updates within a stable DOM
+            structure, use reactive bindings like
+            <code>\${() => state.value}</code>.
+          </p>
         </section>
 
         <!-- API Section (data-driven) -->

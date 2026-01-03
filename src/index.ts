@@ -1,4 +1,4 @@
-export { html, each, type Template } from "./template.js";
+export { html, each, type Template, type RenderedContent } from "./template.js";
 export {
   signal,
   computed,

@@ -8,6 +8,7 @@
  * - Property binding: .value=${signal} (sets DOM property, not attribute)
  * - Nested templates: ${html`<span>...</span>`}
  * - Arrays: ${items.map(i => html`<li>${i}</li>`)}
+ * - Async generators: ${async function*() { yield html`...`; }}
  */
 
 import {
@@ -17,6 +18,7 @@ import {
   signal,
   type Reactive,
 } from "./signals/index.js";
+import { track } from "./signals/context.js";
 import { HTMLParser, type Attr } from "./parser.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -65,6 +67,60 @@ function bind(
   update(value);
 }
 
+/** Result of rendering a template */
+export interface RenderResult {
+  fragment: DocumentFragment;
+  dispose: () => void;
+}
+
+/**
+ * Opaque handle representing settled content from an async generator.
+ *
+ * When an async generator restarts due to signal changes, it receives the
+ * previous settled content as its first argument. Return this value to
+ * preserve the existing DOM instead of re-rendering.
+ *
+ * @example
+ * ```ts
+ * async function* loadUser(settled?: RenderedContent) {
+ *   const id = userId.value; // Track dependency
+ *
+ *   if (settled) {
+ *     // Restart: update state, keep existing DOM
+ *     const user = await fetchUser(id);
+ *     state.user = user; // Triggers surgical updates via reactive bindings
+ *     return settled; // Preserve DOM
+ *   }
+ *
+ *   // First load
+ *   yield html`<div class="skeleton">...</div>`;
+ *   const user = await fetchUser(id);
+ *   state.user = user;
+ *   return UserCard({ state });
+ * }
+ * ```
+ */
+export interface RenderedContent {
+  /** @internal Brand to prevent construction outside the library */
+  readonly __brand: "RenderedContent";
+}
+
+/** Internal structure for RenderedContent (not exported) */
+interface RenderedContentInternal extends RenderedContent {
+  readonly nodes: Node[];
+  readonly childDisposers: (() => void)[];
+}
+
+/** Check if a function is an async generator function */
+function isAsyncGeneratorFunction(
+  fn: unknown,
+): fn is (settled?: RenderedContent) => AsyncGenerator<unknown> {
+  return (
+    typeof fn === "function" &&
+    fn.constructor?.name === "AsyncGeneratorFunction"
+  );
+}
+
 /** A parsed HTML template. Call render() to create live DOM. */
 export class Template {
   constructor(
@@ -75,8 +131,25 @@ export class Template {
   /**
    * Parse template and create live DOM.
    * Returns the fragment and a dispose function to clean up subscriptions.
+   *
+   * @example
+   * ```ts
+   * const { fragment, dispose } = html`<div>Hello</div>`.render();
+   * document.body.appendChild(fragment);
+   *
+   * // For async content, use async generators:
+   * const { fragment, dispose } = html`
+   *   <div>
+   *     ${async function* () {
+   *       yield html`<span>Loading...</span>`;
+   *       const user = await fetchUser();
+   *       yield html`<span>${user.name}</span>`;
+   *     }}
+   *   </div>
+   * `.render();
+   * ```
    */
-  render(): { fragment: DocumentFragment; dispose: () => void } {
+  render(): RenderResult {
     const fragment = document.createDocumentFragment();
     const disposers: (() => void)[] = [];
     const stack: (Element | DocumentFragment)[] = [fragment];
@@ -190,9 +263,170 @@ interface EachEntry {
 }
 
 /**
+ * Render content and insert nodes before marker.
+ * Handles Templates, primitives, arrays.
+ */
+function renderContent(
+  marker: Comment,
+  v: unknown,
+  nodes: Node[],
+  childDisposers: (() => void)[],
+): void {
+  const parent = marker.parentNode!;
+
+  for (const item of Array.isArray(v) ? v : [v]) {
+    // Handle templates
+    if (item instanceof Template) {
+      const { fragment, dispose } = item.render();
+      childDisposers.push(dispose);
+      nodes.push(...fragment.childNodes);
+      parent.insertBefore(fragment, marker);
+    }
+    // Handle primitives (ignore null/undefined/boolean)
+    else if (item != null && typeof item !== "boolean") {
+      const node = document.createTextNode(String(item));
+      nodes.push(node);
+      parent.insertBefore(node, marker);
+    }
+  }
+}
+
+/**
+ * Bind an async generator function to a marker position.
+ * Tracks signal dependencies during generator execution and restarts
+ * the generator when those dependencies change.
+ *
+ * Supports DOM preservation: when the generator receives a `settled` argument
+ * (the previous render result) and returns it, the existing DOM is preserved
+ * instead of being replaced.
+ */
+function bindAsyncGenerator(
+  genFn: (settled?: RenderedContent) => AsyncGenerator<unknown>,
+  marker: Comment,
+  disposers: (() => void)[],
+): void {
+  let generator: AsyncGenerator<unknown> | null = null;
+  let currentNodes: Node[] = [];
+  let childDisposers: (() => void)[] = [];
+  let disposed = false;
+  let iterationId = 0;
+  let depUnsubscribers: (() => void)[] = [];
+
+  // Last settled content for DOM preservation on restart
+  let lastSettled: RenderedContentInternal | null = null;
+
+  /** Remove current nodes and dispose their cleanup functions */
+  const clearNodes = () => {
+    for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
+    for (let i = 0; i < currentNodes.length; i++)
+      currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);
+    childDisposers = [];
+    currentNodes = [];
+  };
+
+  /** Unsubscribe from tracked dependencies */
+  const clearDeps = () => {
+    for (let i = 0; i < depUnsubscribers.length; i++) depUnsubscribers[i]!();
+    depUnsubscribers = [];
+  };
+
+  /** Cleanup generator and dependencies (not nodes - for preservation support) */
+  const cleanupGenerator = () => {
+    clearDeps();
+    if (generator) {
+      // Fire-and-forget: triggers finally block without awaiting
+      generator.return(undefined);
+      generator = null;
+    }
+  };
+
+  /** Full cleanup including nodes */
+  const cleanup = () => {
+    cleanupGenerator();
+    clearNodes();
+  };
+
+  /** Clear nodes and render new content */
+  const render = (value: unknown) => {
+    clearNodes();
+    renderContent(marker, value, currentNodes, childDisposers);
+  };
+
+  const runGenerator = async () => {
+    const thisIteration = ++iterationId;
+    cleanupGenerator();
+
+    if (disposed) return;
+
+    generator = genFn(lastSettled ?? undefined);
+    let lastYielded: unknown = null;
+
+    while (!disposed && thisIteration === iterationId) {
+      let result: IteratorResult<unknown>;
+
+      try {
+        // Track signal accesses in the synchronous part (before yield/await)
+        const tracked = track(() => generator!.next());
+
+        // Restart generator when tracked dependencies change
+        tracked.subscribe(() => {
+          if (!disposed && thisIteration === iterationId) {
+            void runGenerator();
+          }
+        });
+        depUnsubscribers.push(tracked.unsubscribe);
+
+        result = await tracked.value;
+      } catch (e) {
+        cleanup();
+        if (!disposed) throw e;
+        return;
+      }
+
+      // Stale iteration - a newer runGenerator() has started
+      if (thisIteration !== iterationId) return;
+
+      const { value, done } = result;
+
+      if (done) {
+        // DOM preservation: return settled to keep existing DOM
+        if (value === lastSettled && lastSettled !== null) {
+          currentNodes = lastSettled.nodes;
+          childDisposers = lastSettled.childDisposers;
+        } else {
+          // Render final content and capture as settled
+          render(value !== undefined ? value : lastYielded);
+          lastSettled = {
+            __brand: "RenderedContent" as const,
+            nodes: currentNodes,
+            childDisposers: childDisposers,
+          };
+        }
+        return;
+      }
+
+      lastYielded = value;
+      render(value);
+    }
+  };
+
+  void runGenerator();
+
+  disposers.push(() => {
+    disposed = true;
+    cleanup();
+    lastSettled = null;
+  });
+}
+
+/**
  * Bind dynamic content at a marker position.
- * Handles primitives (as text), Templates (rendered), Each (keyed lists), and arrays.
+ * Handles primitives (as text), Templates (rendered), Each (keyed lists), arrays,
+ * and async generator functions.
+ *
  * null/undefined/boolean render nothing (enables conditional: ${cond && html`...`})
+ *
+ * Returns a dispose function to clean up subscriptions and remove nodes.
  */
 function bindContent(marker: Comment, value: unknown): () => void {
   let nodes: Node[] = [];
@@ -204,6 +438,13 @@ function bindContent(marker: Comment, value: unknown): () => void {
     nodes.forEach((n) => (n as ChildNode).remove());
     nodes = [];
   };
+
+  // Handle async generator functions
+  if (isAsyncGeneratorFunction(value)) {
+    const disposers: (() => void)[] = [];
+    bindAsyncGenerator(value, marker, disposers);
+    return () => disposers.forEach((d) => d());
+  }
 
   // Handle each() - keyed list for efficient list rendering
   if (value != null && typeof value === "object" && EACH in value) {
@@ -278,22 +519,10 @@ function bindContent(marker: Comment, value: unknown): () => void {
     };
   }
 
+  // Sync update function for reactive values
   const update = (v: unknown) => {
     clear();
-    const parent = marker.parentNode!;
-
-    for (const item of Array.isArray(v) ? v : [v]) {
-      if (item instanceof Template) {
-        const { fragment, dispose } = item.render();
-        childDisposers.push(dispose);
-        nodes.push(...fragment.childNodes);
-        parent.insertBefore(fragment, marker);
-      } else if (item != null && typeof item !== "boolean") {
-        const node = document.createTextNode(String(item));
-        nodes.push(node);
-        parent.insertBefore(node, marker);
-      }
-    }
+    renderContent(marker, v, nodes, childDisposers);
   };
 
   const unsub = bind(value, update);

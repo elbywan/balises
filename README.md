@@ -29,10 +29,12 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Building Web Components](#building-web-components)
-- [Composable Function Components](#composable-function-components)
+- [Function Components](#function-components)
+- [Async Generators](#async-generators)
+  - [DOM Preservation on Restart](#dom-preservation-on-restart)
 - [Template Syntax](#template-syntax)
 - [Reactivity API](#reactivity-api)
+- [Web Components](#web-components)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
 - [Benchmarks](#benchmarks)
 
@@ -61,9 +63,186 @@ document.body.appendChild(fragment);
 // Call dispose() when done to clean up subscriptions
 ```
 
-## Building Web Components
+## Function Components
 
-Balises works naturally with the Web Components API. Just render templates in `connectedCallback` and clean up in `disconnectedCallback`.
+The recommended way to build UIs with balises is using function components - plain functions that receive props and return templates. This pattern is simpler than web components and works better with future SSR support.
+
+```ts
+import { html, store } from "balises";
+
+// Define a reusable component as a function
+function Counter({ state, onIncrement }) {
+  return html`
+    <div class="counter">
+      <span>Count: ${() => state.count}</span>
+      <button @click=${onIncrement}>+1</button>
+    </div>
+  `;
+}
+
+// Create shared state
+const state = store({ count: 0 });
+
+// Compose components together
+const { fragment, dispose } = html`
+  <div class="app">
+    <h1>My App</h1>
+    ${Counter({ state, onIncrement: () => state.count++ })}
+    ${Counter({ state, onIncrement: () => (state.count += 10) })}
+  </div>
+`.render();
+
+document.body.appendChild(fragment);
+```
+
+**Key principles:**
+
+1. **Pass the store, not values** - The store is a stable reference; accessing `state.property` inside function wrappers tracks dependencies
+2. **Use function wrappers for reactivity** - `${() => state.count}` creates a computed that updates when `state.count` changes
+3. **Event handlers as props** - Pass callbacks for actions, keeping logic in the parent
+
+### When to use Function Components vs Web Components
+
+| Function Components      | Web Components              |
+| ------------------------ | --------------------------- |
+| Internal UI composition  | Reusable standalone widgets |
+| Shared state from parent | Self-contained state        |
+| No Shadow DOM needed     | Need style encapsulation    |
+| Quick composition        | Publishing packages         |
+| Better SSR compatibility | Browser-native lifecycle    |
+
+## Async Generators
+
+Async generator functions provide a powerful pattern for handling loading states, progressive rendering, and async data flows. The generator automatically restarts when any tracked signal changes.
+
+```ts
+import { html, signal } from "balises";
+
+const userId = signal(1);
+
+html`
+  <div class="user-profile">
+    ${async function* () {
+      // Track dependencies - generator restarts when userId changes
+      const id = userId.value;
+
+      // Show loading state
+      yield html`<div class="skeleton">Loading...</div>`;
+
+      // Fetch data
+      const user = await fetch(`/api/users/${id}`).then((r) => r.json());
+
+      // Show final content
+      yield html`
+        <div class="profile">
+          <h2>${user.name}</h2>
+          <p>${user.email}</p>
+        </div>
+      `;
+    }}
+  </div>
+`.render();
+
+// Changing userId automatically restarts the generator
+userId.value = 2; // Shows loading, fetches user 2, renders
+```
+
+### Progressive Loading with Delayed Skeleton
+
+Only show loading UI if the fetch takes longer than a threshold:
+
+```ts
+async function* loadData() {
+  const id = itemId.value;
+
+  const fetchPromise = fetch(`/api/items/${id}`).then((r) => r.json());
+  const delay = new Promise((r) => setTimeout(r, 300));
+
+  // Race between data and timeout
+  const result = await Promise.race([
+    fetchPromise.then((data) => ({ type: "data", data })),
+    delay.then(() => ({ type: "timeout" })),
+  ]);
+
+  if (result.type === "timeout") {
+    yield html`<div class="skeleton">Loading...</div>`;
+    const data = await fetchPromise;
+    yield html`<div>${data.name}</div>`;
+  } else {
+    yield html`<div>${result.data.name}</div>`;
+  }
+}
+```
+
+### When to Use Async Generators
+
+**Good fit:**
+
+- Loading → Content → Error state transitions
+- Progressive data loading (show partial results)
+- Streaming or chunked content
+- Cases where you want to **replace** content at each step
+
+**Not ideal for:**
+
+- Stable DOM structures with changing data (use reactive bindings instead)
+- High-frequency updates where DOM stability matters
+- Simple conditionals (use `${() => condition ? a : b}` instead)
+
+**Key insight:** Async generators replace the entire yielded content on each yield. For surgical updates within a stable structure, use reactive bindings (`${() => state.value}`) which only update the specific text nodes or attributes that changed.
+
+### DOM Preservation on Restart
+
+When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM (enabling surgical updates via reactive bindings), return the `settled` argument:
+
+```ts
+import { html, signal, store, type RenderedContent } from "balises";
+
+const userId = signal(1);
+const state = store({ user: null, loading: false });
+
+html`
+  <div class="user-profile">
+    ${async function* (settled?: RenderedContent) {
+      const id = userId.value; // Track dependency
+
+      if (settled) {
+        // Restart: update state, keep existing DOM
+        state.loading = true;
+        const user = await fetch(`/api/users/${id}`).then((r) => r.json());
+        state.user = user;
+        state.loading = false;
+        return settled; // Preserve DOM!
+      }
+
+      // First load: render with reactive bindings
+      yield html`<div class="skeleton">Loading...</div>`;
+      const user = await fetch(`/api/users/${id}`).then((r) => r.json());
+      state.user = user;
+      return html`
+        <div class="profile">
+          <h2>${() => state.user?.name}</h2>
+          <p>${() => state.user?.email}</p>
+          <span class="status"
+            >${() => (state.loading ? "Updating..." : "")}</span
+          >
+        </div>
+      `;
+    }}
+  </div>
+`.render();
+```
+
+The `settled` parameter:
+
+- Is `undefined` on first run
+- Contains an opaque handle to the previous render on restarts
+- When returned, preserves the existing DOM nodes and reactive bindings
+- Enables surgical updates via reactive bindings instead of full re-renders
+
+## Web Components
+
+For reusable widgets that need encapsulation or browser-native lifecycle, balises works naturally with the Web Components API:
 
 ```ts
 import { html, signal, effect } from "balises";
@@ -108,21 +287,6 @@ Use it in your HTML:
 ```
 
 You can build entire apps this way, or just add interactive widgets to existing pages. No build step required if you use it from a CDN.
-
-## Composable Function Components
-
-You can also use plain functions that return templates. Pass the store and access its properties in function wrappers to keep things reactive:
-
-```ts
-function Counter({ state }) {
-  return html`
-    <button @click=${() => state.count++}>${() => state.count}</button>
-  `;
-}
-
-const state = store({ count: 0 });
-html`<div>${Counter({ state })}</div>`.render();
-```
 
 ## Template Syntax
 

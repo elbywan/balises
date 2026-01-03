@@ -9,6 +9,7 @@ import {
   isBatching,
   enqueueBatchOne,
   registerDisposer,
+  addTrackedSource,
   type Subscriber,
 } from "./context.js";
 
@@ -39,6 +40,7 @@ export class Computed<T> {
   get value(): T {
     if (this.#dirty) this.#recompute();
     if (context && context !== this) context.trackSource(this);
+    addTrackedSource(this);
     return this.#value as T;
   }
 

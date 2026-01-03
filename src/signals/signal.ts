@@ -7,6 +7,7 @@ import {
   context,
   isBatching,
   enqueueBatchAll,
+  addTrackedSource,
   type Subscriber,
 } from "./context.js";
 
@@ -38,6 +39,7 @@ export class Signal<T> {
 
   get value(): T {
     if (context) context.trackSource(this);
+    addTrackedSource(this);
     return this.#value;
   }
 
@@ -56,7 +58,9 @@ export class Signal<T> {
       if (isBatching()) {
         enqueueBatchAll(this.#subs);
       } else {
-        for (let i = 0; i < this.#subs.length; i++) this.#subs[i]!();
+        // Copy array to avoid issues if subscribers modify the array during iteration
+        const subs = [...this.#subs];
+        for (let i = 0; i < subs.length; i++) subs[i]!();
       }
     }
   }
