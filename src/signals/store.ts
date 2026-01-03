@@ -15,14 +15,9 @@ export function store<T extends object>(obj: T): T {
 
   /** Recursively wrap nested objects and arrays */
   const wrap = (value: unknown): unknown => {
-    if (value !== null && typeof value === "object" && STORE in value) {
-      return value; // Already a store
-    }
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      Object.getPrototypeOf(value) === Object.prototype
-    ) {
+    if (typeof value !== "object" || value === null) return value;
+    if (STORE in value) return value; // Already a store
+    if ((value as object).constructor === Object) {
       return store(value as Record<string, unknown>);
     }
     if (Array.isArray(value)) {

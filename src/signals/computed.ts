@@ -102,7 +102,7 @@ export class Computed<T> {
       const targets = c.#targets;
 
       // Short-circuit: if subs + targets + not batching, eagerly check if value changed
-      if (c.#subs.length > 0 && targets.length > 0 && c.#fn && !isBatching()) {
+      if (c.#subs.length && targets.length && c.#fn && !isBatching()) {
         const old = c.#value;
         c.#recompute();
         if (!Object.is(c.#value, old)) {

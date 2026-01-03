@@ -24,17 +24,10 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 /**
  * Create a computed that wraps function execution in a scope.
  * Nested computeds/effects are automatically disposed on re-run.
- * Returns the computed and a dispose function that cleans up both
- * the computed and any nested reactives from the last run.
+ * Returns [computed, dispose] - dispose cleans up both the computed
+ * and any nested reactives from the last run.
  */
-function scopedComputed<T>(fn: () => T): {
-  c: {
-    value: T;
-    subscribe: (fn: () => void) => () => void;
-    dispose: () => void;
-  };
-  dispose: () => void;
-} {
+function scopedComputed<T>(fn: () => T) {
   let disposeScope: (() => void) | undefined;
 
   const c = computed(() => {
@@ -44,13 +37,7 @@ function scopedComputed<T>(fn: () => T): {
     return result;
   });
 
-  return {
-    c,
-    dispose: () => {
-      c.dispose();
-      disposeScope?.();
-    },
-  };
+  return [c, () => (c.dispose(), disposeScope?.())] as const;
 }
 
 /**
@@ -64,18 +51,16 @@ function bind(
   value: unknown,
   update: (v: unknown) => void,
 ): (() => void) | null | undefined {
+  let dispose: (() => void) | undefined;
   if (typeof value === "function") {
-    const { c, dispose } = scopedComputed(value as () => unknown);
-    update(c.value);
-    const unsub = c.subscribe(() => update(c.value));
-    return () => {
-      unsub();
-      dispose();
-    };
+    [value, dispose] = scopedComputed(value as () => unknown);
   }
   if (isSignal(value)) {
     update(value.value);
-    return value.subscribe(() => update((value as Reactive<unknown>).value));
+    const unsub = value.subscribe(() =>
+      update((value as Reactive<unknown>).value),
+    );
+    return dispose ? () => (unsub(), dispose()) : unsub;
   }
   update(value);
 }
@@ -103,7 +88,7 @@ export class Template {
 
       // Event binding: @click=${handler}
       if (name[0] === "@") {
-        if (idx0 !== undefined) {
+        if (idx0 != null) {
           const handler = values[idx0] as EventListener;
           el.addEventListener(name.slice(1), handler);
           disposers.push(() => el.removeEventListener(name.slice(1), handler));
@@ -113,7 +98,7 @@ export class Template {
 
       // Property binding: .value=${data} - sets DOM property directly
       if (name[0] === ".") {
-        if (idx0 !== undefined) {
+        if (idx0 != null) {
           const unsub = bind(values[idx0], (v) => {
             (el as unknown as Record<string, unknown>)[name.slice(1)] = v;
           });
@@ -134,7 +119,7 @@ export class Template {
       for (const idx of indexes) {
         const v = values[idx];
         if (typeof v === "function") {
-          const { c, dispose } = scopedComputed(v as () => unknown);
+          const [c, dispose] = scopedComputed(v as () => unknown);
           values[idx] = c;
           reactives.push(c);
           disposers.push(dispose);
@@ -144,25 +129,18 @@ export class Template {
       }
 
       const update = () => {
-        if (indexes.length === 1) {
-          const val = isSignal(values[idx0!])
-            ? (values[idx0!] as Reactive<unknown>).value
-            : values[idx0!];
-          if (val == null || val === false) el.removeAttribute(name);
-          else
-            el.setAttribute(
-              name,
-              statics[0]! + (val === true ? "" : val) + statics[1]!,
-            );
-        } else {
-          let result = statics[0]!;
-          for (let i = 0; i < indexes.length; i++) {
-            const v = values[indexes[i]!];
-            const val = isSignal(v) ? (v as Reactive<unknown>).value : v;
-            result += (val ?? "") + statics[i + 1]!;
+        let result = statics[0]!;
+        for (let i = 0; i < indexes.length; i++) {
+          const v = values[indexes[i]!];
+          const val = isSignal(v) ? (v as Reactive<unknown>).value : v;
+          // Single dynamic attr: handle boolean/null specially
+          if (indexes.length === 1 && (val == null || val === false)) {
+            el.removeAttribute(name);
+            return;
           }
-          el.setAttribute(name, result);
+          result += (val === true ? "" : (val ?? "")) + statics[i + 1]!;
         }
+        el.setAttribute(name, result);
       };
 
       update();
@@ -176,15 +154,14 @@ export class Template {
 
       onOpenTag: (tag, attrs, selfClosing) => {
         const parent = stack.at(-1)!;
-        const el =
+        const isSvg =
           tag === "svg" ||
           tag === "SVG" ||
-          (parent instanceof Element && parent.namespaceURI === SVG_NS)
-            ? document.createElementNS(SVG_NS, tag)
-            : document.createElement(tag);
-        for (const attr of attrs) {
-          handleAttribute(el, attr);
-        }
+          (parent instanceof Element && parent.namespaceURI === SVG_NS);
+        const el = isSvg
+          ? document.createElementNS(SVG_NS, tag)
+          : document.createElement(tag);
+        for (const attr of attrs) handleAttribute(el, attr);
         parent.appendChild(el);
         if (!selfClosing) stack.push(el);
       },
@@ -224,7 +201,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
   const clear = () => {
     childDisposers.forEach((d) => d());
     childDisposers = [];
-    nodes.forEach((n) => n.parentNode?.removeChild(n));
+    nodes.forEach((n) => (n as ChildNode).remove());
     nodes = [];
   };
 
@@ -255,7 +232,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
           // First time seeing this key, or item at this key changed → render template
           if (entry) {
             // Dispose old entry for this key
-            entry.nodes.forEach((n) => n.parentNode?.removeChild(n));
+            entry.nodes.forEach((n) => (n as ChildNode).remove());
             entry.dispose();
           }
           const { fragment, dispose } = renderFn(item).render();
@@ -268,7 +245,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
       // Remove nodes for deleted keys
       for (const [key, entry] of cache) {
         if (!newKeys.has(key)) {
-          entry.nodes.forEach((n) => n.parentNode?.removeChild(n));
+          entry.nodes.forEach((n) => (n as ChildNode).remove());
           entry.dispose();
           cache.delete(key);
         }
@@ -296,7 +273,7 @@ function bindContent(marker: Comment, value: unknown): () => void {
         entry.dispose();
       }
       cache.clear();
-      nodes.forEach((n) => n.parentNode?.removeChild(n));
+      nodes.forEach((n) => (n as ChildNode).remove());
       dispose?.();
     };
   }
@@ -389,31 +366,19 @@ export function each<T>(
   // Two-arg form: each(list, renderFn) - use object ref for objects, index for primitives
   const keyFn = renderFn
     ? (keyFnOrRenderFn as (item: T, index: number) => unknown)
-    : (item: T, index: number) =>
-        item !== null &&
-        (typeof item === "object" || typeof item === "function")
-          ? item
-          : index;
+    : (item: T, index: number) => (Object(item) === item ? item : index);
 
-  // Track if we created a computed for a getter function
-  let dispose: (() => void) | undefined;
-  let reactiveList: Reactive<T[]>;
-
-  if (Array.isArray(list)) {
-    reactiveList = signal(list);
-  } else if (typeof list === "function") {
-    const c = computed(list);
-    reactiveList = c;
-    dispose = () => c.dispose();
-  } else {
-    reactiveList = list;
-  }
+  // Normalize list to reactive, track dispose if we created a computed
+  const c = typeof list === "function" ? computed(list) : null;
+  const reactiveList: Reactive<T[]> = Array.isArray(list)
+    ? signal(list)
+    : (c ?? (list as Reactive<T[]>));
 
   return {
     [EACH]: true,
     list: reactiveList,
     keyFn,
     renderFn: renderFn ?? (keyFnOrRenderFn as (item: T) => Template),
-    dispose,
+    dispose: c ? () => c.dispose() : undefined,
   };
 }

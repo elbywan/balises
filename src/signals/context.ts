@@ -93,7 +93,7 @@ export function scope<T>(fn: () => T): [result: T, dispose: () => void] {
   } finally {
     // Pop disposal context
     disposalStack.pop();
-    if (disposalStack.length === 0) disposalStack = null;
+    if (!disposalStack.length) disposalStack = null;
   }
 }
 
