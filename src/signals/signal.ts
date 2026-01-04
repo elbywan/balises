@@ -7,7 +7,7 @@ import {
   context,
   isBatching,
   enqueueBatchAll,
-  addTrackedSource,
+  onTrack,
   type Subscriber,
 } from "./context.js";
 
@@ -39,7 +39,7 @@ export class Signal<T> {
 
   get value(): T {
     if (context) context.trackSource(this);
-    addTrackedSource(this);
+    if (onTrack.current) onTrack.current(this);
     return this.#value;
   }
 

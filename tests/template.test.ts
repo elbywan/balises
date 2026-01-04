@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import { html, Template, each, type RenderedContent } from "../src/template.js";
+import { html, Template, each } from "../src/template.js";
+import { async, type RenderedContent } from "../src/async.js";
 import { signal, store, computed, batch } from "../src/signals/index.js";
 
 describe("html template tag", () => {
@@ -1832,9 +1833,9 @@ describe("Template.render()", () => {
 
     it("should render yielded content", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield html`<span>Hello</span>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1846,11 +1847,11 @@ describe("Template.render()", () => {
 
     it("should update DOM on each yield", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield html`<span>Loading...</span>`;
           await tick(50);
           yield html`<span>Done!</span>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1865,11 +1866,11 @@ describe("Template.render()", () => {
 
     it("should use return value over last yield when return value defined", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield html`<span>Loading...</span>`;
           await tick(5);
           return html`<span>Final!</span>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1881,11 +1882,11 @@ describe("Template.render()", () => {
 
     it("should render null/undefined as empty", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield null;
           await tick(50);
           yield html`<span>Done</span>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1901,9 +1902,9 @@ describe("Template.render()", () => {
 
     it("should render strings", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield "Hello World";
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1915,9 +1916,9 @@ describe("Template.render()", () => {
 
     it("should render numbers", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield 42;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1932,12 +1933,12 @@ describe("Template.render()", () => {
       const renderCount = { value: 0 };
 
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           renderCount.value++;
           yield html`<span>Loading user ${userId.value}...</span>`;
           await tick(50);
           yield html`<span>User ${userId.value} loaded</span>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -1972,7 +1973,7 @@ describe("Template.render()", () => {
       let finallyRan = false;
 
       const { fragment, dispose } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           try {
             yield html`<span>Step 1</span>`;
             await tick(50);
@@ -1980,7 +1981,7 @@ describe("Template.render()", () => {
           } finally {
             finallyRan = true;
           }
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2004,7 +2005,7 @@ describe("Template.render()", () => {
       const finallyIds: number[] = [];
 
       const { fragment, dispose } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           const id = userId.value;
           try {
             yield html`<span>User ${id}</span>`;
@@ -2014,7 +2015,7 @@ describe("Template.render()", () => {
           } finally {
             finallyIds.push(id);
           }
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2039,7 +2040,7 @@ describe("Template.render()", () => {
       const abortedIds: number[] = [];
 
       const { fragment, dispose } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           const id = userId.value;
           const controller = new AbortController();
           controller.signal.addEventListener("abort", () => {
@@ -2053,7 +2054,7 @@ describe("Template.render()", () => {
           } finally {
             controller.abort();
           }
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2074,15 +2075,15 @@ describe("Template.render()", () => {
 
     it("should handle nested async generators", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield html`<div class="outer">
-            ${async function* () {
+            ${async(async function* () {
               yield html`<span>Inner Loading...</span>`;
               await tick(20);
               yield html`<span>Inner Done!</span>`;
-            }}
+            })}
           </div>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2109,12 +2110,12 @@ describe("Template.render()", () => {
       let beforeError = false;
 
       const { fragment, dispose } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield html`<span>Before error</span>`;
           beforeError = true;
           await tick(50); // Longer wait
           throw new Error("Test error");
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2135,10 +2136,10 @@ describe("Template.render()", () => {
 
     it("should handle generator that yields once and returns", async () => {
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           yield html`<span>Only yield</span>`;
           return undefined;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2151,13 +2152,13 @@ describe("Template.render()", () => {
 
     it("should handle generator that only returns (no yields)", async () => {
       const { fragment } = html`<div>
-        ${
+        ${async(
           // eslint-disable-next-line require-yield
           async function* () {
             await tick(5);
             return html`<span>Direct return</span>`;
-          }
-        }
+          },
+        )}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2174,13 +2175,13 @@ describe("Template.render()", () => {
       const userId = signal(1);
 
       const { fragment } = html`<div>
-        ${async function* () {
+        ${async(async function* () {
           const id = userId.value;
           yield html`<span>Loading ${id}...</span>`;
           // Longer delay for user 1
           await tick(id === 1 ? 50 : 5);
           yield html`<span>User ${id}</span>`;
-        }}
+        })}
       </div>`.render();
 
       document.body.appendChild(fragment);
@@ -2213,11 +2214,11 @@ describe("Template.render()", () => {
           (id) => id,
           (id) =>
             html`<li>
-              ${async function* () {
+              ${async(async function* () {
                 yield html`<span>Loading ${id}...</span>`;
                 await tick(5);
                 yield html`<span>Item ${id}</span>`;
-              }}
+              })}
             </li>`,
         )}
       </ul>`.render();
@@ -2245,11 +2246,11 @@ describe("Template.render()", () => {
         let called = false;
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             called = true;
             receivedSettled = settled;
             yield html`<span>Done</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2264,11 +2265,11 @@ describe("Template.render()", () => {
         const settledValues: (RenderedContent | undefined)[] = [];
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             settledValues.push(settled);
             const id = userId.value;
             yield html`<span>User ${id}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2290,7 +2291,7 @@ describe("Template.render()", () => {
         let spanElement: Element | null = null;
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             const id = userId.value;
 
             if (settled) {
@@ -2299,7 +2300,7 @@ describe("Template.render()", () => {
             }
 
             yield html`<span data-id="${id}">User ${id}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2327,7 +2328,7 @@ describe("Template.render()", () => {
         let spanElement: Element | null = null;
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             const id = userId.value;
 
             if (settled) {
@@ -2339,7 +2340,7 @@ describe("Template.render()", () => {
 
             // First render with reactive binding
             yield html`<span>${userName}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2363,11 +2364,11 @@ describe("Template.render()", () => {
         const userId = signal(1);
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             void settled; // Ignore settled, always yield new content
             const id = userId.value;
             yield html`<span data-id="${id}">User ${id}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2390,14 +2391,14 @@ describe("Template.render()", () => {
         let renderCount = 0;
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             renderCount++;
             const id = userId.value;
 
             if (settled) return settled;
 
             yield html`<span>${id}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2425,14 +2426,14 @@ describe("Template.render()", () => {
         const userName = signal("Alice");
 
         const { fragment, dispose } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             void userId.value; // Track dependency
 
             if (settled) return settled;
 
             // Create a reactive binding to track
             yield html`<span>${userName}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2464,7 +2465,7 @@ describe("Template.render()", () => {
         const forceRefresh = signal(false);
 
         const { fragment } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             const id = userId.value;
             const refresh = forceRefresh.value;
 
@@ -2478,7 +2479,7 @@ describe("Template.render()", () => {
             }
 
             yield html`<span data-id="${id}">User ${id}</span>`;
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);
@@ -2509,7 +2510,7 @@ describe("Template.render()", () => {
         const finallyCalledFor: number[] = [];
 
         const { fragment, dispose } = html`<div>
-          ${async function* (settled?: RenderedContent) {
+          ${async(async function* (settled?: RenderedContent) {
             const id = userId.value;
 
             try {
@@ -2523,7 +2524,7 @@ describe("Template.render()", () => {
             } finally {
               finallyCalledFor.push(id);
             }
-          }}
+          })}
         </div>`.render();
 
         document.body.appendChild(fragment);

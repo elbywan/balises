@@ -17,24 +17,12 @@ const FEATURES = [
     desc: "Only updates what changed, without virtual DOM overhead",
   },
   {
-    title: "Signals & computed",
-    desc: "Automatic dependency tracking with lazy evaluation",
-  },
-  {
-    title: "Async generators",
-    desc: "Progressive loading with automatic dependency restart",
-  },
-  {
-    title: "Keyed list rendering",
-    desc: "Efficient <code>each()</code> with DOM node recycling",
-  },
-  {
     title: "No build required",
     desc: "Works directly in browsers with ES modules",
   },
   {
-    title: "Non-recursive propagation",
-    desc: "Handles deep dependency chains without stack overflow",
+    title: "Async generators",
+    desc: "Progressive loading with automatic dependency restart",
   },
   {
     title: "Standalone signals",
@@ -74,9 +62,9 @@ const API_ITEMS = [
     desc: "Efficient keyed list rendering. Reuses DOM nodes when items are reordered.",
   },
   {
-    title: "async function* ()",
+    title: "async(fn)",
     code: "asyncgen",
-    desc: "Async generators for progressive loading. Automatically restarts when tracked signals change.",
+    desc: "Wrap async generators for progressive loading. Import from <code>balises/async</code>. Auto-restarts when tracked signals change.",
   },
   {
     title: "batch(fn)",
@@ -187,16 +175,19 @@ const CODE_EXAMPLES = {
     "${each(() => state.items, i => html`<li>${i}</li>`)}",
 
   asyncgen:
+    "// Import async wrapper (opt-in, ~500B extra)\n" +
+    'import { async } from "balises/async";\n' +
+    "\n" +
     "// Progressive loading with automatic restart\n" +
     "html`\n" +
-    "  ${async function* () {\n" +
+    "  ${async(async function* () {\n" +
     "    const id = userId.value; // Track dependency\n" +
     "\n" +
     "    yield html`<div>Loading...</div>`;\n" +
     "\n" +
     "    const user = await fetchUser(id);\n" +
     "    yield html`<div>${user.name}</div>`;\n" +
-    "  }}\n" +
+    "  })}\n" +
     "`\n" +
     "// Generator restarts when userId changes",
 
@@ -400,7 +391,7 @@ class DocsApp extends HTMLElement {
           <p>
             The recommended way to build UIs - plain functions that return
             templates. Pass the store directly to keep reactivity working.
-            Better for composition and future SSR support:
+            Better for composition and reusability:
           </p>
           <code-block data-code="composable"></code-block>
         </section>
@@ -409,7 +400,8 @@ class DocsApp extends HTMLElement {
         <section>
           <h2>Async Generators</h2>
           <p>
-            Progressive loading with automatic dependency tracking. The
+            Progressive loading with automatic dependency tracking. Import from
+            <code>balises/async</code> (opt-in to keep base bundle small). The
             generator restarts when any tracked signal changes:
           </p>
           <code-block data-code="asyncgen"></code-block>

@@ -8,9 +8,6 @@ import type { Signal } from "./signal.js";
 /** Callback function for subscribers */
 export type Subscriber = () => void;
 
-/** Reactive source type - either a Signal or Computed */
-type ReactiveSource = Signal<unknown> | Computed<unknown>;
-
 /** The currently executing computed (for dependency tracking) */
 export let context: Computed<unknown> | null = null;
 
@@ -109,82 +106,11 @@ export function registerDisposer(dispose: () => void): void {
   disposalStack?.at(-1)?.push(dispose);
 }
 
-/** Result of tracking dependencies during a function call */
-export interface TrackResult<T = unknown> {
-  /** The return value of the tracked function */
-  value: T;
-  /** Subscribe to dependency changes - returns unsubscribe function */
-  subscribe: (callback: () => void) => void;
-  /** Unsubscribe from all tracked dependencies */
-  unsubscribe: () => void;
-}
-
-/** Stack for tracking mode - collects accessed sources */
-let trackingStack: Array<Set<ReactiveSource>> | null = null;
-
-/** Check if we're currently in tracking mode */
-export function isTracking(): boolean {
-  return trackingStack !== null && trackingStack.length > 0;
-}
-
-/** Add a source to the current tracking context (if any) */
-export function addTrackedSource(source: ReactiveSource): void {
-  trackingStack?.at(-1)?.add(source);
-}
-
 /**
- * Track reactive dependencies accessed during a function call.
- * Returns the function result and allows subscribing to dependency changes.
- *
- * This is used for async generators to track dependencies before each await.
- *
- * @example
- * ```ts
- * const result = track(() => {
- *   return signal.value + computed.value; // These accesses are tracked
- * });
- *
- * result.subscribe(() => {
- *   console.log("Dependencies changed!");
- * });
- * ```
+ * Hook for tracking signal/computed accesses.
+ * Set by async.ts when track() is active to capture dependencies.
+ * Using an object wrapper so async.ts can mutate the current value.
  */
-export function track<T>(fn: () => T): TrackResult<T> {
-  const sources = new Set<ReactiveSource>();
-
-  // Push tracking context
-  if (!trackingStack) trackingStack = [];
-  trackingStack.push(sources);
-
-  let value: T;
-  try {
-    value = fn();
-  } finally {
-    // Pop tracking context
-    trackingStack.pop();
-    if (trackingStack.length === 0) trackingStack = null;
-  }
-
-  let unsubscribers: (() => void)[] = [];
-  let subscribed = false;
-
-  return {
-    value,
-    subscribe: (callback: () => void) => {
-      if (subscribed) return; // Only subscribe once
-      subscribed = true;
-
-      // Subscribe to all tracked sources
-      for (const source of sources) {
-        unsubscribers.push(source.subscribe(callback));
-      }
-    },
-    unsubscribe: () => {
-      for (const unsub of unsubscribers) {
-        unsub();
-      }
-      unsubscribers = [];
-      subscribed = false;
-    },
-  };
-}
+export const onTrack: {
+  current: ((source: Signal<unknown> | Computed<unknown>) => void) | null;
+} = { current: null };

@@ -65,7 +65,7 @@ document.body.appendChild(fragment);
 
 ## Function Components
 
-The recommended way to build UIs with balises is using function components - plain functions that receive props and return templates. This pattern is simpler than web components and works better with future SSR support.
+The recommended way to build UIs with balises is using function components - plain functions that receive props and return templates. This pattern is simpler than web components and better for composition.
 
 ```ts
 import { html, store } from "balises";
@@ -109,20 +109,22 @@ document.body.appendChild(fragment);
 | Shared state from parent | Self-contained state        |
 | No Shadow DOM needed     | Need style encapsulation    |
 | Quick composition        | Publishing packages         |
-| Better SSR compatibility | Browser-native lifecycle    |
 
 ## Async Generators
 
 Async generator functions provide a powerful pattern for handling loading states, progressive rendering, and async data flows. The generator automatically restarts when any tracked signal changes.
 
+**Note:** Async generators are opt-in via the `balises/async` import to keep the base bundle small (~3KB gzipped).
+
 ```ts
 import { html, signal } from "balises";
+import { async } from "balises/async";
 
 const userId = signal(1);
 
 html`
   <div class="user-profile">
-    ${async function* () {
+    ${async(async function* () {
       // Track dependencies - generator restarts when userId changes
       const id = userId.value;
 
@@ -139,7 +141,7 @@ html`
           <p>${user.email}</p>
         </div>
       `;
-    }}
+    })}
   </div>
 `.render();
 
@@ -152,6 +154,8 @@ userId.value = 2; // Shows loading, fetches user 2, renders
 Only show loading UI if the fetch takes longer than a threshold:
 
 ```ts
+import { async } from "balises/async";
+
 async function* loadData() {
   const id = itemId.value;
 
@@ -172,6 +176,9 @@ async function* loadData() {
     yield html`<div>${result.data.name}</div>`;
   }
 }
+
+// Use in template with async() wrapper
+html`${async(loadData)}`.render();
 ```
 
 ### When to Use Async Generators
@@ -196,14 +203,15 @@ async function* loadData() {
 When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM (enabling surgical updates via reactive bindings), return the `settled` argument:
 
 ```ts
-import { html, signal, store, type RenderedContent } from "balises";
+import { html, signal, store } from "balises";
+import { async, type RenderedContent } from "balises/async";
 
 const userId = signal(1);
 const state = store({ user: null, loading: false });
 
 html`
   <div class="user-profile">
-    ${async function* (settled?: RenderedContent) {
+    ${async(async function* (settled?: RenderedContent) {
       const id = userId.value; // Track dependency
 
       if (settled) {
@@ -228,7 +236,7 @@ html`
           >
         </div>
       `;
-    }}
+    })}
   </div>
 `.render();
 ```

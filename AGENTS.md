@@ -318,7 +318,7 @@ connectedCallback() {
 
 ### Function Component Patterns
 
-For lighter-weight composition without full web components, use **function components** that receive a store and return templates. This is the recommended approach for most UIs as it's simpler and works better with future SSR support:
+For lighter-weight composition without full web components, use **function components** that receive a store and return templates. This is the recommended approach for most UIs as it's simpler and better for composition:
 
 ```typescript
 // Define a function component - receives store, returns template
@@ -364,29 +364,35 @@ html`
 | Shared state from parent | Self-contained state        |
 | No Shadow DOM needed     | Need style encapsulation    |
 | Quick composition        | Publishing packages         |
-| Better SSR compatibility | Browser-native lifecycle    |
 
 ### Async Generator Patterns
 
-Async generator functions enable progressive loading and automatic dependency-driven restarts:
+Async generator functions enable progressive loading and automatic dependency-driven restarts. **Note:** Async generators are opt-in via the `balises/async` import to keep the base bundle small.
 
 ```typescript
+import { html, signal } from "balises";
+import { async } from "balises/async";
+
+const userId = signal(1);
+
 // Basic async generator - yields loading state, then content
 html`
-  ${async function* () {
+  ${async(async function* () {
     const id = userId.value; // Track dependency - restarts when userId changes
 
     yield html`<div class="loading">Loading...</div>`;
 
     const user = await fetchUser(id);
     yield html`<div class="user">${user.name}</div>`;
-  }}
+  })}
 `.render();
 ```
 
 **Progressive loading** (loading → content → posts):
 
 ```typescript
+import { async } from "balises/async";
+
 async function* loadUserProfile() {
   const id = userId.value; // Track dependency
 
@@ -410,6 +416,9 @@ async function* loadUserProfile() {
     </div>
   `;
 }
+
+// Use in template with async() wrapper
+html`${async(loadUserProfile)}`.render();
 ```
 
 **Key behaviors:**
@@ -452,7 +461,8 @@ async function* loadUser() {
 When a signal changes, the generator restarts. To preserve existing DOM instead of re-rendering, use the `settled` parameter:
 
 ```typescript
-import { html, signal, store, type RenderedContent } from "balises";
+import { html, signal, store } from "balises";
+import { async, type RenderedContent } from "balises/async";
 
 const userId = signal(1);
 const state = store({ user: null, loading: false, error: null });

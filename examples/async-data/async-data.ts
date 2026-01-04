@@ -8,7 +8,8 @@
  * - Progressive data loading (fetch user, then fetch posts)
  */
 
-import { html, signal, store, type RenderedContent } from "../../src/index.js";
+import { html, signal, store } from "../../src/index.js";
+import { async, type RenderedContent } from "../../src/async.js";
 
 // Types for JSONPlaceholder API
 interface User {
@@ -230,7 +231,7 @@ function UserProfilePreserved({
     `;
   }
 
-  return html`${loadUser}`;
+  return html`${async(loadUser)}`;
 }
 
 /**
@@ -245,7 +246,7 @@ function UserProfileProgressive({
 }: {
   userId: ReturnType<typeof signal<number>>;
 }) {
-  return html`${async function* () {
+  return html`${async(async function* () {
     const id = userId.value;
 
     yield html`
@@ -353,7 +354,7 @@ function UserProfileProgressive({
         </div>
       `;
     }
-  }}`;
+  })}`;
 }
 
 /**
