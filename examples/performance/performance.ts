@@ -192,14 +192,16 @@ export class PerformanceElement extends HTMLElement {
    */
   #reset = () => {
     this.#stop();
-    this.#cells.value.forEach((cell) => {
-      if (cell.type === "input") {
-        cell.value.value = 1;
-      }
+    batch(() => {
+      this.#cells.value.forEach((cell) => {
+        if (cell.type === "input") {
+          cell.value.value = 1;
+        }
+      });
+      this.#totalUpdates.value = 0;
+      this.#lastBenchmark.value = null;
+      this.#updatesPerSecond.value = 0;
     });
-    this.#totalUpdates.value = 0;
-    this.#lastBenchmark.value = null;
-    this.#updatesPerSecond.value = 0;
   };
 
   /**

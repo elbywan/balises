@@ -90,48 +90,49 @@ export class Computed<T> {
 
   /**
    * Mark this computed and all its dependents as dirty.
+   * Uses a two-phase approach to avoid cascading issues:
+   * 1. Mark all dependents as dirty (no subscriber calls)
+   * 2. Notify subscribers after all dirty flags are set
    * @internal
    */
   markDirty(): void {
     if (this.#dirty) return;
 
+    // Phase 1: Mark all dependents as dirty, collect subscribers
     const queue: Computed<unknown>[] = [this];
+    const toNotify: Array<{ c: Computed<unknown>; old: unknown }> = [];
+
     for (let i = 0; i < queue.length; i++) {
       const c = queue[i]!;
       if (c.#dirty) continue;
       c.#dirty = true;
 
+      // Propagate to all targets
       const targets = c.#targets;
-
-      // Short-circuit: if subs + targets + not batching, eagerly check if value changed
-      if (c.#subs.length && targets.length && c.#fn && !isBatching()) {
-        const old = c.#value;
-        c.#recompute();
-        if (!Object.is(c.#value, old)) {
-          for (let j = 0; j < targets.length; j++) {
-            const t = targets[j]!;
-            if (!t.#dirty) queue.push(t);
-          }
-          for (let j = 0; j < c.#subs.length; j++) c.#subs[j]!();
-        }
-      } else {
-        for (let j = 0; j < targets.length; j++) {
-          const t = targets[j]!;
-          if (!t.#dirty) queue.push(t);
-        }
-        if (c.#subs.length) {
-          const old = c.#value;
-          const notify = () => {
-            if (c.#fn) {
-              c.#recompute();
-              if (!Object.is(c.#value, old)) {
-                for (let j = 0; j < c.#subs.length; j++) c.#subs[j]!();
-              }
-            }
-          };
-          void (isBatching() ? enqueueBatchOne(notify) : notify());
-        }
+      for (let j = 0; j < targets.length; j++) {
+        const t = targets[j]!;
+        if (!t.#dirty) queue.push(t);
       }
+
+      // Collect computeds with subscribers for later notification
+      if (c.#subs.length && c.#fn) {
+        toNotify.push({ c, old: c.#value });
+      }
+    }
+
+    // Phase 2: Notify subscribers (after all dirty flags are set)
+    for (let i = 0; i < toNotify.length; i++) {
+      const { c, old } = toNotify[i]!;
+      const notify = () => {
+        if (c.#fn) {
+          c.#recompute();
+          if (!Object.is(c.#value, old)) {
+            const subs = c.#subs;
+            for (let j = 0; j < subs.length; j++) subs[j]!();
+          }
+        }
+      };
+      void (isBatching() ? enqueueBatchOne(notify) : notify());
     }
   }
 
