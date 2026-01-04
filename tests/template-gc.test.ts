@@ -11,10 +11,14 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { html, each } from "../src/template.js";
+import { html as baseHtml } from "../src/template.js";
+import eachPlugin, { each } from "../src/each.js";
 import { signal, store, effect, computed } from "../src/signals/index.js";
 import v8 from "node:v8";
 import vm from "node:vm";
+
+// Compose html with each plugin for these tests
+const html = baseHtml.with(eachPlugin);
 
 v8.setFlagsFromString("--expose-gc");
 const gc = vm.runInNewContext("gc") as () => void;

@@ -1,4 +1,7 @@
-import { html, signal, each, computed } from "../../src/index.js";
+import { html as baseHtml, signal, computed } from "../../src/index.js";
+import eachPlugin, { each } from "../../src/each.js";
+
+const html = baseHtml.with(eachPlugin);
 
 interface Todo {
   id: number;

@@ -8,19 +8,34 @@
  * - Property binding: .value=${signal} (sets DOM property, not attribute)
  * - Nested templates: ${html`<span>...</span>`}
  * - Arrays: ${items.map(i => html`<li>${i}</li>`)}
- * - Async generators: ${async function*() { yield html`...`; }}
+ *
+ * Extend with plugins via html.with(...plugins) for additional interpolation types.
  */
 
-import {
-  computed,
-  isSignal,
-  scope,
-  signal,
-  type Reactive,
-} from "./signals/index.js";
+import { computed, isSignal, scope, type Reactive } from "./signals/index.js";
 import { HTMLParser, type Attr } from "./parser.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Plugin that handles custom interpolation types.
+ * Return a bind function if this plugin handles the value, null otherwise.
+ * First plugin to return non-null wins.
+ */
+export interface InterpolationPlugin {
+  (
+    value: unknown,
+  ): ((marker: Comment, disposers: (() => void)[]) => void) | null;
+}
+
+/**
+ * Html template tag function with plugin composition.
+ */
+export interface HtmlTag {
+  (strings: TemplateStringsArray, ...values: unknown[]): Template;
+  /** Create a new html tag with additional plugins */
+  with(...plugins: InterpolationPlugin[]): HtmlTag;
+}
 
 /**
  * Create a computed that wraps function execution in a scope.
@@ -77,28 +92,12 @@ export class Template {
   constructor(
     private strings: TemplateStringsArray,
     private values: unknown[],
+    private plugins: InterpolationPlugin[] = [],
   ) {}
 
   /**
    * Parse template and create live DOM.
    * Returns the fragment and a dispose function to clean up subscriptions.
-   *
-   * @example
-   * ```ts
-   * const { fragment, dispose } = html`<div>Hello</div>`.render();
-   * document.body.appendChild(fragment);
-   *
-   * // For async content, use async generators:
-   * const { fragment, dispose } = html`
-   *   <div>
-   *     ${async function* () {
-   *       yield html`<span>Loading...</span>`;
-   *       const user = await fetchUser();
-   *       yield html`<span>${user.name}</span>`;
-   *     }}
-   *   </div>
-   * `.render();
-   * ```
    */
   render(): RenderResult {
     const fragment = document.createDocumentFragment();
@@ -106,6 +105,7 @@ export class Template {
     const stack: (Element | DocumentFragment)[] = [fragment];
     const parser = new HTMLParser();
     const values = this.values;
+    const plugins = this.plugins;
 
     const handleAttribute = (el: Element, [name, statics, indexes]: Attr) => {
       const idx0 = indexes[0];
@@ -171,6 +171,44 @@ export class Template {
       for (const s of reactives) disposers.push(s.subscribe(update));
     };
 
+    /**
+     * Bind dynamic content at a marker position.
+     * Tries plugins first (first match wins), then falls back to default handling.
+     */
+    const bindContent = (marker: Comment, value: unknown): (() => void) => {
+      // Try plugins first (first match wins)
+      for (const plugin of plugins) {
+        const binder = plugin(value);
+        if (binder) {
+          const pluginDisposers: (() => void)[] = [];
+          binder(marker, pluginDisposers);
+          return () => pluginDisposers.forEach((d) => d());
+        }
+      }
+
+      // Default handling
+      let nodes: Node[] = [];
+      let childDisposers: (() => void)[] = [];
+
+      const clear = () => {
+        childDisposers.forEach((d) => d());
+        childDisposers = [];
+        nodes.forEach((n) => (n as ChildNode).remove());
+        nodes = [];
+      };
+
+      const update = (v: unknown) => {
+        clear();
+        renderContent(marker, v, nodes, childDisposers);
+      };
+
+      const unsub = bind(value, update);
+      return () => {
+        unsub?.();
+        clear();
+      };
+    };
+
     parser.parseTemplate(this.strings, {
       onText: (text) => {
         stack.at(-1)!.append(text);
@@ -206,19 +244,11 @@ export class Template {
   }
 }
 
-/** Cached entry for a keyed list item */
-interface EachEntry {
-  item: unknown;
-  nodes: Node[];
-  dispose: () => void;
-}
-
 /**
  * Render content and insert nodes before marker.
  * Handles Templates, primitives, arrays.
- * @internal Exported for use by async.ts
  */
-export function renderContent(
+function renderContent(
   marker: Comment,
   v: unknown,
   nodes: Node[],
@@ -243,204 +273,32 @@ export function renderContent(
   }
 }
 
-/** Marker property for async generator descriptors (from async.ts) */
-const ASYNC_MARKER = "__asyncGen__";
-
-/** Async descriptor interface for detection */
-interface AsyncDescriptor {
-  readonly [key: string]: unknown;
-  __bind__(marker: Comment, disposers: (() => void)[]): void;
-}
-
 /**
- * Bind dynamic content at a marker position.
- * Handles primitives (as text), Templates (rendered), Each (keyed lists), arrays,
- * and async generator descriptors.
- *
- * null/undefined/boolean render nothing (enables conditional: ${cond && html`...`})
- *
- * Returns a dispose function to clean up subscriptions and remove nodes.
+ * Create an html tag function with the given plugins.
  */
-function bindContent(marker: Comment, value: unknown): () => void {
-  let nodes: Node[] = [];
-  let childDisposers: (() => void)[] = [];
+function createHtmlWithPlugins(plugins: InterpolationPlugin[]): HtmlTag {
+  const tag = ((strings: TemplateStringsArray, ...values: unknown[]) =>
+    new Template(strings, values, plugins)) as HtmlTag;
 
-  const clear = () => {
-    childDisposers.forEach((d) => d());
-    childDisposers = [];
-    nodes.forEach((n) => (n as ChildNode).remove());
-    nodes = [];
-  };
+  tag.with = (...morePlugins: InterpolationPlugin[]) =>
+    createHtmlWithPlugins([...plugins, ...morePlugins]);
 
-  // Handle async generator descriptors (from async.ts)
-  if (value != null && typeof value === "object" && ASYNC_MARKER in value) {
-    const disposers: (() => void)[] = [];
-    (value as unknown as AsyncDescriptor).__bind__(marker, disposers);
-    return () => disposers.forEach((d) => d());
-  }
-
-  // Handle each() - keyed list for efficient list rendering
-  if (value != null && typeof value === "object" && EACH in value) {
-    const cache = new Map<unknown, EachEntry>();
-    const { list, keyFn, renderFn, dispose } = value as EachDescriptor<unknown>;
-    let warned = 0;
-
-    const updateList = () => {
-      const parent = marker.parentNode!;
-      const items = list.value;
-      const newKeys = new Set<unknown>();
-      const newNodes: Node[] = [];
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]!;
-        const key = keyFn(item, i);
-
-        if (newKeys.has(key)) {
-          void (warned++ || console.warn("Duplicate key:", key));
-          continue; // Skip duplicate
-        }
-        newKeys.add(key);
-
-        let entry = cache.get(key);
-        if (!entry || entry.item !== item) {
-          // First time seeing this key, or item at this key changed → render template
-          if (entry) {
-            // Dispose old entry for this key
-            entry.nodes.forEach((n) => (n as ChildNode).remove());
-            entry.dispose();
-          }
-          const { fragment, dispose } = renderFn(item).render();
-          entry = { item, nodes: [...fragment.childNodes], dispose };
-          cache.set(key, entry);
-        }
-        newNodes.push(...entry.nodes);
-      }
-
-      // Remove nodes for deleted keys
-      for (const [key, entry] of cache) {
-        if (!newKeys.has(key)) {
-          entry.nodes.forEach((n) => (n as ChildNode).remove());
-          entry.dispose();
-          cache.delete(key);
-        }
-      }
-
-      // Reorder/insert nodes in correct order
-      let prevNode: Node = marker;
-      for (let i = newNodes.length - 1; i >= 0; i--) {
-        const node = newNodes[i]!;
-        if (node.nextSibling !== prevNode) {
-          parent.insertBefore(node, prevNode);
-        }
-        prevNode = node;
-      }
-
-      nodes = newNodes;
-    };
-
-    updateList();
-    const unsub = list.subscribe(updateList);
-
-    return () => {
-      unsub();
-      for (const entry of cache.values()) {
-        entry.dispose();
-      }
-      cache.clear();
-      nodes.forEach((n) => (n as ChildNode).remove());
-      dispose?.();
-    };
-  }
-
-  // Sync update function for reactive values
-  const update = (v: unknown) => {
-    clear();
-    renderContent(marker, v, nodes, childDisposers);
-  };
-
-  const unsub = bind(value, update);
-  return () => {
-    unsub?.();
-    clear();
-  };
+  return tag;
 }
-
-/** Tagged template literal for creating reactive HTML templates */
-export const html = (strings: TemplateStringsArray, ...values: unknown[]) =>
-  new Template(strings, values);
-
-/** Marker symbol for keyed list objects */
-const EACH = Symbol();
-
-/** Keyed list descriptor */
-interface EachDescriptor<T> {
-  [EACH]: true;
-  list: Reactive<T[]>;
-  keyFn: (item: T, index: number) => unknown;
-  renderFn: (item: T) => Template;
-  dispose?: (() => void) | undefined;
-}
-
-/** List input type - accepts arrays, reactive arrays, or getter functions */
-type ListInput<T> = T[] | Reactive<T[]> | (() => T[]);
 
 /**
- * Efficient keyed list rendering.
+ * Tagged template literal for creating reactive HTML templates.
+ * Use .with(...plugins) to add interpolation handlers like each() or async generators.
  *
- * Caches templates by key, only re-rendering when items are added/removed.
- * For content updates within items, use nested signals:
- *
+ * @example
  * ```ts
- * const items = signal([
- *   { id: 1, name: signal("Alice") },
- *   { id: 2, name: signal("Bob") },
- * ]);
+ * import { html } from "balises";
+ * import eachPlugin, { each } from "balises/each";
+ * import asyncPlugin from "balises/async";
  *
- * // With explicit key (recommended when items may have same reference after re-fetch)
- * html`<ul>${each(items, i => i.id, i => html`<li>${i.name}</li>`)}</ul>`
+ * const html = baseHtml.with(eachPlugin, asyncPlugin);
  *
- * // Without key (uses object reference for objects, index for primitives)
- * html`<ul>${each(items, i => html`<li>${i.name}</li>`)}</ul>`
- *
- * // With getter function (useful with stores)
- * html`<ul>${each(() => state.items, i => html`<li>${i.name}</li>`)}</ul>`
- *
- * // With plain array (static, won't react to changes)
- * html`<ul>${each(["a", "b", "c"], i => html`<li>${i}</li>`)}</ul>`
+ * html`<div>${async function* () { ... }}</div>`.render();
  * ```
  */
-export function each<T>(
-  list: ListInput<T>,
-  renderFn: (item: T) => Template,
-): EachDescriptor<T>;
-export function each<T>(
-  list: ListInput<T>,
-  keyFn: (item: T, index: number) => unknown,
-  renderFn: (item: T) => Template,
-): EachDescriptor<T>;
-export function each<T>(
-  list: ListInput<T>,
-  keyFnOrRenderFn:
-    | ((item: T, index: number) => unknown)
-    | ((item: T) => Template),
-  renderFn?: (item: T) => Template,
-): EachDescriptor<T> {
-  // Two-arg form: each(list, renderFn) - use object ref for objects, index for primitives
-  const keyFn = renderFn
-    ? (keyFnOrRenderFn as (item: T, index: number) => unknown)
-    : (item: T, index: number) => (Object(item) === item ? item : index);
-
-  // Normalize list to reactive, track dispose if we created a computed
-  const c = typeof list === "function" ? computed(list) : null;
-  const reactiveList: Reactive<T[]> = Array.isArray(list)
-    ? signal(list)
-    : (c ?? (list as Reactive<T[]>));
-
-  return {
-    [EACH]: true,
-    list: reactiveList,
-    keyFn,
-    renderFn: renderFn ?? (keyFnOrRenderFn as (item: T) => Template),
-    dispose: c ? () => c.dispose() : undefined,
-  };
-}
+export const html: HtmlTag = createHtmlWithPlugins([]);

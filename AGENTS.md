@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-**Balises** is a minimal reactive HTML templating library (~3.0KB gzipped) for building websites and web components. It provides:
+**Balises** is a minimal reactive HTML templating library (~2.8KB gzipped) for building websites and web components. It provides:
 
 - **Reactive signals system** - standalone reactivity (can be used without DOM)
 - **HTML templating** - tagged template literals with reactive bindings
@@ -153,6 +153,7 @@ The library has multiple export points for tree-shaking:
 
 **Keyed list rendering (`each()`):**
 
+- Opt-in via `balises/each` import, enabled with `html.with(eachPlugin)`
 - Efficiently renders lists with keys to avoid recreating DOM
 - Caches templates by key
 - Two signatures:
@@ -367,31 +368,36 @@ html`
 
 ### Async Generator Patterns
 
-Async generator functions enable progressive loading and automatic dependency-driven restarts. **Note:** Async generators are opt-in via the `balises/async` import to keep the base bundle small.
+Async generator functions enable progressive loading and automatic dependency-driven restarts. **Note:** Async generators are opt-in via the `balises/async` import to keep the base bundle small. Use `html.with(asyncPlugin)` to enable async generator support.
 
 ```typescript
-import { html, signal } from "balises";
-import { async } from "balises/async";
+import { html as baseHtml, signal } from "balises";
+import asyncPlugin from "balises/async";
 
+const html = baseHtml.with(asyncPlugin);
 const userId = signal(1);
 
 // Basic async generator - yields loading state, then content
+// No wrapper needed - async generator functions are auto-detected
 html`
-  ${async(async function* () {
+  ${async function* () {
     const id = userId.value; // Track dependency - restarts when userId changes
 
     yield html`<div class="loading">Loading...</div>`;
 
     const user = await fetchUser(id);
     yield html`<div class="user">${user.name}</div>`;
-  })}
+  }}
 `.render();
 ```
 
 **Progressive loading** (loading → content → posts):
 
 ```typescript
-import { async } from "balises/async";
+import { html as baseHtml, signal } from "balises";
+import asyncPlugin from "balises/async";
+
+const html = baseHtml.with(asyncPlugin);
 
 async function* loadUserProfile() {
   const id = userId.value; // Track dependency
@@ -417,8 +423,8 @@ async function* loadUserProfile() {
   `;
 }
 
-// Use in template with async() wrapper
-html`${async(loadUserProfile)}`.render();
+// Async generator functions are auto-detected - no wrapper needed
+html`${loadUserProfile}`.render();
 ```
 
 **Key behaviors:**
@@ -461,8 +467,10 @@ async function* loadUser() {
 When a signal changes, the generator restarts. To preserve existing DOM instead of re-rendering, use the `settled` parameter:
 
 ```typescript
-import { html, signal, store } from "balises";
-import { async, type RenderedContent } from "balises/async";
+import { html as baseHtml, signal, store } from "balises";
+import asyncPlugin, { type RenderedContent } from "balises/async";
+
+const html = baseHtml.with(asyncPlugin);
 
 const userId = signal(1);
 const state = store({ user: null, loading: false, error: null });
@@ -664,7 +672,7 @@ html`<svg><circle r="10" /></svg>`;
 
 ### Bundle Size
 
-- Full library: ~3.0KB gzipped
+- Full library: ~2.8KB gzipped
 - Signals only: ~1.5KB gzipped
 - CI warns if IIFE bundle exceeds 3500 bytes gzipped
 

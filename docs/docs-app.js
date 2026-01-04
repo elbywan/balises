@@ -59,12 +59,12 @@ const API_ITEMS = [
   {
     title: "each(list, keyFn?, renderFn)",
     code: "each",
-    desc: "Efficient keyed list rendering. Reuses DOM nodes when items are reordered.",
+    desc: "Efficient keyed list rendering. Import from <code>balises/each</code> and use <code>html.with(eachPlugin)</code>.",
   },
   {
-    title: "async(fn)",
+    title: "async function* ()",
     code: "asyncgen",
-    desc: "Wrap async generators for progressive loading. Import from <code>balises/async</code>. Auto-restarts when tracked signals change.",
+    desc: "Async generators for progressive loading. Import from <code>balises/async</code> and use <code>html.with(asyncPlugin)</code>. Auto-restarts when tracked signals change.",
   },
   {
     title: "batch(fn)",
@@ -165,6 +165,11 @@ const CODE_EXAMPLES = {
     "const { fragment, dispose } = tmpl.render();",
 
   each:
+    "// Import and enable the each plugin\n" +
+    'import { html as baseHtml } from "balises";\n' +
+    'import eachPlugin, { each } from "balises/each";\n' +
+    "const html = baseHtml.with(eachPlugin);\n" +
+    "\n" +
     "// With key function (recommended)\n" +
     "${each(items, i => i.id, i => html`<li>${i.name}</li>`)}\n" +
     "\n" +
@@ -175,21 +180,46 @@ const CODE_EXAMPLES = {
     "${each(() => state.items, i => html`<li>${i}</li>`)}",
 
   asyncgen:
-    "// Import async wrapper (opt-in, ~500B extra)\n" +
-    'import { async } from "balises/async";\n' +
+    "// Import and enable the async plugin\n" +
+    'import { html as baseHtml } from "balises";\n' +
+    'import asyncPlugin from "balises/async";\n' +
+    "const html = baseHtml.with(asyncPlugin);\n" +
     "\n" +
     "// Progressive loading with automatic restart\n" +
     "html`\n" +
-    "  ${async(async function* () {\n" +
+    "  ${async function* () {\n" +
     "    const id = userId.value; // Track dependency\n" +
     "\n" +
     "    yield html`<div>Loading...</div>`;\n" +
     "\n" +
     "    const user = await fetchUser(id);\n" +
     "    yield html`<div>${user.name}</div>`;\n" +
-    "  })}\n" +
+    "  }}\n" +
     "`\n" +
     "// Generator restarts when userId changes",
+
+  settled:
+    "// Use 'settled' to preserve DOM on restart\n" +
+    "const state = store({ user: null, loading: false });\n" +
+    "\n" +
+    "async function* loadUser(settled) {\n" +
+    "  const id = userId.value; // Track dependency\n" +
+    "\n" +
+    "  state.loading = true;\n" +
+    "  state.user = await fetchUser(id);\n" +
+    "  state.loading = false;\n" +
+    "\n" +
+    "  // On restart: preserve existing DOM\n" +
+    "  if (settled) return settled;\n" +
+    "\n" +
+    "  // First load: render with reactive bindings\n" +
+    "  return html`\n" +
+    '    <div class="profile">\n' +
+    "      <h2>${() => state.user?.name}</h2>\n" +
+    '      <span class="loader" .hidden=${() => !state.loading} />\n' +
+    "    </div>\n" +
+    "  `;\n" +
+    "}",
 
   batch:
     "batch(() => {\n" +
@@ -405,12 +435,19 @@ class DocsApp extends HTMLElement {
             generator restarts when any tracked signal changes:
           </p>
           <code-block data-code="asyncgen"></code-block>
+          <br />
           <p class="note">
             <strong>Tip:</strong> Use async generators for loading states and
             structural transitions. For surgical updates within a stable DOM
             structure, use reactive bindings like
             <code>\${() => state.value}</code>.
           </p>
+          <br />
+          <p>
+            Use the <code>settled</code> parameter to preserve DOM on restarts,
+            letting reactive bindings handle updates instead of re-rendering:
+          </p>
+          <code-block data-code="settled"></code-block>
         </section>
 
         <!-- API Section (data-driven) -->

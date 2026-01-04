@@ -1,9 +1,12 @@
-import { html, signal, computed, each, batch } from "../../src/index.js";
+import { html as baseHtml, signal, computed, batch } from "../../src/index.js";
+import eachPlugin, { each } from "../../src/each.js";
 import type { Cell } from "./types.js";
 import { CellFactory } from "./cell-factory.js";
 import { GridCell } from "./components/grid-cell.js";
 import { MetricCard } from "./components/metric-card.js";
 import { ControlGroup } from "./components/control-group.js";
+
+const html = baseHtml.with(eachPlugin);
 
 /**
  * Performance demo showcasing surgical reactivity with computed values

@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library for building websites and web components. ~3.0KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~2.8KB gzipped.
 
 Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
 
@@ -95,158 +95,80 @@ const { fragment, dispose } = html`
 document.body.appendChild(fragment);
 ```
 
-**Key principles:**
+Pass the store itself (not individual values) so reactivity works.
 
-1. **Pass the store, not values** - The store is a stable reference; accessing `state.property` inside function wrappers tracks dependencies
-2. **Use function wrappers for reactivity** - `${() => state.count}` creates a computed that updates when `state.count` changes
-3. **Event handlers as props** - Pass callbacks for actions, keeping logic in the parent
-
-### When to use Function Components vs Web Components
-
-| Function Components      | Web Components              |
-| ------------------------ | --------------------------- |
-| Internal UI composition  | Reusable standalone widgets |
-| Shared state from parent | Self-contained state        |
-| No Shadow DOM needed     | Need style encapsulation    |
-| Quick composition        | Publishing packages         |
+Wrap expressions in functions like `${() => state.count}` to track dependencies.
 
 ## Async Generators
 
-Async generator functions provide a powerful pattern for handling loading states, progressive rendering, and async data flows. The generator automatically restarts when any tracked signal changes.
+Async generator functions handle loading states and async data flows. The generator automatically restarts when any tracked signal changes.
 
-**Note:** Async generators are opt-in via the `balises/async` import to keep the base bundle small (~3KB gzipped).
+**Note:** Async generators are opt-in via `balises/async` to keep the base bundle small.
 
 ```ts
-import { html, signal } from "balises";
-import { async } from "balises/async";
+import { html as baseHtml, signal } from "balises";
+import asyncPlugin from "balises/async";
 
+const html = baseHtml.with(asyncPlugin);
 const userId = signal(1);
 
 html`
-  <div class="user-profile">
-    ${async(async function* () {
-      // Track dependencies - generator restarts when userId changes
-      const id = userId.value;
+  ${async function* () {
+    const id = userId.value; // Track dependency - restarts when userId changes
 
-      // Show loading state
-      yield html`<div class="skeleton">Loading...</div>`;
+    yield html`<div class="loading">Loading...</div>`;
 
-      // Fetch data
-      const user = await fetch(`/api/users/${id}`).then((r) => r.json());
-
-      // Show final content
-      yield html`
-        <div class="profile">
-          <h2>${user.name}</h2>
-          <p>${user.email}</p>
-        </div>
-      `;
-    })}
-  </div>
+    const user = await fetch(`/api/users/${id}`).then((r) => r.json());
+    yield html`<div class="profile">${user.name}</div>`;
+  }}
 `.render();
 
-// Changing userId automatically restarts the generator
-userId.value = 2; // Shows loading, fetches user 2, renders
+// Changing userId restarts the generator automatically
+userId.value = 2;
 ```
 
-### Progressive Loading with Delayed Skeleton
-
-Only show loading UI if the fetch takes longer than a threshold:
-
-```ts
-import { async } from "balises/async";
-
-async function* loadData() {
-  const id = itemId.value;
-
-  const fetchPromise = fetch(`/api/items/${id}`).then((r) => r.json());
-  const delay = new Promise((r) => setTimeout(r, 300));
-
-  // Race between data and timeout
-  const result = await Promise.race([
-    fetchPromise.then((data) => ({ type: "data", data })),
-    delay.then(() => ({ type: "timeout" })),
-  ]);
-
-  if (result.type === "timeout") {
-    yield html`<div class="skeleton">Loading...</div>`;
-    const data = await fetchPromise;
-    yield html`<div>${data.name}</div>`;
-  } else {
-    yield html`<div>${result.data.name}</div>`;
-  }
-}
-
-// Use in template with async() wrapper
-html`${async(loadData)}`.render();
-```
-
-### When to Use Async Generators
-
-**Good fit:**
-
-- Loading → Content → Error state transitions
-- Progressive data loading (show partial results)
-- Streaming or chunked content
-- Cases where you want to **replace** content at each step
-
-**Not ideal for:**
-
-- Stable DOM structures with changing data (use reactive bindings instead)
-- High-frequency updates where DOM stability matters
-- Simple conditionals (use `${() => condition ? a : b}` instead)
-
-**Key insight:** Async generators replace the entire yielded content on each yield. For surgical updates within a stable structure, use reactive bindings (`${() => state.value}`) which only update the specific text nodes or attributes that changed.
+Async generators replace the entire yielded content on each yield. For surgical updates within a stable DOM structure, use reactive bindings (`${() => state.value}`) instead.
 
 ### DOM Preservation on Restart
 
-When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM (enabling surgical updates via reactive bindings), return the `settled` argument:
+When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM and enable surgical updates via reactive bindings, return the `settled` parameter:
 
 ```ts
-import { html, signal, store } from "balises";
-import { async, type RenderedContent } from "balises/async";
+import { html as baseHtml, signal, store } from "balises";
+import asyncPlugin, { type RenderedContent } from "balises/async";
 
+const html = baseHtml.with(asyncPlugin);
 const userId = signal(1);
 const state = store({ user: null, loading: false });
 
 html`
-  <div class="user-profile">
-    ${async(async function* (settled?: RenderedContent) {
-      const id = userId.value; // Track dependency
+  ${async function* (settled?: RenderedContent) {
+    const id = userId.value;
 
-      if (settled) {
-        // Restart: update state, keep existing DOM
-        state.loading = true;
-        const user = await fetch(`/api/users/${id}`).then((r) => r.json());
-        state.user = user;
-        state.loading = false;
-        return settled; // Preserve DOM!
-      }
-
-      // First load: render with reactive bindings
-      yield html`<div class="skeleton">Loading...</div>`;
+    if (settled) {
+      // Restart: update state, preserve existing DOM
+      state.loading = true;
       const user = await fetch(`/api/users/${id}`).then((r) => r.json());
       state.user = user;
-      return html`
-        <div class="profile">
-          <h2>${() => state.user?.name}</h2>
-          <p>${() => state.user?.email}</p>
-          <span class="status"
-            >${() => (state.loading ? "Updating..." : "")}</span
-          >
-        </div>
-      `;
-    })}
-  </div>
+      state.loading = false;
+      return settled;
+    }
+
+    // First load: render with reactive bindings
+    yield html`<div class="skeleton">Loading...</div>`;
+    const user = await fetch(`/api/users/${id}`).then((r) => r.json());
+    state.user = user;
+    return html`
+      <div class="profile">
+        <h2>${() => state.user?.name}</h2>
+        <span>${() => (state.loading ? "Updating..." : "")}</span>
+      </div>
+    `;
+  }}
 `.render();
 ```
 
-The `settled` parameter:
-
-- Is `undefined` on first run
-- Contains an opaque handle to the previous render on restarts
-- When returned, preserves the existing DOM nodes and reactive bindings
-- Enables surgical updates via reactive bindings instead of full re-renders
+The `settled` parameter is `undefined` on first run, and contains an opaque handle to the previous render on restarts. Returning it preserves existing DOM nodes and reactive bindings.
 
 ## Web Components
 
@@ -342,10 +264,15 @@ html`
 
 ### Efficient List Rendering with `each()`
 
-When rendering lists that change frequently, use `each()` for keyed reconciliation. It caches templates by key so items can be reordered, added, or removed without recreating the DOM nodes:
+When rendering lists that change frequently, use `each()` for keyed reconciliation. It caches templates by key so items can be reordered, added, or removed without recreating the DOM nodes.
+
+**Note:** The `each()` function is opt-in via the `balises/each` import to keep the base bundle small. Use `html.with(eachPlugin)` to enable keyed list support.
 
 ```ts
-import { html, signal, each } from "balises";
+import { html as baseHtml, signal } from "balises";
+import eachPlugin, { each } from "balises/each";
+
+const html = baseHtml.with(eachPlugin);
 
 const items = signal([
   { id: 1, name: signal("Alice") },
@@ -586,7 +513,7 @@ doubled.dispose(); // Stops tracking, frees memory
 You can import just what you need to keep bundle size down:
 
 ```ts
-// Full library (~3.0KB gzipped)
+// Full library (~2.8KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
 // Signals only (no HTML templating - use in any JS project)
@@ -598,6 +525,31 @@ import { computed } from "balises/signals/computed";
 import { effect } from "balises/signals/effect";
 import { store } from "balises/signals/store";
 import { batch, scope } from "balises/signals/context";
+```
+
+### Template Plugins
+
+The `each()` and async generator features are provided as opt-in plugins to keep the base bundle minimal. Use `html.with()` to compose plugins:
+
+```ts
+// With each() support for keyed lists
+import { html as baseHtml } from "balises";
+import eachPlugin, { each } from "balises/each";
+
+const html = baseHtml.with(eachPlugin);
+
+// With async generator support
+import { html as baseHtml } from "balises";
+import asyncPlugin from "balises/async";
+
+const html = baseHtml.with(asyncPlugin);
+
+// With both plugins
+import { html as baseHtml } from "balises";
+import eachPlugin, { each } from "balises/each";
+import asyncPlugin from "balises/async";
+
+const html = baseHtml.with(eachPlugin, asyncPlugin);
 ```
 
 ### Using as a Standalone Signals Library

@@ -2,9 +2,12 @@
  * Team Selection Component - Choose Pokemon for your battle team
  */
 
-import { html, each } from "../../../src/index.js";
+import { html as baseHtml } from "../../../src/index.js";
+import eachPlugin, { each } from "../../../src/each.js";
 import type { BattleState, Pokemon } from "../types.js";
 import type { BattleTranslations } from "../utils/battle-translations.js";
+
+const html = baseHtml.with(eachPlugin);
 
 /** Stat name abbreviations for display */
 const STAT_ABBREV: Record<string, string> = {

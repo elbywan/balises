@@ -1,4 +1,9 @@
-export { html, each, type Template } from "./template.js";
+export {
+  html,
+  type HtmlTag,
+  type InterpolationPlugin,
+  type Template,
+} from "./template.js";
 export {
   signal,
   computed,

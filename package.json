@@ -56,6 +56,10 @@
     "./async": {
       "import": "./dist/esm/async.js",
       "types": "./dist/esm/async.d.ts"
+    },
+    "./each": {
+      "import": "./dist/esm/each.js",
+      "types": "./dist/esm/each.d.ts"
     }
   },
   "scripts": {

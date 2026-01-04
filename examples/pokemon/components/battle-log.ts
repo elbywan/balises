@@ -2,8 +2,11 @@
  * Battle Log Component - Displays battle messages with scrolling
  */
 
-import { html, each } from "../../../src/index.js";
+import { html as baseHtml } from "../../../src/index.js";
+import eachPlugin, { each } from "../../../src/each.js";
 import type { BattleLogEntry } from "../types.js";
+
+const html = baseHtml.with(eachPlugin);
 
 export interface BattleLogProps {
   entries: () => BattleLogEntry[];

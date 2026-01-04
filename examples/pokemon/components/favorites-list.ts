@@ -2,9 +2,12 @@
  * FavoritesList Component - Display and manage favorite Pokemon
  */
 
-import { html, each } from "../../../src/index.js";
+import { html as baseHtml } from "../../../src/index.js";
+import eachPlugin, { each } from "../../../src/each.js";
 import type { FavoritePokemon, SharedAppState } from "../types.js";
 import type { PokedexTranslations } from "../utils/pokedex-translations.js";
+
+const html = baseHtml.with(eachPlugin);
 
 export interface FavoritesListProps {
   sharedState: SharedAppState;

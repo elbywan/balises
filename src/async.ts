@@ -7,23 +7,25 @@
  *
  * @example
  * ```ts
- * import { html, signal } from "balises";
- * import { async } from "balises/async";
+ * import { html as baseHtml, signal } from "balises";
+ * import asyncPlugin from "balises/async";
  *
+ * const html = baseHtml.with(asyncPlugin);
  * const userId = signal(1);
  *
- * html`<div>${async(async function* () {
+ * // Async generators are auto-detected - no wrapper needed!
+ * html`<div>${async function* () {
  *   yield html`<span>Loading user ${userId.value}...</span>`;
  *   const user = await fetchUser(userId.value);
  *   return html`<span>${user.name}</span>`;
- * })}</div>`;
+ * }}</div>`.render();
  * ```
  */
 
 import { onTrack, type Subscriber } from "./signals/context.js";
+import { Template, type InterpolationPlugin } from "./template.js";
 import type { Computed } from "./signals/computed.js";
 import type { Signal } from "./signals/signal.js";
-import { renderContent } from "./template.js";
 
 /** Reactive source type */
 type ReactiveSource = Signal<unknown> | Computed<unknown>;
@@ -37,9 +39,9 @@ type ReactiveSource = Signal<unknown> | Computed<unknown>;
  *
  * @example
  * ```ts
- * import { async, type RenderedContent } from "balises/async";
+ * import asyncPlugin, { type RenderedContent } from "balises/async";
  *
- * async(async function* (settled?: RenderedContent) {
+ * async function* loadUser(settled?: RenderedContent) {
  *   const id = userId.value; // Track dependency
  *
  *   if (settled) {
@@ -54,7 +56,7 @@ type ReactiveSource = Signal<unknown> | Computed<unknown>;
  *   const user = await fetchUser(id);
  *   state.user = user;
  *   return UserCard({ state });
- * });
+ * }
  * ```
  */
 export interface RenderedContent {
@@ -73,63 +75,62 @@ type AsyncGenFn = (
   settled?: RenderedContent,
 ) => AsyncGenerator<unknown, unknown, unknown>;
 
-/** Marker property for async generator descriptors */
-const ASYNC_MARKER = "__asyncGen__";
-
-/** Async generator descriptor - returned by async() */
-export interface AsyncDescriptor {
-  readonly [ASYNC_MARKER]: true;
-  /** @internal Bind the async generator to a DOM position */
-  __bind__(marker: Comment, disposers: (() => void)[]): void;
+/**
+ * Check if a value is an async generator function.
+ */
+function isAsyncGeneratorFunction(
+  value: unknown,
+): value is AsyncGeneratorFunction {
+  if (typeof value !== "function") return false;
+  const constructor = value.constructor;
+  return (
+    constructor &&
+    (constructor.name === "AsyncGeneratorFunction" ||
+      // Check prototype chain for async generator
+      Object.prototype.toString.call(constructor.prototype) ===
+        "[object AsyncGeneratorFunction]")
+  );
 }
-
-// Re-export marker for template.ts detection
-export { ASYNC_MARKER };
 
 /**
- * Wrap an async generator function for use in templates.
- *
- * The generator function:
- * - Can yield content progressively (loading states)
- * - Automatically tracks signal dependencies accessed before each yield
- * - Restarts when those dependencies change
- * - Receives previous settled content for DOM preservation on restart
- *
- * @example
- * ```ts
- * import { html, signal } from "balises";
- * import { async } from "balises/async";
- *
- * const userId = signal(1);
- *
- * // Basic usage - loading state then content
- * html`${async(async function* () {
- *   yield html`<div>Loading...</div>`;
- *   const data = await fetchData(userId.value);
- *   return html`<div>${data.name}</div>`;
- * })}`;
- *
- * // With DOM preservation on restart
- * html`${async(async function* (settled) {
- *   const id = userId.value;
- *   if (settled) {
- *     state.data = await fetchData(id);
- *     return settled; // Keep existing DOM
- *   }
- *   yield html`<div>Loading...</div>`;
- *   state.data = await fetchData(id);
- *   return html`<div>${() => state.data.name}</div>`;
- * })}`;
- * ```
+ * Render content and insert nodes before marker.
+ * Handles Templates and primitives.
  */
-export function async(fn: AsyncGenFn): AsyncDescriptor {
-  return {
-    [ASYNC_MARKER]: true as const,
-    __bind__(marker: Comment, disposers: (() => void)[]) {
-      bindAsyncGenerator(fn, marker, disposers);
-    },
-  };
+function insertContent(
+  marker: Comment,
+  value: unknown,
+  nodes: Node[],
+  disposers: (() => void)[],
+): void {
+  const parent = marker.parentNode!;
+
+  for (const item of Array.isArray(value) ? value : [value]) {
+    if (item instanceof Template) {
+      const { fragment, dispose } = item.render();
+      disposers.push(dispose);
+      nodes.push(...fragment.childNodes);
+      parent.insertBefore(fragment, marker);
+    } else if (item != null && typeof item !== "boolean") {
+      const node = document.createTextNode(String(item));
+      nodes.push(node);
+      parent.insertBefore(node, marker);
+    }
+  }
 }
+
+/**
+ * Plugin that handles async generator functions.
+ * Auto-detects `async function*` without needing a wrapper.
+ */
+const asyncPlugin: InterpolationPlugin = (value) => {
+  if (!isAsyncGeneratorFunction(value)) return null;
+
+  return (marker, disposers) => {
+    bindAsyncGenerator(value as AsyncGenFn, marker, disposers);
+  };
+};
+
+export default asyncPlugin;
 
 /** Result of tracking dependencies during a function call */
 interface TrackResult<T> {
@@ -220,7 +221,7 @@ function bindAsyncGenerator(
 
   const render = (value: unknown) => {
     clearNodes();
-    renderContent(marker, value, currentNodes, childDisposers);
+    insertContent(marker, value, currentNodes, childDisposers);
   };
 
   const runGenerator = async () => {

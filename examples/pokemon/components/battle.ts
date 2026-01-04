@@ -3,8 +3,11 @@
  * Refactored from PokemonBattleElement to be a function component
  */
 
-import { html, each } from "../../../src/index.js";
+import { html as baseHtml } from "../../../src/index.js";
+import eachPlugin, { each } from "../../../src/each.js";
 import { DEFAULT_ROSTER_IDS } from "../utils/storage.js";
+
+const html = baseHtml.with(eachPlugin);
 import type {
   Pokemon,
   BattleState,
