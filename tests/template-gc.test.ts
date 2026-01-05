@@ -325,7 +325,7 @@ describe("Template GC after dispose()", () => {
         ${each(
           items,
           (i) => i,
-          (item) => html`<li>${item}</li>`,
+          (item) => html`<li>${item.value}</li>`,
         )}
       </ul>`.render();
 
@@ -353,7 +353,7 @@ describe("Template GC after dispose()", () => {
           ${each(
             () => [1, 2, 3].map((n) => n * multiplier.value),
             (i) => i,
-            (item) => html`<li>${item}</li>`,
+            (item) => html`<li>${item.value}</li>`,
           )}
         </ul>`.render();
         // When using a getter, each() creates a computed
@@ -380,7 +380,7 @@ describe("Template GC after dispose()", () => {
           ${each(
             items,
             (i) => i.id,
-            (item) => html`<li>${() => item.name.value}</li>`,
+            (item) => html`<li>${() => item.value.name.value}</li>`,
           )}
         </ul>`.render();
 
@@ -413,9 +413,9 @@ describe("Template GC after dispose()", () => {
           (row) =>
             html`<div>
               ${each(
-                row,
+                () => row.value,
                 (cell, j) => j,
-                (cell) => html`<span>${cell}</span>`,
+                (cell) => html`<span>${cell.value}</span>`,
               )}
             </div>`,
         )}
@@ -985,7 +985,7 @@ describe("Template GC after dispose()", () => {
         ${each(
           items,
           (i) => i,
-          (item) => html`<li>${item}</li>`,
+          (item) => html`<li>${item.value}</li>`,
         )}
       </ul>`.render();
 

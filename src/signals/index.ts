@@ -6,13 +6,13 @@
  * dependency checks without complex linked-list structures.
  */
 
-export { Signal, signal } from "./signal.js";
+export { Signal, signal, ReadonlySignal } from "./signal.js";
 export { Computed, computed } from "./computed.js";
 export { effect } from "./effect.js";
 export { store } from "./store.js";
 export { batch, scope, type Subscriber } from "./context.js";
 
-import { Signal } from "./signal.js";
+import { Signal, ReadonlySignal } from "./signal.js";
 import { Computed } from "./computed.js";
 
 /** Common interface for reactive values (Signal or Computed). */
@@ -23,4 +23,6 @@ export interface Reactive<T> {
 
 /** Check if a value is a reactive signal or computed. @internal */
 export const isSignal = (value: unknown): value is Reactive<unknown> =>
-  value instanceof Signal || value instanceof Computed;
+  value instanceof Signal ||
+  value instanceof Computed ||
+  value instanceof ReadonlySignal;

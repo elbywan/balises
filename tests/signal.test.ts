@@ -1758,3 +1758,143 @@ describe("Signal.update", () => {
     assert.strictEqual(s.value, 3); // (1 + 1) * 2 - 1 = 3
   });
 });
+
+describe("Signal.peek", () => {
+  it("should return current value without tracking", () => {
+    const s = signal(42);
+    assert.strictEqual(s.peek(), 42);
+  });
+
+  it("should not create dependency in computed", () => {
+    const a = signal(1);
+    const b = signal(2);
+    let computeCount = 0;
+
+    const result = computed(() => {
+      computeCount++;
+      // Use peek for 'a', regular access for 'b'
+      return a.peek() + b.value;
+    });
+
+    assert.strictEqual(result.value, 3);
+    assert.strictEqual(computeCount, 1);
+
+    // Changing 'a' should NOT trigger recomputation (used peek)
+    a.value = 10;
+    assert.strictEqual(result.value, 3); // Still old value (not recomputed)
+    assert.strictEqual(computeCount, 1);
+
+    // Changing 'b' SHOULD trigger recomputation
+    b.value = 5;
+    assert.strictEqual(result.value, 15); // Now uses current a.value (10) + b.value (5)
+    assert.strictEqual(computeCount, 2);
+  });
+
+  it("should not create dependency in effect", () => {
+    const a = signal(1);
+    const b = signal(2);
+    let effectCount = 0;
+    let lastSum = 0;
+
+    const dispose = effect(() => {
+      effectCount++;
+      lastSum = a.peek() + b.value;
+    });
+
+    assert.strictEqual(effectCount, 1);
+    assert.strictEqual(lastSum, 3);
+
+    // Changing 'a' should NOT trigger effect (used peek)
+    a.value = 10;
+    assert.strictEqual(effectCount, 1);
+
+    // Changing 'b' SHOULD trigger effect
+    b.value = 5;
+    assert.strictEqual(effectCount, 2);
+    assert.strictEqual(lastSum, 15);
+
+    dispose();
+  });
+});
+
+import { ReadonlySignal } from "../src/signals/signal.js";
+
+describe("ReadonlySignal", () => {
+  it("should expose value from underlying signal", () => {
+    const s = signal(42);
+    const readonly = new ReadonlySignal(s);
+
+    assert.strictEqual(readonly.value, 42);
+
+    s.value = 100;
+    assert.strictEqual(readonly.value, 100);
+  });
+
+  it("should expose peek from underlying signal", () => {
+    const s = signal(42);
+    const readonly = new ReadonlySignal(s);
+
+    assert.strictEqual(readonly.peek(), 42);
+
+    s.value = 100;
+    assert.strictEqual(readonly.peek(), 100);
+  });
+
+  it("should track dependencies when value is accessed", () => {
+    const s = signal(5);
+    const readonly = new ReadonlySignal(s);
+    let computeCount = 0;
+
+    const doubled = computed(() => {
+      computeCount++;
+      return readonly.value * 2;
+    });
+
+    assert.strictEqual(doubled.value, 10);
+    assert.strictEqual(computeCount, 1);
+
+    // Changing the underlying signal should trigger recomputation
+    s.value = 10;
+    assert.strictEqual(doubled.value, 20);
+    assert.strictEqual(computeCount, 2);
+  });
+
+  it("should not track dependencies when peek is used", () => {
+    const s = signal(5);
+    const readonly = new ReadonlySignal(s);
+    let computeCount = 0;
+
+    const doubled = computed(() => {
+      computeCount++;
+      return readonly.peek() * 2;
+    });
+
+    assert.strictEqual(doubled.value, 10);
+    assert.strictEqual(computeCount, 1);
+
+    // Changing the underlying signal should NOT trigger recomputation
+    s.value = 10;
+    assert.strictEqual(doubled.value, 10); // Still old value
+    assert.strictEqual(computeCount, 1);
+  });
+
+  it("should support subscribe", () => {
+    const s = signal(1);
+    const readonly = new ReadonlySignal(s);
+    let notifyCount = 0;
+
+    const unsub = readonly.subscribe(() => {
+      notifyCount++;
+    });
+
+    s.value = 2;
+    assert.strictEqual(notifyCount, 1);
+
+    s.value = 3;
+    assert.strictEqual(notifyCount, 2);
+
+    unsub();
+    s.value = 4;
+    assert.strictEqual(notifyCount, 2); // No more notifications
+  });
+});

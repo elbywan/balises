@@ -363,7 +363,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -852,7 +852,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -869,7 +869,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -899,7 +899,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -929,7 +929,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -958,7 +958,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -984,7 +984,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1013,7 +1013,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1031,7 +1031,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1295,7 +1295,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (item) => html`<li>${item.name}</li>`,
+          (item) => html`<li>${item.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1340,7 +1340,7 @@ describe("Template.render()", () => {
         ${each(
           () => state.items,
           (i) => i.id,
-          (item) => html`<li>${item.name}</li>`,
+          (item) => html`<li>${item.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1387,7 +1387,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1427,7 +1427,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1467,7 +1467,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1504,7 +1504,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1534,17 +1534,19 @@ describe("Template.render()", () => {
     /**
      * Edge case: Item with same key but different content
      *
-     * When an item at a key changes (different object reference),
-     * the old template should be disposed and new one rendered.
+     * With the three-arg form of each(), items are wrapped in ReadonlySignal<T>.
+     * When an item at a key changes (different object reference but same key),
+     * the template is reused and the signal's value is updated. To make the
+     * content reactive, use a function wrapper: `${() => item.value.name}`.
      */
-    it("should re-render when item at same key changes", () => {
+    it("should update item signal when item at same key changes", () => {
       const items = signal([{ id: 1, name: "Alice" }]);
 
       const { fragment } = html`<ul>
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${() => i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1552,12 +1554,14 @@ describe("Template.render()", () => {
       const ul = document.body.querySelector("ul")!;
       const originalNode = ul.children[0]!;
 
+      assert.strictEqual(originalNode.textContent, "Alice");
+
       // Replace with new object having same id
       items.value = [{ id: 1, name: "Alicia" }];
 
-      // Node is recreated because object reference changed
+      // Node is reused (same key), content updates via signal
       assert.strictEqual(ul.children.length, 1);
-      assert.notStrictEqual(ul.children[0], originalNode);
+      assert.strictEqual(ul.children[0], originalNode); // Same node reused
       assert.strictEqual(ul.children[0]!.textContent, "Alicia");
 
       ul.remove();
@@ -1581,7 +1585,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1621,7 +1625,7 @@ describe("Template.render()", () => {
         ${each(
           activeItems,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1656,7 +1660,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (_, i) => i,
-          (item) => html`<span>${item}</span><span>!</span>`,
+          (item) => html`<span>${item.value}</span><span>!</span>`,
         )}
       </div>`.render();
 
@@ -1696,7 +1700,7 @@ describe("Template.render()", () => {
           (g) => g.id,
           (g) =>
             html`<ul>
-              ${each(g.items, (item) => html`<li>${item}</li>`)}
+              ${each(g.value.items, (item) => html`<li>${item}</li>`)}
             </ul>`,
         )}
       </div>`.render();
@@ -1738,7 +1742,7 @@ describe("Template.render()", () => {
           ${each(
             items,
             () => "same-key",
-            (i) => html`<li>${i.name}</li>`,
+            (i) => html`<li>${i.value.name}</li>`,
           )}
         </ul>`.render();
 
@@ -1802,7 +1806,7 @@ describe("Template.render()", () => {
         ${each(
           items,
           (i) => i.id,
-          (i) => html`<li>${i.name}</li>`,
+          (i) => html`<li>${i.value.name}</li>`,
         )}
       </ul>`.render();
 
@@ -1820,6 +1824,203 @@ describe("Template.render()", () => {
       name1.value = "Alice Updated";
       assert.strictEqual(ul.children[0], firstLi);
       assert.strictEqual(ul.children[0]!.textContent, "Alice Updated");
+
+      ul.remove();
+    });
+  });
+
+  /**
+   * Comparison tests: Two-arg vs Three-arg form behavior
+   *
+   * These tests demonstrate the key behavioral differences between
+   * the two forms of each().
+   */
+  describe("each() - two-arg vs three-arg comparison", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    /**
+     * Two-arg form: DOM is recreated when object reference changes
+     * even if the data is logically the same.
+     */
+    it("two-arg form: should recreate DOM when object reference changes", () => {
+      const alice = { id: 1, name: "Alice" };
+      const items = signal([alice]);
+
+      const { fragment } = html`<ul>
+        ${each(items, (item) => html`<li data-id=${item.id}>${item.name}</li>`)}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      const ul = document.body.querySelector("ul")!;
+      const originalNode = ul.children[0]!;
+
+      assert.strictEqual(originalNode.textContent, "Alice");
+
+      // Replace with new object having same data - DOM is recreated
+      items.value = [{ id: 1, name: "Alice" }];
+
+      assert.strictEqual(ul.children.length, 1);
+      assert.notStrictEqual(ul.children[0], originalNode); // Different node!
+      assert.strictEqual(ul.children[0]!.textContent, "Alice");
+    });
+
+    /**
+     * Three-arg form: DOM is preserved when key matches,
+     * even with different object reference.
+     */
+    it("three-arg form: should preserve DOM when key matches with new object", () => {
+      const items = signal([{ id: 1, name: "Alice" }]);
+
+      const { fragment } = html`<ul>
+        ${each(
+          items,
+          (i) => i.id,
+          (i) => html`<li data-id=${i.value.id}>${() => i.value.name}</li>`,
+        )}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      const ul = document.body.querySelector("ul")!;
+      const originalNode = ul.children[0]!;
+
+      assert.strictEqual(originalNode.textContent, "Alice");
+
+      // Replace with new object having same key - DOM is preserved!
+      items.value = [{ id: 1, name: "Alicia" }];
+
+      assert.strictEqual(ul.children.length, 1);
+      assert.strictEqual(ul.children[0], originalNode); // Same node!
+      assert.strictEqual(ul.children[0]!.textContent, "Alicia"); // Content updated
+    });
+
+    /**
+     * Three-arg form: Signal updates propagate to the template
+     */
+    it("three-arg form: should update content reactively via signal", () => {
+      const items = signal([{ id: 1, name: "Alice" }]);
+
+      let renderCount = 0;
+      const { fragment } = html`<ul>
+        ${each(
+          items,
+          (i) => i.id,
+          (i) => {
+            renderCount++;
+            return html`<li>${() => i.value.name}</li>`;
+          },
+        )}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      const ul = document.body.querySelector("ul")!;
+
+      assert.strictEqual(renderCount, 1);
+      assert.strictEqual(ul.children[0]!.textContent, "Alice");
+
+      // Update with same key - render function NOT called again
+      items.value = [{ id: 1, name: "Bob" }];
+
+      assert.strictEqual(renderCount, 1); // Still 1 - not re-rendered
+      assert.strictEqual(ul.children[0]!.textContent, "Bob"); // But content updated
+
+      ul.remove();
+    });
+
+    /**
+     * Three-arg form: New keys still create new DOM
+     */
+    it("three-arg form: should create new DOM for new keys", () => {
+      const items = signal([{ id: 1, name: "Alice" }]);
+
+      const { fragment } = html`<ul>
+        ${each(
+          items,
+          (i) => i.id,
+          (i) => html`<li>${() => i.value.name}</li>`,
+        )}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      const ul = document.body.querySelector("ul")!;
+      const originalNode = ul.children[0]!;
+
+      // Add item with new key
+      items.value = [
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+      ];
+
+      assert.strictEqual(ul.children.length, 2);
+      assert.strictEqual(ul.children[0], originalNode); // First node preserved
+      assert.strictEqual(ul.children[1]!.textContent, "Bob"); // New node created
+
+      ul.remove();
+    });
+
+    /**
+     * Three-arg form: Removed keys dispose their templates
+     */
+    it("three-arg form: should dispose templates when keys are removed", () => {
+      const items = signal([
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+      ]);
+
+      const { fragment } = html`<ul>
+        ${each(
+          items,
+          (i) => i.id,
+          (i) => html`<li>${() => i.value.name}</li>`,
+        )}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      const ul = document.body.querySelector("ul")!;
+      const secondNode = ul.children[1]!;
+
+      assert.strictEqual(ul.children.length, 2);
+
+      // Remove first item
+      items.value = [{ id: 2, name: "Bob" }];
+
+      assert.strictEqual(ul.children.length, 1);
+      assert.strictEqual(ul.children[0], secondNode); // Second node preserved and moved
+      assert.strictEqual(ul.children[0]!.textContent, "Bob");
+
+      ul.remove();
+    });
+
+    /**
+     * Three-arg form with peek(): Read without reactivity
+     */
+    it("three-arg form: peek() should read without tracking", () => {
+      const items = signal([{ id: 1, name: "Alice" }]);
+      const clickedIds: number[] = [];
+
+      const { fragment } = html`<ul>
+        ${each(
+          items,
+          (i) => i.id,
+          (i) =>
+            html`<li @click=${() => clickedIds.push(i.peek().id)}>
+              ${() => i.value.name}
+            </li>`,
+        )}
+      </ul>`.render();
+
+      document.body.appendChild(fragment);
+      const ul = document.body.querySelector("ul")!;
+
+      // Simulate click
+      (ul.children[0] as HTMLElement).click();
+      assert.deepStrictEqual(clickedIds, [1]);
+
+      // Update item - click handler still works with current value
+      items.value = [{ id: 1, name: "Alicia" }];
+      (ul.children[0] as HTMLElement).click();
+      assert.deepStrictEqual(clickedIds, [1, 1]);
 
       ul.remove();
     });
@@ -2219,9 +2420,9 @@ describe("Template.render()", () => {
           (id) =>
             html`<li>
               ${async function* () {
-                yield html`<span>Loading ${id}...</span>`;
+                yield html`<span>Loading ${id.value}...</span>`;
                 await tick(5);
-                yield html`<span>Item ${id}</span>`;
+                yield html`<span>Item ${id.value}</span>`;
               }}
             </li>`,
         )}

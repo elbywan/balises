@@ -1,4 +1,9 @@
-import { html as baseHtml, signal, computed } from "../../src/index.js";
+import {
+  html as baseHtml,
+  signal,
+  computed,
+  type ReadonlySignal,
+} from "../../src/index.js";
 import eachPlugin, { each } from "../../src/each.js";
 
 const html = baseHtml.with(eachPlugin);
@@ -56,15 +61,16 @@ export class TodoListElement extends HTMLElement {
     };
 
     // renderTodo is called once per unique todo.id, template is cached and reused
-    const renderTodo = (todo: Todo) => html`
-      <li class=${() => (todo.completed.value ? "completed" : "")}>
+    // With three-arg each(), the render function receives a ReadonlySignal<Todo>
+    const renderTodo = (todo: ReadonlySignal<Todo>) => html`
+      <li class=${() => (todo.value.completed.value ? "completed" : "")}>
         <input
           type="checkbox"
-          .checked=${todo.completed}
-          @change=${() => toggleTodo(todo)}
+          .checked=${() => todo.value.completed.value}
+          @change=${() => toggleTodo(todo.value)}
         />
-        <span>${todo.text}</span>
-        <button @click=${() => removeTodo(todo.id)}>x</button>
+        <span>${() => todo.value.text}</span>
+        <button @click=${() => removeTodo(todo.value.id)}>x</button>
       </li>
     `;
 

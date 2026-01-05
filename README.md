@@ -268,45 +268,59 @@ When rendering lists that change frequently, use `each()` for keyed reconciliati
 
 **Note:** The `each()` function is opt-in via the `balises/each` import to keep the base bundle small. Use `html.with(eachPlugin)` to enable keyed list support.
 
+**Two forms:**
+
+1. **Two-arg form** (object reference as key): Render receives raw item. DOM reused only when same object reference appears.
+2. **Three-arg form** (explicit key function): Render receives `ReadonlySignal<T>`. DOM reused when keys match, even with new object references.
+
 ```ts
 import { html as baseHtml, signal } from "balises";
 import eachPlugin, { each } from "balises/each";
 
 const html = baseHtml.with(eachPlugin);
 
-const items = signal([
-  { id: 1, name: signal("Alice") },
-  { id: 2, name: signal("Bob") },
+// Three-arg form: explicit key, receives ReadonlySignal
+// DOM is preserved when keys match (ideal for API data)
+const users = signal([
+  { id: 1, name: "Alice" },
+  { id: 2, name: "Bob" },
 ]);
 
 html`
   <ul>
     ${each(
-      items,
-      (item) => item.id,
-      (item) => html`<li>${item.name}</li>`,
+      users,
+      (user) => user.id,
+      (userSignal) => html`<li>${() => userSignal.value.name}</li>`,
     )}
   </ul>
 `.render();
 
-// Append: only creates one new node
-items.value = [...items.value, { id: 3, name: signal("Carol") }];
+// Refetch from API - DOM preserved, content updated via signal
+users.value = [
+  { id: 1, name: "Alicia" }, // Same key, new object - DOM preserved!
+  { id: 2, name: "Bobby" },
+  { id: 3, name: "Carol" }, // New key - new DOM created
+];
 
-// Update content: surgical update, no list diffing
-items.value[0].name.value = "Alicia";
+// Two-arg form: object reference as key, receives raw item
+const items = signal([{ name: "Item 1" }, { name: "Item 2" }]);
 
-// Reorder: moves existing nodes, no recreation
-items.value = [...items.value].reverse();
+html`
+  <ul>
+    ${each(items, (item) => html`<li>${item.name}</li>`)}
+  </ul>
+`.render();
 ```
 
 Signatures:
 
 ```ts
-each(list, keyFn, renderFn); // keyed by keyFn(item, index)
-each(list, renderFn); // keyed by object reference or index
+each(list, keyFn, renderFn); // Three-arg: keyFn extracts key, renderFn receives ReadonlySignal<T>
+each(list, renderFn); // Two-arg: object reference as key, renderFn receives raw T
 ```
 
-If you want to update item content without triggering list reconciliation, nest signals inside your items (like `name: signal("Alice")` above).
+**Important:** When using the three-arg form, access item properties through `itemSignal.value` and wrap in `() => ...` for reactive updates.
 
 ## Reactivity API
 
@@ -332,6 +346,16 @@ count.update((n) => n * 2);
 // Equivalent to:
 count.value = count.value + 1;
 count.value = count.value * 2;
+```
+
+**Reading without tracking dependencies:**
+
+```ts
+const count = signal(0);
+
+// peek() reads without creating a dependency
+// Useful in event handlers where you don't want reactivity
+button.onclick = () => console.log(count.peek());
 ```
 
 ### `computed<T>(fn)`

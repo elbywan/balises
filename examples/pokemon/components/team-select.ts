@@ -2,7 +2,7 @@
  * Team Selection Component - Choose Pokemon for your battle team
  */
 
-import { html as baseHtml } from "../../../src/index.js";
+import { html as baseHtml, type ReadonlySignal } from "../../../src/index.js";
 import eachPlugin, { each } from "../../../src/each.js";
 import type { BattleState, Pokemon } from "../types.js";
 import type { BattleTranslations } from "../utils/battle-translations.js";
@@ -118,7 +118,8 @@ export function TeamSelect({
         ${each(
           () => state.availablePokemon,
           (p) => p.id,
-          (pokemon) => {
+          (pokemonSignal: ReadonlySignal<Pokemon>) => {
+            const pokemon = pokemonSignal.value;
             const selected = () => isSelected(pokemon.id);
             const disabled = () =>
               !selected() && state.selectedForTeam.length >= state.teamSize;
@@ -145,7 +146,7 @@ export function TeamSelect({
                   alt=${pokemon.name}
                 />
                 <div class="pokemon-select-name">
-                  ${() => getPokemonName(pokemon)}
+                  ${() => getPokemonName(pokemonSignal.value)}
                 </div>
                 <div class="pokemon-select-types">
                   ${pokemon.types.map(
@@ -181,7 +182,7 @@ export function TeamSelect({
                 <div class="stats-tooltip">
                   <div class="stats-tooltip-header">
                     <span class="stats-tooltip-name"
-                      >${() => getPokemonName(pokemon)}</span
+                      >${() => getPokemonName(pokemonSignal.value)}</span
                     >
                     <span class="stats-tooltip-total"
                       >Total: ${totalStats}</span

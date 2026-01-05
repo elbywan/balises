@@ -3,7 +3,7 @@
  * Refactored from PokemonBattleElement to be a function component
  */
 
-import { html as baseHtml } from "../../../src/index.js";
+import { html as baseHtml, type ReadonlySignal } from "../../../src/index.js";
 import eachPlugin, { each } from "../../../src/each.js";
 import { DEFAULT_ROSTER_IDS } from "../utils/storage.js";
 
@@ -995,7 +995,8 @@ export function Battle(props: BattleProps) {
           ${each(
             () => state.playerTeam,
             (p) => p.id,
-            (pokemon) => {
+            (pokemonSignal: ReadonlySignal<BattlePokemon>) => {
+              const pokemon = pokemonSignal.value;
               const getIndex = () =>
                 state.playerTeam.findIndex((p) => p.id === pokemon.id);
               const isActive = () =>
@@ -1033,7 +1034,8 @@ export function Battle(props: BattleProps) {
           ${each(
             () => state.playerTeam,
             (p) => p.id,
-            (pokemon) => {
+            (pokemonSignal: ReadonlySignal<BattlePokemon>) => {
+              const pokemon = pokemonSignal.value;
               const getIndex = () =>
                 state.playerTeam.findIndex((p) => p.id === pokemon.id);
               const isActive = () =>
@@ -1052,7 +1054,8 @@ export function Battle(props: BattleProps) {
           ${each(
             () => state.enemyTeam,
             (p) => p.id,
-            (pokemon) => {
+            (pokemonSignal: ReadonlySignal<BattlePokemon>) => {
+              const pokemon = pokemonSignal.value;
               const isActive = () =>
                 state.enemyTeam[state.activeEnemyPokemon]?.id === pokemon.id;
               return TeamSlot({ pokemon, isActive });

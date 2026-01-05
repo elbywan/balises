@@ -156,9 +156,9 @@ The library has multiple export points for tree-shaking:
 - Opt-in via `balises/each` import, enabled with `html.with(eachPlugin)`
 - Efficiently renders lists with keys to avoid recreating DOM
 - Caches templates by key
-- Two signatures:
-  - `each(list, keyFn, renderFn)` - Explicit key function
-  - `each(list, renderFn)` - Uses object reference or index
+- Two forms with different behavior:
+  - `each(list, keyFn, renderFn)` - Three-arg: explicit key, renderFn receives `ReadonlySignal<T>`, DOM reused when keys match
+  - `each(list, renderFn)` - Two-arg: object reference as key, renderFn receives raw `T`, DOM reused only on same reference
 - Supports arrays, signals, computeds, and getter functions
 - Reorders/adds/removes nodes surgically
 
@@ -630,14 +630,26 @@ html`<div>${() => count.value * 2}</div>`;
 html`<div>${computed(() => count.value * 2)}</div>`;
 ```
 
-### 6. Each() Expects Template Return
+### 6. Each() Three-Arg Form Receives ReadonlySignal
 
 ```typescript
-// ❌ Wrong - returns string
-each(items, (item) => item.name);
-
-// ✅ Correct - returns Template
+// Two-arg form: receives raw item (unchanged)
 each(items, (item) => html`<li>${item.name}</li>`);
+
+// Three-arg form: receives ReadonlySignal<T>
+// ❌ Wrong - accessing properties directly
+each(
+  items,
+  (i) => i.id,
+  (item) => html`<li>${item.name}</li>`,
+);
+
+// ✅ Correct - unwrap signal and use reactive wrapper
+each(
+  items,
+  (i) => i.id,
+  (item) => html`<li>${() => item.value.name}</li>`,
+);
 ```
 
 ### 7. Batch Doesn't Prevent Recomputation

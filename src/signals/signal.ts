@@ -83,6 +83,20 @@ export class Signal<T> {
     this.value = fn(this.#value);
   }
 
+  /**
+   * Read the signal value without tracking dependencies.
+   * Useful in event handlers where you want the current value
+   * but don't want to create a reactive dependency.
+   *
+   * @example
+   * const count = signal(0);
+   * // In an event handler - no dependency tracking
+   * button.onclick = () => console.log(count.peek());
+   */
+  peek(): T {
+    return this.#value;
+  }
+
   /** @internal */
   get targets(): Computed<unknown>[] {
     return this.#targets;
@@ -96,3 +110,34 @@ export class Signal<T> {
 
 /** Create a new signal with the given initial value. */
 export const signal = <T>(value: T) => new Signal(value);
+
+/**
+ * A read-only view of a Signal.
+ * Provides reactive access without allowing external mutation.
+ * Used by `each()` to pass item signals to render functions.
+ */
+export class ReadonlySignal<T> {
+  #signal: Signal<T>;
+
+  /** @internal */
+  constructor(signal: Signal<T>) {
+    this.#signal = signal;
+  }
+
+  get value(): T {
+    return this.#signal.value;
+  }
+
+  /**
+   * Read the signal value without tracking dependencies.
+   * Useful in event handlers where you want the current value
+   * but don't want to create a reactive dependency.
+   */
+  peek(): T {
+    return this.#signal.peek();
+  }
+
+  subscribe(fn: Subscriber): () => void {
+    return this.#signal.subscribe(fn);
+  }
+}

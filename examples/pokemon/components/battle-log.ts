@@ -2,7 +2,7 @@
  * Battle Log Component - Displays battle messages with scrolling
  */
 
-import { html as baseHtml } from "../../../src/index.js";
+import { html as baseHtml, type ReadonlySignal } from "../../../src/index.js";
 import eachPlugin, { each } from "../../../src/each.js";
 import type { BattleLogEntry } from "../types.js";
 
@@ -40,11 +40,14 @@ export function BattleLog({ entries }: BattleLogProps) {
         ${each(
           entries,
           (entry) => entry.id,
-          (entry) => html`
-            <div class="log-entry ${getEntryClass(entry.type)}">
-              ${entry.message}
-            </div>
-          `,
+          (entrySignal: ReadonlySignal<BattleLogEntry>) => {
+            const entry = entrySignal.value;
+            return html`
+              <div class="log-entry ${getEntryClass(entry.type)}">
+                ${entry.message}
+              </div>
+            `;
+          },
         )}
       </div>
     </div>

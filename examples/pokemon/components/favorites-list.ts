@@ -2,7 +2,7 @@
  * FavoritesList Component - Display and manage favorite Pokemon
  */
 
-import { html as baseHtml } from "../../../src/index.js";
+import { html as baseHtml, type ReadonlySignal } from "../../../src/index.js";
 import eachPlugin, { each } from "../../../src/each.js";
 import type { FavoritePokemon, SharedAppState } from "../types.js";
 import type { PokedexTranslations } from "../utils/pokedex-translations.js";
@@ -24,19 +24,22 @@ export function FavoritesList(props: FavoritesListProps) {
     props;
   const t = () => getTranslations();
 
-  const renderFavorite = (fav: FavoritePokemon) => html`
-    <div class="favorite-item" @click=${() => onSelectFavorite(fav)}>
-      <img src=${fav.sprite} alt=${fav.name} />
-      <span>${fav.name}</span>
-      <button
-        class="remove-btn"
-        @click=${(e: Event) => onRemoveFavorite(fav, e)}
-        title=${() => t().removeFavorite}
-      >
-        ×
-      </button>
-    </div>
-  `;
+  const renderFavorite = (favSignal: ReadonlySignal<FavoritePokemon>) => {
+    const fav = favSignal.value;
+    return html`
+      <div class="favorite-item" @click=${() => onSelectFavorite(fav)}>
+        <img src=${fav.sprite} alt=${fav.name} />
+        <span>${fav.name}</span>
+        <button
+          class="remove-btn"
+          @click=${(e: Event) => onRemoveFavorite(fav, e)}
+          title=${() => t().removeFavorite}
+        >
+          ×
+        </button>
+      </div>
+    `;
+  };
 
   return html`
     <div class="favorites-section">

@@ -296,7 +296,10 @@ export class PerformanceElement extends HTMLElement {
                   this.#cells,
                   (cell) => cell.id,
                   (cell) =>
-                    GridCell({ cell, onIncrement: this.#handleCellIncrement }),
+                    GridCell({
+                      cell: cell.value,
+                      onIncrement: this.#handleCellIncrement,
+                    }),
                 )}
               </div>
               <div class="legend">

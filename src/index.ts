@@ -17,4 +17,5 @@ export type {
   Computed,
   Reactive,
   Subscriber,
+  ReadonlySignal,
 } from "./signals/index.js";
