@@ -336,9 +336,15 @@ function reorderNodes<T>(
 
   // Build array of old indices for keys that existed before (-1 for new)
   const oldIndices: number[] = [];
+  let allNew = true;
   for (let i = 0; i < len; i++) {
     const oldIdx = prevIndexMap.get(newKeys[i]);
-    oldIndices.push(oldIdx !== undefined ? oldIdx : -1);
+    oldIndices.push(oldIdx !== undefined ? ((allNew = false), oldIdx) : -1);
+  }
+
+  // Skip reordering if ALL items are new - nodes were just created in correct order
+  if (allNew) {
+    return;
   }
 
   // Find LIS of old indices (only considering items that existed before)
