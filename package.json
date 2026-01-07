@@ -1,6 +1,6 @@
 {
   "name": "balises",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "A very simple reactive html templating library",
   "author": "Julien Elbaz <elbywan@hotmail.com>",
   "type": "module",
