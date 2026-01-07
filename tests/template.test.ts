@@ -1684,6 +1684,97 @@ describe("Template.render()", () => {
     });
 
     /**
+     * Edge case: reordering entries with multiple root nodes
+     *
+     * When entries have multiple DOM nodes and are reordered,
+     * the internal order of nodes within each entry must be preserved.
+     * This tests the LIS-based reordering algorithm.
+     */
+    it("should preserve internal node order when reordering multi-node entries", () => {
+      const a = { id: "a" };
+      const b = { id: "b" };
+      const items = signal([a, b]);
+
+      const { fragment } = html`<div>
+        ${each(
+          items,
+          (i) => i.id,
+          (item) =>
+            html`<span>${item.value.id}1</span><span>${item.value.id}2</span>`,
+        )}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      const div = document.body.querySelector("div")!;
+
+      // Initial order: a1, a2, b1, b2
+      let spans = div.querySelectorAll("span");
+      assert.strictEqual(spans.length, 4);
+      assert.strictEqual(spans[0]!.textContent, "a1");
+      assert.strictEqual(spans[1]!.textContent, "a2");
+      assert.strictEqual(spans[2]!.textContent, "b1");
+      assert.strictEqual(spans[3]!.textContent, "b2");
+
+      // Swap order: [b, a]
+      items.value = [b, a];
+
+      // After swap: b1, b2, a1, a2 (internal order preserved)
+      spans = div.querySelectorAll("span");
+      assert.strictEqual(spans.length, 4);
+      assert.strictEqual(spans[0]!.textContent, "b1");
+      assert.strictEqual(spans[1]!.textContent, "b2");
+      assert.strictEqual(spans[2]!.textContent, "a1");
+      assert.strictEqual(spans[3]!.textContent, "a2");
+
+      div.remove();
+    });
+
+    /**
+     * Edge case: reordering with mix of new and existing multi-node entries
+     *
+     * When new entries are added while existing multi-node entries are reordered,
+     * all nodes should end up in the correct order.
+     */
+    it("should handle reordering multi-node entries with new items", () => {
+      const a = { id: "a" };
+      const b = { id: "b" };
+      const c = { id: "c" };
+      const items = signal([a, b]);
+
+      const { fragment } = html`<div>
+        ${each(
+          items,
+          (i) => i.id,
+          (item) =>
+            html`<span>${item.value.id}1</span><span>${item.value.id}2</span>`,
+        )}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      const div = document.body.querySelector("div")!;
+
+      // Initial: a1, a2, b1, b2
+      let spans = div.querySelectorAll("span");
+      assert.strictEqual(spans[0]!.textContent, "a1");
+      assert.strictEqual(spans[3]!.textContent, "b2");
+
+      // Add c at beginning and swap a,b: [c, b, a]
+      items.value = [c, b, a];
+
+      // Expected: c1, c2, b1, b2, a1, a2
+      spans = div.querySelectorAll("span");
+      assert.strictEqual(spans.length, 6);
+      assert.strictEqual(spans[0]!.textContent, "c1");
+      assert.strictEqual(spans[1]!.textContent, "c2");
+      assert.strictEqual(spans[2]!.textContent, "b1");
+      assert.strictEqual(spans[3]!.textContent, "b2");
+      assert.strictEqual(spans[4]!.textContent, "a1");
+      assert.strictEqual(spans[5]!.textContent, "a2");
+
+      div.remove();
+    });
+
+    /**
      * Edge case: Nested each() calls
      *
      * each() inside each() should work correctly.
