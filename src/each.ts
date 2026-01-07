@@ -363,6 +363,7 @@ function reorderNodes<T>(
       // This item needs to be moved
       for (let j = nodes.length - 1; j >= 0; j--) {
         parent.insertBefore(nodes[j]!, insertionPoint);
+        insertionPoint = nodes[j]!;
       }
     }
 
