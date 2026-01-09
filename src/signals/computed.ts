@@ -2,7 +2,7 @@
  * Computed - A derived reactive value.
  */
 
-import { Signal, removeFromArray } from "./signal.js";
+import { removeFromArray } from "./signal.js";
 import {
   context,
   setContext,
@@ -11,6 +11,7 @@ import {
   registerDisposer,
   onTrack,
   type Subscriber,
+  type TrackableSource,
 } from "./context.js";
 
 /**
@@ -26,8 +27,9 @@ export class Computed<T> {
   #computing = false;
   #subs: Subscriber[] = [];
   #targets: Computed<unknown>[] = [];
-  #sources: (Signal<unknown> | Computed<unknown>)[] = [];
+  #sources: TrackableSource[] = [];
   #sourceIndex = 0;
+  #isSlots: Map<T, TrackableSource> | undefined;
 
   constructor(fn: () => T) {
     this.#fn = fn;
@@ -58,13 +60,50 @@ export class Computed<T> {
     }
     this.#sources = [];
     this.#subs.length = 0;
+    this.#isSlots?.clear();
+  }
+
+  /**
+   * Check if the computed's value equals the given value.
+   * Enables O(1) selection updates - only the old and new matching values
+   * trigger recomputes, not all dependents.
+   *
+   * @example
+   * ```ts
+   * const selected = computed(() => items.find(i => i.active)?.id ?? null);
+   *
+   * // In each row - only 2 rows recompute when selection changes
+   * html`<tr class=${() => selected.is(row.id) ? 'danger' : ''}>...`
+   * ```
+   */
+  is(value: T): boolean {
+    if (this.#dirty) this.#recompute();
+    if (context) {
+      if (!this.#isSlots) this.#isSlots = new Map();
+      let slot = this.#isSlots.get(value);
+      if (!slot) {
+        const targets: Computed<unknown>[] = [];
+        slot = { targets, deleteTarget: (t) => removeFromArray(targets, t) };
+        this.#isSlots.set(value, slot);
+      }
+      context.trackSource(slot);
+    }
+    return Object.is(this.#value, value);
+  }
+
+  #notifyIsSlot(key: T): void {
+    const slot = this.#isSlots!.get(key);
+    if (!slot) return;
+    // Copy: markDirty can cause disposal which mutates the array
+    const targets = slot.targets.slice();
+    for (let i = 0; i < targets.length; i++) targets[i]!.markDirty();
   }
 
   /**
    * Called by sources when accessed during recompute.
    * @internal
    */
-  trackSource(source: Signal<unknown> | Computed<unknown>): void {
+  trackSource(source: TrackableSource): void {
     // Skip tracking if disposed (can happen if dispose() is called during #fn execution)
     if (!this.#fn) return;
 
@@ -114,8 +153,8 @@ export class Computed<T> {
         if (!t.#dirty) queue.push(t);
       }
 
-      // Collect computeds with subscribers for later notification
-      if (c.#subs.length && c.#fn) {
+      // Collect computeds with subscribers or .is() slots for later notification
+      if ((c.#subs.length || c.#isSlots?.size) && c.#fn) {
         toNotify.push({ c, old: c.#value });
       }
     }
@@ -127,6 +166,11 @@ export class Computed<T> {
         if (c.#fn) {
           c.#recompute();
           if (!Object.is(c.#value, old)) {
+            // Notify .is() slots for old and new values
+            if (c.#isSlots) {
+              c.#notifyIsSlot(old as T);
+              c.#notifyIsSlot(c.#value as T);
+            }
             const subs = c.#subs;
             for (let j = 0; j < subs.length; j++) subs[j]!();
           }

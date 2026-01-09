@@ -9,6 +9,7 @@ import {
   enqueueBatchAll,
   onTrack,
   type Subscriber,
+  type TrackableSource,
 } from "./context.js";
 
 /**
@@ -32,6 +33,7 @@ export class Signal<T> {
   #value: T;
   #subs: Subscriber[] = [];
   #targets: Computed<unknown>[] = [];
+  #isSlots: Map<T, TrackableSource> | undefined;
 
   constructor(value: T) {
     this.#value = value;
@@ -45,7 +47,14 @@ export class Signal<T> {
 
   set value(v: T) {
     if (Object.is(this.#value, v)) return;
+    const prev = this.#value;
     this.#value = v;
+
+    // Notify .is() slots for old and new values (O(1) selection updates)
+    if (this.#isSlots) {
+      this.#notifyIsSlot(prev);
+      this.#notifyIsSlot(v);
+    }
 
     // Mark all dependent computeds as dirty
     const targets = this.#targets;
@@ -63,6 +72,14 @@ export class Signal<T> {
         for (let i = 0; i < subs.length; i++) subs[i]!();
       }
     }
+  }
+
+  #notifyIsSlot(key: T): void {
+    const slot = this.#isSlots!.get(key);
+    if (!slot) return;
+    // Copy: markDirty can cause disposal which mutates the array
+    const targets = slot.targets.slice();
+    for (let i = 0; i < targets.length; i++) targets[i]!.markDirty();
   }
 
   subscribe(fn: Subscriber): () => void {
@@ -95,6 +112,33 @@ export class Signal<T> {
    */
   peek(): T {
     return this.#value;
+  }
+
+  /**
+   * Check if the signal's value equals the given value.
+   * Enables O(1) selection updates - only the old and new matching values
+   * trigger recomputes, not all dependents.
+   *
+   * @example
+   * ```ts
+   * const selected = signal<number | null>(null);
+   *
+   * // In each row - only 2 rows recompute when selection changes
+   * html`<tr class=${() => selected.is(row.id) ? 'danger' : ''}>...`
+   * ```
+   */
+  is(value: T): boolean {
+    if (context) {
+      if (!this.#isSlots) this.#isSlots = new Map();
+      let slot = this.#isSlots.get(value);
+      if (!slot) {
+        const targets: Computed<unknown>[] = [];
+        slot = { targets, deleteTarget: (t) => removeFromArray(targets, t) };
+        this.#isSlots.set(value, slot);
+      }
+      context.trackSource(slot);
+    }
+    return Object.is(this.#value, value);
   }
 
   /** @internal */

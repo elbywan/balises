@@ -22,13 +22,16 @@
  * ```
  */
 
-import { onTrack, type Subscriber } from "./signals/context.js";
+import {
+  onTrack,
+  type Subscriber,
+  type TrackableSource,
+} from "./signals/context.js";
 import { Template, type InterpolationPlugin } from "./template.js";
-import type { Computed } from "./signals/computed.js";
-import type { Signal } from "./signals/signal.js";
+import { isSignal, type Reactive } from "./signals/index.js";
 
-/** Reactive source type */
-type ReactiveSource = Signal<unknown> | Computed<unknown>;
+/** Reactive source type - TrackableSource may or may not be subscribable */
+type SubscribableSource = Reactive<unknown>;
 
 /**
  * Opaque handle representing settled content from an async generator.
@@ -144,7 +147,7 @@ interface TrackResult<T> {
  * Sets up the onTrack hook temporarily to capture signal/computed accesses.
  */
 function track<T>(fn: () => T): TrackResult<T> {
-  const sources = new Set<ReactiveSource>();
+  const sources = new Set<TrackableSource>();
   const prevHook = onTrack.current;
   onTrack.current = (source) => sources.add(source);
 
@@ -164,7 +167,12 @@ function track<T>(fn: () => T): TrackResult<T> {
       if (subscribed) return;
       subscribed = true;
       for (const source of sources) {
-        unsubscribers.push(source.subscribe(callback));
+        // Only subscribe to actual signals/computeds (not selector slots)
+        if (isSignal(source)) {
+          unsubscribers.push(
+            (source as SubscribableSource).subscribe(callback),
+          );
+        }
       }
     },
     unsubscribe: () => {

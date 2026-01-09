@@ -3,10 +3,18 @@
  */
 
 import type { Computed } from "./computed.js";
-import type { Signal } from "./signal.js";
 
 /** Callback function for subscribers */
 export type Subscriber = () => void;
+
+/**
+ * Minimal interface for dependency tracking sources.
+ * Implemented by Signal, Computed, and selector slots.
+ */
+export interface TrackableSource {
+  targets: Computed<unknown>[];
+  deleteTarget(target: Computed<unknown>): void;
+}
 
 /** The currently executing computed (for dependency tracking) */
 export let context: Computed<unknown> | null = null;
@@ -112,5 +120,5 @@ export function registerDisposer(dispose: () => void): void {
  * Using an object wrapper so async.ts can mutate the current value.
  */
 export const onTrack: {
-  current: ((source: Signal<unknown> | Computed<unknown>) => void) | null;
+  current: ((source: TrackableSource) => void) | null;
 } = { current: null };
