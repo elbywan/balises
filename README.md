@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library for building websites and web components. ~3.1KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~3.2KB gzipped.
 
 Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
 
@@ -523,6 +523,34 @@ count.value = 1; // logs "count changed to 1"
 unsubscribe(); // Stop listening
 ```
 
+### `.is(value)`
+
+Checks equality with O(1) update performance - ideal for selection patterns.
+
+When you have a signal representing a selected item (like `selectedId`), using `.is()` inside computed/templates creates optimized subscriptions. Only computeds checking the **previous** or **new** value are notified on change, not all of them.
+
+```ts
+import { html, signal } from "balises";
+
+const selected = signal<number | null>(null);
+
+// In a list of 1000 rows, only 2 rows update when selection changes
+// (the previously selected and newly selected)
+function Row({ id, label }) {
+  return html`
+    <tr class=${() => (selected.is(id) ? "danger" : "")}>
+      <td>${id}</td>
+      <td>${label}</td>
+    </tr>
+  `;
+}
+
+selected.value = 5; // Only row 5 gets "danger" class
+selected.value = 10; // Only rows 5 and 10 update
+```
+
+Works on both `Signal` and `Computed`. Uses `Object.is()` for equality checks.
+
 ### `.dispose()`
 
 Stops a computed from tracking dependencies and frees memory.
@@ -537,7 +565,7 @@ doubled.dispose(); // Stops tracking, frees memory
 You can import just what you need to keep bundle size down:
 
 ```ts
-// Full library (~3.1KB gzipped)
+// Full library (~3.2KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
 // Signals only (no HTML templating - use in any JS project)

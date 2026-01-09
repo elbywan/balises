@@ -40,93 +40,85 @@ export interface HtmlTag {
   with(...plugins: InterpolationPlugin[]): HtmlTag;
 }
 
-/** Information about a single binding point */
-type BindingInfo =
-  | { type: "text"; path: number[]; slot: number }
-  | {
-      type: "attr";
-      path: number[];
-      name: string;
-      statics: string[];
-      slots: number[];
-    }
-  | { type: "prop"; path: number[]; slot: number; name: string }
-  | { type: "event"; path: number[]; slot: number; name: string };
-
-/** Cached template structure */
-interface CachedTemplate {
-  prototype: DocumentFragment; // The DOM structure to clone
-  bindings: BindingInfo[]; // How to apply values after cloning
-}
-
-/** Template cache - keyed by static string parts identity */
-const cache = new WeakMap<TemplateStringsArray, CachedTemplate>();
-
-/**
- * Create a computed that wraps function execution in a scope.
- * Nested computeds/effects are automatically disposed on re-run.
- * Returns [computed, dispose] - dispose cleans up both the computed
- * and any nested reactives from the last run.
- */
-function scopedComputed<T>(fn: () => T) {
-  let disposeScope: (() => void) | undefined;
-
-  const c = computed(() => {
-    disposeScope?.();
-    const [result, dispose] = scope(fn);
-    disposeScope = dispose;
-    return result;
-  });
-
-  return [c, () => (c.dispose(), disposeScope?.())] as const;
-}
-
-/**
- * Bind a value to an update function.
- * If reactive, subscribes and returns unsubscribe. Otherwise returns undefined.
- * Functions are wrapped in computed() for automatic reactivity.
- * Nested computeds/effects created inside functions are automatically
- * disposed when the function re-runs or the binding is disposed.
- */
-function bind(
-  value: unknown,
-  update: (v: unknown) => void,
-): (() => void) | undefined {
-  let dispose: (() => void) | undefined;
-  if (typeof value === "function") {
-    [value, dispose] = scopedComputed(value as () => unknown);
-  }
-  if (isSignal(value)) {
-    update(value.value);
-    const unsub = value.subscribe(() =>
-      update((value as Reactive<unknown>).value),
-    );
-    return dispose ? () => (unsub(), dispose()) : unsub;
-  }
-  update(value);
-  return dispose;
-}
-
 /** Result of rendering a template */
 export interface RenderResult {
   fragment: DocumentFragment;
   dispose: () => void;
 }
 
-/** Walk a path to find a node in a fragment */
-function walkPath(root: Node, path: number[]): Node {
-  let node: Node = root;
-  for (let i = 0; i < path.length; i++) node = node.childNodes[path[i]!]!;
-  return node;
+/**
+ * Binding descriptor stored in cache.
+ * Uses tuple format for compact storage:
+ * - [0, path, slotIndex] - text content binding
+ * - [1, path, attrName, staticParts, slotIndices] - attribute binding
+ * - [2, path, propName, slotIndex] - property binding
+ * - [3, path, eventName, slotIndex] - event binding
+ */
+type Binding =
+  | [0, number[], number]
+  | [1, number[], string, string[], number[]]
+  | [2, number[], string, number]
+  | [3, number[], string, number];
+
+/** Cached template: prototype fragment and binding descriptors */
+type Cached = [DocumentFragment, Binding[]];
+
+/** Template cache - keyed by static string parts identity */
+const cache = new WeakMap<TemplateStringsArray, Cached>();
+
+/**
+ * Wrap a function in a scoped computed.
+ * Nested computeds/effects are automatically disposed on re-run.
+ * Registers disposal of both the computed and nested reactives.
+ */
+function wrapFn(fn: () => unknown, d: (() => void)[]) {
+  let cleanup: (() => void) | undefined;
+  const c = computed(() => {
+    cleanup?.();
+    const [r, dispose] = scope(fn);
+    cleanup = dispose;
+    return r;
+  });
+  d.push(() => (c.dispose(), cleanup?.()));
+  return c;
+}
+
+/**
+ * Bind a value to an update function.
+ * Functions are wrapped in computed() for automatic reactivity.
+ * Nested computeds/effects created inside functions are automatically
+ * disposed when the function re-runs or the binding is disposed.
+ */
+function bind(v: unknown, update: (v: unknown) => void, d: (() => void)[]) {
+  if (typeof v === "function") v = wrapFn(v as () => unknown, d);
+  if (isSignal(v)) {
+    update(v.value);
+    d.push(v.subscribe(() => update((v as Reactive<unknown>).value)));
+  } else update(v);
+}
+
+/** Walk a path of child indices to find a node in a fragment */
+function walk(root: Node, path: number[]): Node {
+  let n = root;
+  for (let i = 0; i < path.length; i++) n = n.childNodes[path[i]!]!;
+  return n;
 }
 
 /** A parsed HTML template. Call render() to create live DOM. */
 export class Template {
+  #strings: TemplateStringsArray;
+  #values: unknown[];
+  #plugins: InterpolationPlugin[];
+
   constructor(
-    private strings: TemplateStringsArray,
-    private values: unknown[],
-    private plugins: InterpolationPlugin[] = [],
-  ) {}
+    strings: TemplateStringsArray,
+    values: unknown[],
+    plugins: InterpolationPlugin[] = [],
+  ) {
+    this.#strings = strings;
+    this.#values = values;
+    this.#plugins = plugins;
+  }
 
   /**
    * Parse template and create live DOM.
@@ -136,84 +128,47 @@ export class Template {
    * clone the cached DOM structure instead of rebuilding it.
    */
   render(): RenderResult {
-    let cached = cache.get(this.strings);
-
-    if (!cached) {
-      cached = this.buildPrototype();
-      cache.set(this.strings, cached);
-    }
-
-    return this.instantiate(cached);
+    let cached = cache.get(this.#strings);
+    if (!cached) cache.set(this.#strings, (cached = this.#buildPrototype()));
+    return this.#instantiate(cached);
   }
 
-  /**
-   * Build the prototype DOM and collect binding metadata.
-   * This is called only on the first render for each unique template.
-   */
-  private buildPrototype(): CachedTemplate {
-    const fragment = document.createDocumentFragment();
-    const bindings: BindingInfo[] = [];
-    const stack: (Element | DocumentFragment)[] = [fragment];
-    const path: number[] = []; // Current path - push/pop as we traverse
-    const parser = new HTMLParser();
+  /** Build the prototype fragment and collect binding descriptors */
+  #buildPrototype(): Cached {
+    const frag = document.createDocumentFragment();
+    const bindings: Binding[] = [];
+    const stack: (Element | DocumentFragment)[] = [frag];
+    const path: number[] = [];
 
-    parser.parseTemplate(this.strings, {
-      onText: (text) => {
-        stack.at(-1)!.append(text);
-      },
+    new HTMLParser().parseTemplate(this.#strings, {
+      onText: (t) => stack[stack.length - 1]!.append(t),
 
-      onOpenTag: (tag, attrs, selfClosing) => {
-        const parent = stack.at(-1)!;
-        const childIndex = parent.childNodes.length;
-
-        const isSvg =
+      onOpenTag: (tag, attrs, selfClose) => {
+        const parent = stack[stack.length - 1]!;
+        const idx = parent.childNodes.length;
+        const svg =
           tag === "svg" ||
           tag === "SVG" ||
           (parent instanceof Element && parent.namespaceURI === SVG_NS);
-        const el = isSvg
+        const el = svg
           ? document.createElementNS(SVG_NS, tag)
           : document.createElement(tag);
 
-        // Process attributes - record bindings for dynamic ones
         for (const [name, statics, slots] of attrs) {
-          if (slots.length > 0) {
-            // Has dynamic parts - record binding
-            const bindingPath = [...path, childIndex];
-
-            if (name[0] === "@") {
-              bindings.push({
-                type: "event",
-                path: bindingPath,
-                slot: slots[0]!,
-                name: name.slice(1),
-              });
-            } else if (name[0] === ".") {
-              bindings.push({
-                type: "prop",
-                path: bindingPath,
-                slot: slots[0]!,
-                name: name.slice(1),
-              });
-            } else {
-              bindings.push({
-                type: "attr",
-                path: bindingPath,
-                name,
-                statics,
-                slots,
-              });
-            }
-          } else {
-            // Static attribute - apply directly to prototype
-            el.setAttribute(name, statics[0] ?? "");
+          if (!slots.length) el.setAttribute(name, statics[0] ?? "");
+          else {
+            const p = [...path, idx];
+            const c = name[0];
+            if (c === "@") bindings.push([3, p, name.slice(1), slots[0]!]);
+            else if (c === ".") bindings.push([2, p, name.slice(1), slots[0]!]);
+            else bindings.push([1, p, name, statics, slots]);
           }
         }
 
         parent.appendChild(el);
-
-        if (!selfClosing) {
+        if (!selfClose) {
           stack.push(el);
-          path.push(childIndex);
+          path.push(idx);
         }
       },
 
@@ -224,237 +179,144 @@ export class Template {
         }
       },
 
-      onSlot: (index) => {
-        const parent = stack.at(-1)!;
-        const childIndex = parent.childNodes.length;
-
-        const marker = document.createComment("");
-        parent.appendChild(marker);
-
-        bindings.push({
-          type: "text",
-          path: [...path, childIndex],
-          slot: index,
-        });
+      onSlot: (i) => {
+        const parent = stack[stack.length - 1]!;
+        parent.appendChild(document.createComment(""));
+        bindings.push([0, [...path, parent.childNodes.length - 1], i]);
       },
     });
 
-    return { prototype: fragment, bindings };
+    return [frag, bindings];
   }
 
-  /**
-   * Clone the cached prototype and apply bindings.
-   * This is the fast path for subsequent renders.
-   *
-   * IMPORTANT: We must walk all paths BEFORE applying any bindings,
-   * because text bindings insert content which shifts sibling indices.
-   */
-  private instantiate(cached: CachedTemplate): RenderResult {
-    const fragment = cached.prototype.cloneNode(true) as DocumentFragment;
+  /** Clone the prototype and apply bindings with current values */
+  #instantiate([proto, bindings]: Cached): RenderResult {
+    const frag = proto.cloneNode(true) as DocumentFragment;
     const disposers: (() => void)[] = [];
-    const values = this.values;
-    const plugins = this.plugins;
+    const values = this.#values;
 
-    // First pass: resolve all paths to actual node references
-    // This must happen before any content insertion which could shift indices
-    const nodes = cached.bindings.map((binding) =>
-      walkPath(fragment, binding.path),
-    );
+    // Walk all paths first to get stable node references
+    const nodes = bindings.map((b) => walk(frag, b[1]));
 
-    // Second pass: apply bindings using the resolved node references
-    for (let i = 0; i < cached.bindings.length; i++) {
-      const binding = cached.bindings[i]!;
+    for (let i = 0; i < bindings.length; i++) {
+      const b = bindings[i]!;
       const node = nodes[i]!;
 
-      switch (binding.type) {
-        case "text":
-          disposers.push(
-            bindContent(node as Comment, values[binding.slot], plugins),
-          );
-          break;
+      if (b[0] === 0) {
+        // Content binding
+        this.#bindContent(node as Comment, values[b[2]], disposers);
+      } else if (b[0] === 1) {
+        // Attribute binding
+        const [, , name, statics, slots] = b;
+        const resolved = slots.map((s) => {
+          const v = values[s];
+          return typeof v === "function"
+            ? wrapFn(v as () => unknown, disposers)
+            : v;
+        });
+        let prev: string | null | undefined;
 
-        case "attr":
-          this.applyAttrBinding(node as Element, binding, values, disposers);
-          break;
-
-        case "prop": {
-          const { name, slot } = binding;
-          let prev: unknown;
-          const unsub = bind(values[slot], (v) => {
-            if (Object.is(v, prev)) return;
-            prev = v;
-            (node as unknown as Record<string, unknown>)[name] = v;
-          });
-          if (unsub) disposers.push(unsub);
-          break;
-        }
-
-        case "event": {
-          const { name, slot } = binding;
-          const handler = values[slot] as EventListener;
-          node.addEventListener(name, handler);
-          disposers.push(() => node.removeEventListener(name, handler));
-          break;
-        }
+        const update = () => {
+          let result = statics[0]!,
+            allNull = true;
+          for (let j = 0; j < resolved.length; j++) {
+            const val = isSignal(resolved[j])
+              ? (resolved[j] as Reactive<unknown>).value
+              : resolved[j];
+            if (val != null && val !== false) allNull = false;
+            result += (val === true ? "" : (val ?? "")) + statics[j + 1]!;
+          }
+          const next = slots.length === 1 && allNull ? null : result;
+          if (next !== prev) {
+            prev = next;
+            if (next === null) (node as Element).removeAttribute(name);
+            else (node as Element).setAttribute(name, next);
+          }
+        };
+        update();
+        for (const r of resolved)
+          if (isSignal(r)) disposers.push(r.subscribe(update));
+      } else if (b[0] === 2) {
+        // Property binding
+        const [, , name, slot] = b;
+        bind(
+          values[slot],
+          (v) => ((node as unknown as Record<string, unknown>)[name] = v),
+          disposers,
+        );
+      } else {
+        // Event binding
+        const [, , name, slot] = b;
+        const handler = values[slot] as EventListener;
+        node.addEventListener(name, handler);
+        disposers.push(() => node.removeEventListener(name, handler));
       }
     }
 
-    return { fragment, dispose: () => disposers.forEach((d) => d()) };
+    return { fragment: frag, dispose: () => disposers.forEach((f) => f()) };
   }
 
-  /** Apply an attribute binding */
-  private applyAttrBinding(
-    el: Element,
-    binding: Extract<BindingInfo, { type: "attr" }>,
-    values: unknown[],
-    disposers: (() => void)[],
-  ): void {
-    const { name, statics, slots } = binding;
-
-    // Convert functions to scoped computeds, track all reactives
-    const resolved: unknown[] = [];
-    const reactives: Reactive<unknown>[] = [];
-    for (let i = 0; i < slots.length; i++) {
-      let v = values[slots[i]!];
-      if (typeof v === "function") {
-        const [c, dispose] = scopedComputed(v as () => unknown);
-        v = c;
-        disposers.push(dispose);
+  /** Bind content slot - handles plugins, templates, arrays, and primitives */
+  #bindContent(marker: Comment, value: unknown, disposers: (() => void)[]) {
+    // Try plugins first
+    for (const plugin of this.#plugins) {
+      const binder = plugin(value);
+      if (binder) {
+        binder(marker, disposers);
+        return;
       }
-      resolved[i] = v;
-      if (isSignal(v)) reactives.push(v);
     }
 
-    let prev: string | null | undefined;
-    const update = () => {
-      let result = statics[0]!;
-      let allNull = true;
-      for (let i = 0; i < resolved.length; i++) {
-        const v = resolved[i];
-        const val = isSignal(v) ? (v as Reactive<unknown>).value : v;
-        if (val != null && val !== false) allNull = false;
-        result += (val === true ? "" : (val ?? "")) + statics[i + 1]!;
-      }
-      const next = slots.length === 1 && allNull ? null : result;
-      if (next === prev) return;
-      prev = next;
-      if (next === null) el.removeAttribute(name);
-      else el.setAttribute(name, next);
+    let currentNodes: Node[] = [],
+      childDisposers: (() => void)[] = [];
+
+    const clear = () => {
+      childDisposers.forEach((f) => f());
+      childDisposers = [];
+      currentNodes.forEach((n) => (n as ChildNode).remove());
+      currentNodes = [];
     };
 
-    update();
-    for (let i = 0; i < reactives.length; i++) {
-      disposers.push(reactives[i]!.subscribe(update));
-    }
+    const update = (v: unknown) => {
+      // Fast path: update existing text node for primitives
+      if (
+        v != null &&
+        typeof v !== "boolean" &&
+        typeof v !== "object" &&
+        currentNodes.length === 1 &&
+        !childDisposers.length &&
+        currentNodes[0] instanceof Text
+      ) {
+        currentNodes[0].textContent = String(v);
+        return;
+      }
+      clear();
+      const parent = marker.parentNode!;
+      for (const item of [v].flat()) {
+        if (item instanceof Template) {
+          const { fragment, dispose } = item.render();
+          childDisposers.push(dispose);
+          currentNodes.push(...fragment.childNodes);
+          parent.insertBefore(fragment, marker);
+        } else if (item != null && typeof item !== "boolean") {
+          const n = document.createTextNode(String(item));
+          currentNodes.push(n);
+          parent.insertBefore(n, marker);
+        }
+      }
+    };
+
+    bind(value, update, disposers);
+    disposers.push(clear);
   }
 }
 
-/**
- * Bind dynamic content at a marker position.
- * Tries plugins first (first match wins), then falls back to default handling.
- */
-function bindContent(
-  marker: Comment,
-  value: unknown,
-  plugins: InterpolationPlugin[],
-): () => void {
-  // Try plugins first (first match wins)
-  for (const plugin of plugins) {
-    const binder = plugin(value);
-    if (binder) {
-      const pluginDisposers: (() => void)[] = [];
-      binder(marker, pluginDisposers);
-      return () => pluginDisposers.forEach((d) => d());
-    }
-  }
-
-  // Default handling
-  let nodes: Node[] = [];
-  let childDisposers: (() => void)[] = [];
-  let prevPrimitive: unknown;
-
-  const clear = () => {
-    for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
-    childDisposers = [];
-    for (let i = 0; i < nodes.length; i++) (nodes[i] as ChildNode).remove();
-    nodes = [];
-    prevPrimitive = undefined;
-  };
-
-  const update = (v: unknown) => {
-    // Fast path: update existing text node for primitives
-    const isPrimitive =
-      v != null && typeof v !== "boolean" && typeof v !== "object";
-    if (
-      isPrimitive &&
-      nodes.length === 1 &&
-      childDisposers.length === 0 &&
-      nodes[0] instanceof Text
-    ) {
-      const str = String(v);
-      if (str !== prevPrimitive) {
-        prevPrimitive = str;
-        nodes[0].textContent = str;
-      }
-      return;
-    }
-
-    clear();
-    const parent = marker.parentNode!;
-
-    // Render content (handles arrays, templates, primitives)
-    for (const item of Array.isArray(v) ? v : [v]) {
-      if (item instanceof Template) {
-        const { fragment, dispose } = item.render();
-        childDisposers.push(dispose);
-        nodes.push(...fragment.childNodes);
-        parent.insertBefore(fragment, marker);
-      } else if (item != null && typeof item !== "boolean") {
-        const node = document.createTextNode(String(item));
-        nodes.push(node);
-        parent.insertBefore(node, marker);
-      }
-    }
-
-    // Track primitive for future fast-path
-    if (isPrimitive && nodes.length === 1 && childDisposers.length === 0) {
-      prevPrimitive = String(v);
-    }
-  };
-
-  const unsub = bind(value, update);
-  return () => {
-    unsub?.();
-    clear();
-  };
-}
-
-/**
- * Create an html tag function with the given plugins.
- */
-function createHtmlWithPlugins(plugins: InterpolationPlugin[]): HtmlTag {
+function createHtml(plugins: InterpolationPlugin[]): HtmlTag {
   const tag = ((strings: TemplateStringsArray, ...values: unknown[]) =>
     new Template(strings, values, plugins)) as HtmlTag;
-
-  tag.with = (...morePlugins: InterpolationPlugin[]) =>
-    createHtmlWithPlugins([...plugins, ...morePlugins]);
-
+  tag.with = (...more: InterpolationPlugin[]) =>
+    createHtml([...plugins, ...more]);
   return tag;
 }
 
-/**
- * Tagged template literal for creating reactive HTML templates.
- * Use .with(...plugins) to add interpolation handlers like each() or async generators.
- *
- * @example
- * ```ts
- * import { html } from "balises";
- * import eachPlugin, { each } from "balises/each";
- * import asyncPlugin from "balises/async";
- *
- * const html = baseHtml.with(eachPlugin, asyncPlugin);
- *
- * html`<div>${async function* () { ... }}</div>`.render();
- * ```
- */
-export const html: HtmlTag = createHtmlWithPlugins([]);
+export const html: HtmlTag = createHtml([]);

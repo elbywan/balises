@@ -2,7 +2,7 @@
  * Computed - A derived reactive value.
  */
 
-import { removeFromArray } from "./signal.js";
+import { removeFromArray, IsSlot } from "./signal.js";
 import {
   context,
   setContext,
@@ -29,7 +29,7 @@ export class Computed<T> {
   #targets: Computed<unknown>[] = [];
   #sources: TrackableSource[] = [];
   #sourceIndex = 0;
-  #isSlots: Map<T, TrackableSource> | undefined;
+  #isSlots: Map<T, IsSlot<T>> | undefined;
 
   constructor(fn: () => T) {
     this.#fn = fn;
@@ -54,10 +54,7 @@ export class Computed<T> {
   dispose(): void {
     this.#fn = undefined;
     const sources = this.#sources;
-    for (let i = 0; i < sources.length; i++) {
-      const source = sources[i];
-      if (source) source.deleteTarget(this);
-    }
+    for (let i = 0; i < sources.length; i++) sources[i]?.deleteTarget(this);
     this.#sources = [];
     this.#subs.length = 0;
     this.#isSlots?.clear();
@@ -79,24 +76,12 @@ export class Computed<T> {
   is(value: T): boolean {
     if (this.#dirty) this.#recompute();
     if (context) {
-      if (!this.#isSlots) this.#isSlots = new Map();
-      let slot = this.#isSlots.get(value);
-      if (!slot) {
-        const targets: Computed<unknown>[] = [];
-        slot = { targets, deleteTarget: (t) => removeFromArray(targets, t) };
-        this.#isSlots.set(value, slot);
-      }
+      const slots = this.#isSlots ?? (this.#isSlots = new Map());
+      let slot = slots.get(value);
+      if (!slot) slots.set(value, (slot = new IsSlot(slots, value)));
       context.trackSource(slot);
     }
     return Object.is(this.#value, value);
-  }
-
-  #notifyIsSlot(key: T): void {
-    const slot = this.#isSlots!.get(key);
-    if (!slot) return;
-    // Copy: markDirty can cause disposal which mutates the array
-    const targets = slot.targets.slice();
-    for (let i = 0; i < targets.length; i++) targets[i]!.markDirty();
   }
 
   /**
@@ -139,7 +124,7 @@ export class Computed<T> {
 
     // Phase 1: Mark all dependents as dirty, collect subscribers
     const queue: Computed<unknown>[] = [this];
-    const toNotify: Array<{ c: Computed<unknown>; old: unknown }> = [];
+    const toNotify: [Computed<unknown>, unknown][] = [];
 
     for (let i = 0; i < queue.length; i++) {
       const c = queue[i]!;
@@ -155,25 +140,24 @@ export class Computed<T> {
 
       // Collect computeds with subscribers or .is() slots for later notification
       if ((c.#subs.length || c.#isSlots?.size) && c.#fn) {
-        toNotify.push({ c, old: c.#value });
+        toNotify.push([c, c.#value]);
       }
     }
 
     // Phase 2: Notify subscribers (after all dirty flags are set)
     for (let i = 0; i < toNotify.length; i++) {
-      const { c, old } = toNotify[i]!;
+      const [c, old] = toNotify[i]!;
       const notify = () => {
-        if (c.#fn) {
-          c.#recompute();
-          if (!Object.is(c.#value, old)) {
-            // Notify .is() slots for old and new values
-            if (c.#isSlots) {
-              c.#notifyIsSlot(old as T);
-              c.#notifyIsSlot(c.#value as T);
-            }
-            const subs = c.#subs;
-            for (let j = 0; j < subs.length; j++) subs[j]!();
+        if (!c.#fn) return;
+        c.#recompute();
+        if (!Object.is(c.#value, old)) {
+          // Notify .is() slots for old and new values
+          if (c.#isSlots) {
+            c.#isSlots.get(old)?.notify();
+            c.#isSlots.get(c.#value)?.notify();
           }
+          const subs = c.#subs;
+          for (let j = 0; j < subs.length; j++) subs[j]!();
         }
       };
       void (isBatching() ? enqueueBatchOne(notify) : notify());
@@ -208,12 +192,7 @@ export class Computed<T> {
       const newLen = this.#sourceIndex;
       if (newLen < prevLen) {
         const sources = this.#sources;
-        for (let i = newLen; i < prevLen; i++) {
-          const source = sources[i];
-          if (source) {
-            source.deleteTarget(this);
-          }
-        }
+        for (let i = newLen; i < prevLen; i++) sources[i]?.deleteTarget(this);
         sources.length = newLen;
       }
 

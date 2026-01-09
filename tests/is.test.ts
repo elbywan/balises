@@ -1,6 +1,62 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { signal, computed } from "../src/signals/index.js";
+import v8 from "node:v8";
+import vm from "node:vm";
+
+v8.setFlagsFromString("--expose-gc");
+const gc = vm.runInNewContext("gc") as () => void;
+
+/**
+ * Force GC and wait until condition is met or timeout.
+ */
+async function forceGCUntil(
+  condition: () => boolean,
+  timeoutMs = 2000,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    gc();
+    await new Promise((r) => setTimeout(r, 10));
+    if (condition()) return true;
+  }
+  return false;
+}
+
+/**
+ * Helper to track GC of multiple objects.
+ */
+function createGCTracker() {
+  const collected = new Set<string>();
+  const registry = new FinalizationRegistry((label: string) => {
+    collected.add(label);
+  });
+
+  return {
+    track(obj: object, label: string) {
+      registry.register(obj, label);
+    },
+    isCollected(label: string) {
+      return collected.has(label);
+    },
+    async waitFor(label: string, timeoutMs = 2000) {
+      const ok = await forceGCUntil(() => collected.has(label), timeoutMs);
+      if (!ok) {
+        throw new Error(`GC timeout: "${label}" not collected`);
+      }
+    },
+    async waitForAll(labels: string[], timeoutMs = 2000) {
+      const ok = await forceGCUntil(
+        () => labels.every((l) => collected.has(l)),
+        timeoutMs,
+      );
+      if (!ok) {
+        const missing = labels.filter((l) => !collected.has(l));
+        throw new Error(`GC timeout: not collected: ${missing.join(", ")}`);
+      }
+    },
+  };
+}
 
 describe("signal.is()", () => {
   describe("basic functionality", () => {
@@ -366,5 +422,542 @@ describe("computed.is()", () => {
 
       c.dispose();
     });
+  });
+});
+
+describe(".is() GC and memory leak tests", () => {
+  describe("signal.is() GC", () => {
+    it("should GC computed using .is() after dispose", async () => {
+      const tracker = createGCTracker();
+      // Signal stays alive - this is key to a valid test
+      const selected = signal<number | null>(null);
+
+      (function scope() {
+        const c = computed(() => (selected.is(1) ? "danger" : ""));
+        c.subscribe(() => {});
+        void c.value; // Trigger computation
+        tracker.track(c, "computed");
+        c.dispose();
+      })();
+
+      // If dispose() didn't unlink from .is() slot, it would keep computed alive
+      await tracker.waitFor("computed");
+    });
+
+    it("should GC multiple computeds using same .is() value after dispose", async () => {
+      const tracker = createGCTracker();
+      const selected = signal<number | null>(null);
+
+      (function scope() {
+        const c1 = computed(() => (selected.is(1) ? "a" : ""));
+        const c2 = computed(() => (selected.is(1) ? "b" : ""));
+        const c3 = computed(() => (selected.is(1) ? "c" : ""));
+        c1.subscribe(() => {});
+        c2.subscribe(() => {});
+        c3.subscribe(() => {});
+        void c1.value;
+        void c2.value;
+        void c3.value;
+        tracker.track(c1, "computed1");
+        tracker.track(c2, "computed2");
+        tracker.track(c3, "computed3");
+        c1.dispose();
+        c2.dispose();
+        c3.dispose();
+      })();
+
+      await tracker.waitForAll(["computed1", "computed2", "computed3"]);
+    });
+
+    it("should GC computeds using different .is() values after dispose", async () => {
+      const tracker = createGCTracker();
+      const selected = signal<number | null>(null);
+
+      (function scope() {
+        const c1 = computed(() => (selected.is(1) ? "a" : ""));
+        const c2 = computed(() => (selected.is(2) ? "b" : ""));
+        const c3 = computed(() => (selected.is(3) ? "c" : ""));
+        c1.subscribe(() => {});
+        c2.subscribe(() => {});
+        c3.subscribe(() => {});
+        void c1.value;
+        void c2.value;
+        void c3.value;
+        tracker.track(c1, "computed1");
+        tracker.track(c2, "computed2");
+        tracker.track(c3, "computed3");
+        c1.dispose();
+        c2.dispose();
+        c3.dispose();
+      })();
+
+      await tracker.waitForAll(["computed1", "computed2", "computed3"]);
+    });
+
+    it("should not leak when creating and disposing many .is() computeds", async () => {
+      const tracker = createGCTracker();
+      const selected = signal<number | null>(null);
+
+      const labels: string[] = [];
+
+      (function scope() {
+        // Create 100 computeds each checking different .is() values
+        for (let i = 0; i < 100; i++) {
+          const c = computed(() => (selected.is(i) ? "danger" : ""));
+          c.subscribe(() => {});
+          void c.value;
+          const label = `computed${i}`;
+          labels.push(label);
+          tracker.track(c, label);
+          c.dispose();
+        }
+      })();
+
+      // All should be GC'd
+      await tracker.waitForAll(labels);
+    });
+
+    it("should GC computed after signal value changes and dispose", async () => {
+      const tracker = createGCTracker();
+      const selected = signal<number | null>(null);
+
+      (function scope() {
+        const c = computed(() => (selected.is(1) ? "danger" : ""));
+        c.subscribe(() => {});
+        void c.value;
+
+        // Trigger some updates before dispose
+        selected.value = 1;
+        void c.value;
+        selected.value = 2;
+        void c.value;
+        selected.value = null;
+        void c.value;
+
+        tracker.track(c, "computed");
+        c.dispose();
+      })();
+
+      await tracker.waitFor("computed");
+    });
+  });
+
+  describe("computed.is() GC", () => {
+    it("should GC computed using computed.is() after dispose", async () => {
+      const tracker = createGCTracker();
+      const a = signal(1);
+      const selected = computed(() => a.value);
+
+      (function scope() {
+        const c = computed(() => (selected.is(1) ? "danger" : ""));
+        c.subscribe(() => {});
+        void c.value;
+        tracker.track(c, "computed");
+        c.dispose();
+      })();
+
+      await tracker.waitFor("computed");
+
+      // Cleanup
+      selected.dispose();
+    });
+
+    it("should GC source computed's .is() slots when source is disposed", async () => {
+      const tracker = createGCTracker();
+      const a = signal(1);
+
+      (function scope() {
+        const selected = computed(() => a.value);
+        const c = computed(() => (selected.is(1) ? "danger" : ""));
+        c.subscribe(() => {});
+        void c.value;
+        tracker.track(c, "inner-computed");
+        tracker.track(selected, "source-computed");
+
+        // Dispose both
+        c.dispose();
+        selected.dispose();
+      })();
+
+      await tracker.waitForAll(["inner-computed", "source-computed"]);
+    });
+
+    it("should GC multiple computeds using computed.is() after dispose", async () => {
+      const tracker = createGCTracker();
+      const a = signal<number | null>(null);
+      const selected = computed(() => a.value);
+
+      (function scope() {
+        const c1 = computed(() => (selected.is(1) ? "a" : ""));
+        const c2 = computed(() => (selected.is(2) ? "b" : ""));
+        const c3 = computed(() => (selected.is(3) ? "c" : ""));
+        c1.subscribe(() => {});
+        c2.subscribe(() => {});
+        c3.subscribe(() => {});
+        void c1.value;
+        void c2.value;
+        void c3.value;
+        tracker.track(c1, "computed1");
+        tracker.track(c2, "computed2");
+        tracker.track(c3, "computed3");
+        c1.dispose();
+        c2.dispose();
+        c3.dispose();
+      })();
+
+      await tracker.waitForAll(["computed1", "computed2", "computed3"]);
+
+      // Cleanup
+      selected.dispose();
+    });
+  });
+
+  describe("subscription cleanup", () => {
+    it("should remove from .is() slot targets when computed is disposed", () => {
+      const selected = signal<number | null>(null);
+
+      const c1 = computed(() => (selected.is(1) ? "a" : ""));
+      const c2 = computed(() => (selected.is(1) ? "b" : ""));
+      c1.subscribe(() => {});
+      c2.subscribe(() => {});
+      void c1.value;
+      void c2.value;
+
+      // Both should be subscribed to the is(1) slot
+      // Dispose one - the other should still work
+      c1.dispose();
+
+      // c2 should still react to changes
+      let c2Calls = 0;
+      c2.subscribe(() => c2Calls++);
+      selected.value = 1;
+      assert.strictEqual(c2.value, "b");
+      assert.strictEqual(c2Calls, 1);
+
+      c2.dispose();
+    });
+
+    it("should not notify disposed computed when .is() value changes", () => {
+      const selected = signal<number | null>(null);
+
+      let calls = 0;
+      const c = computed(() => {
+        calls++;
+        return selected.is(1) ? "danger" : "";
+      });
+      c.subscribe(() => {});
+      void c.value;
+      assert.strictEqual(calls, 1);
+
+      c.dispose();
+
+      // This should not trigger the disposed computed
+      selected.value = 1;
+      assert.strictEqual(calls, 1); // Should still be 1
+    });
+
+    it("should handle dispose during signal update cycle", () => {
+      const selected = signal<number | null>(null);
+
+      let c2Disposed = false;
+      let c1Calls = 0;
+      let c2Calls = 0;
+
+      const c2 = computed(() => {
+        c2Calls++;
+        return selected.is(2) ? "danger2" : "";
+      });
+
+      const c1 = computed(() => {
+        c1Calls++;
+        const isOne = selected.is(1);
+        // Dispose c2 during c1's computation (edge case)
+        // Use peek() to avoid creating a .value dependency
+        if (selected.peek() === 1 && !c2Disposed) {
+          c2Disposed = true;
+          c2.dispose();
+        }
+        return isOne ? "danger1" : "";
+      });
+
+      c1.subscribe(() => {});
+      c2.subscribe(() => {});
+      void c1.value;
+      void c2.value;
+
+      // Trigger update that will cause c1 to dispose c2
+      selected.value = 1;
+
+      assert.strictEqual(c1.value, "danger1");
+      assert.strictEqual(c1Calls, 2);
+      // c2 was disposed during the update cycle
+      assert.strictEqual(c2Disposed, true);
+
+      // Further updates should not affect disposed c2
+      const c2CallsAfterDispose = c2Calls;
+      selected.value = 2;
+      assert.strictEqual(c2Calls, c2CallsAfterDispose);
+
+      c1.dispose();
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle rapid create/dispose cycles", async () => {
+      const tracker = createGCTracker();
+      const selected = signal<number | null>(null);
+
+      const labels: string[] = [];
+
+      // Rapid create/dispose cycle
+      for (let cycle = 0; cycle < 10; cycle++) {
+        (function scope() {
+          const c = computed(() => (selected.is(cycle) ? "danger" : ""));
+          c.subscribe(() => {});
+          void c.value;
+
+          // Trigger some updates
+          selected.value = cycle;
+          void c.value;
+
+          const label = `computed-cycle${cycle}`;
+          labels.push(label);
+          tracker.track(c, label);
+          c.dispose();
+        })();
+      }
+
+      await tracker.waitForAll(labels);
+    });
+
+    it("should handle .is() with object keys", async () => {
+      const tracker = createGCTracker();
+      const obj1 = { id: 1 };
+      const obj2 = { id: 2 };
+      const selected = signal<object | null>(null);
+
+      (function scope() {
+        const c1 = computed(() => (selected.is(obj1) ? "a" : ""));
+        const c2 = computed(() => (selected.is(obj2) ? "b" : ""));
+        c1.subscribe(() => {});
+        c2.subscribe(() => {});
+        void c1.value;
+        void c2.value;
+
+        selected.value = obj1;
+        assert.strictEqual(c1.value, "a");
+        assert.strictEqual(c2.value, "");
+
+        selected.value = obj2;
+        assert.strictEqual(c1.value, "");
+        assert.strictEqual(c2.value, "b");
+
+        tracker.track(c1, "computed1");
+        tracker.track(c2, "computed2");
+        c1.dispose();
+        c2.dispose();
+      })();
+
+      await tracker.waitForAll(["computed1", "computed2"]);
+    });
+
+    it("should handle .is() computed that switches between tracking and not", async () => {
+      const tracker = createGCTracker();
+      const selected = signal<number | null>(null);
+      const shouldTrack = signal(true);
+
+      (function scope() {
+        const c = computed(() => {
+          if (shouldTrack.value) {
+            return selected.is(1) ? "danger" : "";
+          }
+          return "not-tracking";
+        });
+        c.subscribe(() => {});
+        void c.value;
+
+        // Switch to not tracking
+        shouldTrack.value = false;
+        void c.value;
+
+        // Switch back to tracking
+        shouldTrack.value = true;
+        void c.value;
+
+        tracker.track(c, "computed");
+        c.dispose();
+      })();
+
+      await tracker.waitFor("computed");
+    });
+  });
+});
+
+describe(".is() slot cleanup", () => {
+  it("should remove empty slots from the map when all targets dispose", () => {
+    const selected = signal<number | null>(null);
+
+    // Access internal isSlots map via the signal
+    // We'll verify cleanup by checking the computed properly unlinks
+    const c1 = computed(() => (selected.is(1) ? "a" : ""));
+    const c2 = computed(() => (selected.is(1) ? "b" : ""));
+    c1.subscribe(() => {});
+    c2.subscribe(() => {});
+    void c1.value;
+    void c2.value;
+
+    // Both computeds are now tracking the is(1) slot
+    // Verify they work
+    selected.value = 1;
+    assert.strictEqual(c1.value, "a");
+    assert.strictEqual(c2.value, "b");
+
+    // Dispose one - the other should still work
+    c1.dispose();
+
+    selected.value = null;
+    assert.strictEqual(c2.value, "");
+
+    selected.value = 1;
+    assert.strictEqual(c2.value, "b");
+
+    // Dispose the other - slot should be cleaned up
+    c2.dispose();
+
+    // Creating a new computed should work (new slot created)
+    const c3 = computed(() => (selected.is(1) ? "c" : ""));
+    c3.subscribe(() => {});
+    assert.strictEqual(c3.value, "c");
+
+    c3.dispose();
+  });
+
+  it("should handle computed using both .value and .is() on same signal", () => {
+    const selected = signal<number | null>(null);
+
+    let calls = 0;
+    const c = computed(() => {
+      calls++;
+      // Access both .value and .is()
+      const currentValue = selected.value;
+      const isOne = selected.is(1);
+      return `value=${currentValue}, isOne=${isOne}`;
+    });
+    c.subscribe(() => {});
+
+    assert.strictEqual(c.value, "value=null, isOne=false");
+    assert.strictEqual(calls, 1);
+
+    // Change to 1 - should trigger once (not twice)
+    selected.value = 1;
+    assert.strictEqual(c.value, "value=1, isOne=true");
+    assert.strictEqual(calls, 2); // Only one recompute
+
+    // Change to 2 - should trigger once
+    selected.value = 2;
+    assert.strictEqual(c.value, "value=2, isOne=false");
+    assert.strictEqual(calls, 3); // Only one recompute
+
+    c.dispose();
+  });
+
+  it("should clean up slots when computed changes dependencies", () => {
+    const selected = signal<number | null>(null);
+    const useIs = signal(true);
+
+    let calls = 0;
+    const c = computed(() => {
+      calls++;
+      if (useIs.value) {
+        return selected.is(1) ? "danger" : "";
+      }
+      return "not-using-is";
+    });
+    c.subscribe(() => {});
+
+    assert.strictEqual(c.value, "");
+    assert.strictEqual(calls, 1);
+
+    // Trigger is(1) slot
+    selected.value = 1;
+    assert.strictEqual(c.value, "danger");
+    assert.strictEqual(calls, 2);
+
+    // Switch to not using .is() - old slot should be unlinked
+    useIs.value = false;
+    assert.strictEqual(c.value, "not-using-is");
+    assert.strictEqual(calls, 3);
+
+    // Now changing selected should NOT trigger recompute
+    // (because c no longer tracks selected or its .is() slot)
+    const callsBeforeChange = calls;
+    selected.value = 2;
+    // c should NOT be recomputed
+    assert.strictEqual(calls, callsBeforeChange);
+
+    c.dispose();
+  });
+
+  it("should handle computed using both .value and .is() on same computed source", () => {
+    const source = signal(1);
+    const derived = computed(() => source.value);
+
+    let calls = 0;
+    const c = computed(() => {
+      calls++;
+      // Access both .value and .is() on the COMPUTED (not signal)
+      const currentValue = derived.value;
+      const isOne = derived.is(1);
+      return `value=${currentValue}, isOne=${isOne}`;
+    });
+    c.subscribe(() => {});
+
+    assert.strictEqual(c.value, "value=1, isOne=true");
+    assert.strictEqual(calls, 1);
+
+    // Change source to 2 - should trigger c only once (not twice)
+    source.value = 2;
+    assert.strictEqual(c.value, "value=2, isOne=false");
+    assert.strictEqual(calls, 2); // Only one recompute
+
+    // Change back to 1 - should trigger c only once
+    source.value = 1;
+    assert.strictEqual(c.value, "value=1, isOne=true");
+    assert.strictEqual(calls, 3); // Only one recompute
+
+    // Change to 3 - neither old nor new matches .is(1)
+    source.value = 3;
+    assert.strictEqual(c.value, "value=3, isOne=false");
+    assert.strictEqual(calls, 4); // Only one recompute
+
+    derived.dispose();
+    c.dispose();
+  });
+
+  it("should handle many slots and clean them all up", () => {
+    const selected = signal<number | null>(null);
+    const computeds: ReturnType<typeof computed<string>>[] = [];
+
+    // Create 100 computeds each checking different .is() values
+    for (let i = 0; i < 100; i++) {
+      const c = computed(() => (selected.is(i) ? "danger" : ""));
+      c.subscribe(() => {});
+      void c.value;
+      computeds.push(c);
+    }
+
+    // Verify they work
+    selected.value = 50;
+    assert.strictEqual(computeds[50]!.value, "danger");
+    assert.strictEqual(computeds[49]!.value, "");
+
+    // Dispose all
+    for (const c of computeds) c.dispose();
+
+    // Creating new computeds should work
+    const c = computed(() => (selected.is(50) ? "new" : ""));
+    c.subscribe(() => {});
+    assert.strictEqual(c.value, "new");
+    c.dispose();
   });
 });

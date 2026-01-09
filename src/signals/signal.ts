@@ -4,6 +4,7 @@
 
 import type { Computed } from "./computed.js";
 import {
+  batch,
   context,
   isBatching,
   enqueueBatchAll,
@@ -24,6 +25,37 @@ export function removeFromArray<T>(array: T[], item: T): void {
 }
 
 /**
+ * A tracking slot for .is() comparisons.
+ * Self-removes from parent map when all targets are gone.
+ * @internal
+ */
+export class IsSlot<T> implements TrackableSource {
+  targets: Computed<unknown>[] = [];
+  #map: Map<T, IsSlot<T>>;
+  #key: T;
+
+  constructor(map: Map<T, IsSlot<T>>, key: T) {
+    this.#map = map;
+    this.#key = key;
+  }
+
+  deleteTarget(target: Computed<unknown>): void {
+    removeFromArray(this.targets, target);
+    // Self-cleanup when empty
+    if (!this.targets.length) {
+      this.#map.delete(this.#key);
+    }
+  }
+
+  /** Notify all targets that they may need to recompute */
+  notify(): void {
+    // Copy: markDirty can cause disposal which mutates the array
+    const copy = this.targets.slice();
+    for (let i = 0; i < copy.length; i++) copy[i]!.markDirty();
+  }
+}
+
+/**
  * A reactive value container. When the value changes, all dependent
  * computeds are marked dirty and subscribers are notified.
  *
@@ -33,7 +65,7 @@ export class Signal<T> {
   #value: T;
   #subs: Subscriber[] = [];
   #targets: Computed<unknown>[] = [];
-  #isSlots: Map<T, TrackableSource> | undefined;
+  #isSlots: Map<T, IsSlot<T>> | undefined;
 
   constructor(value: T) {
     this.#value = value;
@@ -50,16 +82,26 @@ export class Signal<T> {
     const prev = this.#value;
     this.#value = v;
 
-    // Notify .is() slots for old and new values (O(1) selection updates)
-    if (this.#isSlots) {
-      this.#notifyIsSlot(prev);
-      this.#notifyIsSlot(v);
-    }
-
-    // Mark all dependent computeds as dirty
     const targets = this.#targets;
-    for (let i = 0; i < targets.length; i++) {
-      targets[i]!.markDirty();
+    const isSlots = this.#isSlots;
+
+    // Fast path: no .is() slots, just notify regular targets
+    if (!isSlots) {
+      for (let i = 0; i < targets.length; i++) {
+        targets[i]!.markDirty();
+      }
+    } else {
+      // When .is() slots exist, batch all notifications so markDirty()
+      // defers recomputation. This allows the #dirty flag to remain true
+      // across multiple markDirty() calls, preventing double recomputation
+      // when a computed tracks both .value and .is() on the same signal.
+      batch(() => {
+        isSlots.get(prev)?.notify();
+        isSlots.get(v)?.notify();
+        for (let i = 0; i < targets.length; i++) {
+          targets[i]!.markDirty();
+        }
+      });
     }
 
     // Notify subscribers
@@ -68,18 +110,10 @@ export class Signal<T> {
         enqueueBatchAll(this.#subs);
       } else {
         // Copy array to avoid issues if subscribers modify the array during iteration
-        const subs = [...this.#subs];
+        const subs = this.#subs.slice();
         for (let i = 0; i < subs.length; i++) subs[i]!();
       }
     }
-  }
-
-  #notifyIsSlot(key: T): void {
-    const slot = this.#isSlots!.get(key);
-    if (!slot) return;
-    // Copy: markDirty can cause disposal which mutates the array
-    const targets = slot.targets.slice();
-    for (let i = 0; i < targets.length; i++) targets[i]!.markDirty();
   }
 
   subscribe(fn: Subscriber): () => void {
@@ -129,13 +163,9 @@ export class Signal<T> {
    */
   is(value: T): boolean {
     if (context) {
-      if (!this.#isSlots) this.#isSlots = new Map();
-      let slot = this.#isSlots.get(value);
-      if (!slot) {
-        const targets: Computed<unknown>[] = [];
-        slot = { targets, deleteTarget: (t) => removeFromArray(targets, t) };
-        this.#isSlots.set(value, slot);
-      }
+      const slots = this.#isSlots ?? (this.#isSlots = new Map());
+      let slot = slots.get(value);
+      if (!slot) slots.set(value, (slot = new IsSlot(slots, value)));
       context.trackSource(slot);
     }
     return Object.is(this.#value, value);
@@ -183,5 +213,13 @@ export class ReadonlySignal<T> {
 
   subscribe(fn: Subscriber): () => void {
     return this.#signal.subscribe(fn);
+  }
+
+  /**
+   * Check if the signal's value equals the given value.
+   * Enables O(1) selection updates.
+   */
+  is(value: T): boolean {
+    return this.#signal.is(value);
   }
 }

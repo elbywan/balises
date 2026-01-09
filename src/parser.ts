@@ -174,20 +174,12 @@ export class HTMLParser {
     this.statics = [];
     this.indexes = [];
   }
-
-  private isA(c: string) {
-    return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
-  }
-  private isT(c: string) {
-    return (
-      (c >= "a" && c <= "z") ||
-      (c >= "A" && c <= "Z") ||
-      (c >= "0" && c <= "9") ||
-      c === "-" ||
-      c === ":"
-    );
-  }
-  private isW(c: string) {
-    return c <= " " && c !== "";
-  }
+  private isA = (c: string) => (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
+  private isT = (c: string) =>
+    (c >= "a" && c <= "z") ||
+    (c >= "A" && c <= "Z") ||
+    (c >= "0" && c <= "9") ||
+    c === "-" ||
+    c === ":";
+  private isW = (c: string) => c <= " " && c !== "";
 }

@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-**Balises** is a minimal reactive HTML templating library (~3.1KB gzipped) for building websites and web components. It provides:
+**Balises** is a minimal reactive HTML templating library (~3.2KB gzipped) for building websites and web components. It provides:
 
 - **Reactive signals system** - standalone reactivity (can be used without DOM)
 - **HTML templating** - tagged template literals with reactive bindings
@@ -684,7 +684,7 @@ html`<svg><circle r="10" /></svg>`;
 
 ### Bundle Size
 
-- Full library: ~3.1KB gzipped
+- Full library: ~3.2KB gzipped
 - Signals only: ~1.5KB gzipped
 - CI warns if IIFE bundle exceeds 3500 bytes gzipped
 
