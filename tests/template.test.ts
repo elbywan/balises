@@ -2845,4 +2845,714 @@ describe("Template.render()", () => {
       });
     });
   });
+
+  describe("template caching", () => {
+    it("should reuse cached prototype for same template strings", () => {
+      // Use the same tagged template literal twice
+      function createTemplate() {
+        return html`<div class="cached"><span>Hello</span></div>`;
+      }
+
+      const t1 = createTemplate();
+      const t2 = createTemplate();
+
+      const { fragment: f1, dispose: d1 } = t1.render();
+      const { fragment: f2, dispose: d2 } = t2.render();
+
+      // Both should produce valid DOM
+      assert.strictEqual((f1.firstChild as Element).className, "cached");
+      assert.strictEqual((f2.firstChild as Element).className, "cached");
+
+      // They should be separate instances
+      assert.notStrictEqual(f1.firstChild, f2.firstChild);
+
+      d1();
+      d2();
+    });
+
+    it("should isolate instances - mutations should not affect cached prototype", () => {
+      function createTemplate() {
+        return html`<div class="original"><span>Text</span></div>`;
+      }
+
+      // Render first instance and mutate it
+      const { fragment: f1, dispose: d1 } = createTemplate().render();
+      const div1 = f1.firstChild as HTMLDivElement;
+      div1.className = "mutated";
+      div1.textContent = "Changed!";
+
+      // Render second instance - should have original content
+      const { fragment: f2, dispose: d2 } = createTemplate().render();
+      const div2 = f2.firstChild as HTMLDivElement;
+
+      assert.strictEqual(div2.className, "original");
+      assert.strictEqual(div2.querySelector("span")?.textContent, "Text");
+
+      d1();
+      d2();
+    });
+
+    it("should maintain reactivity across cached renders", () => {
+      document.body.innerHTML = "";
+      const count = signal(0);
+
+      function createTemplate() {
+        return html`<div>${() => count.value}</div>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate().render();
+      const { fragment: f2, dispose: d2 } = createTemplate().render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const div1 = document.body.children[0] as HTMLDivElement;
+      const div2 = document.body.children[1] as HTMLDivElement;
+
+      assert.strictEqual(div1.textContent, "0");
+      assert.strictEqual(div2.textContent, "0");
+
+      // Update signal - both should react
+      count.value = 42;
+
+      assert.strictEqual(div1.textContent, "42");
+      assert.strictEqual(div2.textContent, "42");
+
+      // Dispose one, other should still work
+      d1();
+      count.value = 100;
+
+      assert.strictEqual(div2.textContent, "100");
+
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should handle multiple bindings per cached template", () => {
+      document.body.innerHTML = "";
+      const name = signal("World");
+      const cls = signal("greeting");
+
+      function createTemplate() {
+        return html`<div class=${() => cls.value}>
+          <span>Hello, ${() => name.value}!</span>
+        </div>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate().render();
+      const { fragment: f2, dispose: d2 } = createTemplate().render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const div1 = document.body.children[0] as HTMLDivElement;
+      const div2 = document.body.children[1] as HTMLDivElement;
+
+      assert.strictEqual(div1.className, "greeting");
+      assert.strictEqual(div2.className, "greeting");
+      assert.ok(div1.textContent?.includes("Hello, World!"));
+      assert.ok(div2.textContent?.includes("Hello, World!"));
+
+      // Update signals
+      name.value = "Cached";
+      cls.value = "updated";
+
+      assert.strictEqual(div1.className, "updated");
+      assert.strictEqual(div2.className, "updated");
+      assert.ok(div1.textContent?.includes("Hello, Cached!"));
+      assert.ok(div2.textContent?.includes("Hello, Cached!"));
+
+      d1();
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should preserve SVG namespace after cloning", () => {
+      function createTemplate() {
+        return html`<svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="40" />
+        </svg>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate().render();
+      const { fragment: f2, dispose: d2 } = createTemplate().render();
+
+      const svg1 = f1.firstChild as SVGSVGElement;
+      const svg2 = f2.firstChild as SVGSVGElement;
+      const circle1 = svg1.querySelector("circle");
+      const circle2 = svg2.querySelector("circle");
+
+      // Both should have SVG namespace
+      assert.strictEqual(svg1.namespaceURI, "http://www.w3.org/2000/svg");
+      assert.strictEqual(svg2.namespaceURI, "http://www.w3.org/2000/svg");
+      assert.strictEqual(circle1?.namespaceURI, "http://www.w3.org/2000/svg");
+      assert.strictEqual(circle2?.namespaceURI, "http://www.w3.org/2000/svg");
+
+      d1();
+      d2();
+    });
+
+    it("should handle event bindings in cached templates", () => {
+      document.body.innerHTML = "";
+      let clickCount1 = 0;
+      let clickCount2 = 0;
+
+      function createTemplate(onClick: () => void) {
+        return html`<button @click=${onClick}>Click</button>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate(
+        () => clickCount1++,
+      ).render();
+      const { fragment: f2, dispose: d2 } = createTemplate(
+        () => clickCount2++,
+      ).render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const btn1 = document.body.children[0] as HTMLButtonElement;
+      const btn2 = document.body.children[1] as HTMLButtonElement;
+
+      btn1.click();
+      assert.strictEqual(clickCount1, 1);
+      assert.strictEqual(clickCount2, 0);
+
+      btn2.click();
+      btn2.click();
+      assert.strictEqual(clickCount1, 1);
+      assert.strictEqual(clickCount2, 2);
+
+      d1();
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should handle property bindings in cached templates", () => {
+      function createTemplate(value: string) {
+        return html`<input .value=${value} />`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate("first").render();
+      const { fragment: f2, dispose: d2 } = createTemplate("second").render();
+
+      const input1 = f1.firstChild as HTMLInputElement;
+      const input2 = f2.firstChild as HTMLInputElement;
+
+      assert.strictEqual(input1.value, "first");
+      assert.strictEqual(input2.value, "second");
+
+      d1();
+      d2();
+    });
+
+    it("should handle nested templates with caching", () => {
+      const show = signal(true);
+
+      function createInner() {
+        return html`<span class="inner">Inner</span>`;
+      }
+
+      function createOuter() {
+        return html`<div class="outer">
+          ${() => (show.value ? createInner() : null)}
+        </div>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createOuter().render();
+      const { fragment: f2, dispose: d2 } = createOuter().render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      // Both should show inner
+      assert.strictEqual(document.querySelectorAll(".inner").length, 2);
+
+      // Toggle off
+      show.value = false;
+      assert.strictEqual(document.querySelectorAll(".inner").length, 0);
+
+      // Toggle on
+      show.value = true;
+      assert.strictEqual(document.querySelectorAll(".inner").length, 2);
+
+      d1();
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should handle multi-part attribute bindings with caching", () => {
+      const part1 = signal("hello");
+      const part2 = signal("world");
+
+      function createTemplate() {
+        return html`<div
+          class="static ${() => part1.value} ${() => part2.value}"
+        ></div>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate().render();
+      const { fragment: f2, dispose: d2 } = createTemplate().render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const div1 = document.body.children[0] as HTMLDivElement;
+      const div2 = document.body.children[1] as HTMLDivElement;
+
+      assert.strictEqual(div1.className, "static hello world");
+      assert.strictEqual(div2.className, "static hello world");
+
+      part1.value = "foo";
+      assert.strictEqual(div1.className, "static foo world");
+      assert.strictEqual(div2.className, "static foo world");
+
+      part2.value = "bar";
+      assert.strictEqual(div1.className, "static foo bar");
+      assert.strictEqual(div2.className, "static foo bar");
+
+      d1();
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should work with each() plugin and caching", () => {
+      document.body.innerHTML = "";
+      const items = signal([
+        { id: 1, name: "A" },
+        { id: 2, name: "B" },
+        { id: 3, name: "C" },
+      ]);
+
+      function createTemplate() {
+        return html`<ul>
+          ${each(
+            items,
+            (i) => i.id,
+            (item) => html`<li>${() => item.value.name}</li>`,
+          )}
+        </ul>`;
+      }
+
+      const { fragment: f1, dispose: d1 } = createTemplate().render();
+      const { fragment: f2, dispose: d2 } = createTemplate().render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const ul1 = document.body.children[0] as HTMLUListElement;
+      const ul2 = document.body.children[1] as HTMLUListElement;
+
+      assert.strictEqual(ul1.querySelectorAll("li").length, 3);
+      assert.strictEqual(ul2.querySelectorAll("li").length, 3);
+
+      // Update items
+      items.value = [
+        { id: 2, name: "B-updated" },
+        { id: 1, name: "A-updated" },
+      ];
+
+      assert.strictEqual(ul1.querySelectorAll("li").length, 2);
+      assert.strictEqual(ul2.querySelectorAll("li").length, 2);
+
+      // Check content updated
+      assert.strictEqual(ul1.children[0]?.textContent, "B-updated");
+      assert.strictEqual(ul1.children[1]?.textContent, "A-updated");
+      assert.strictEqual(ul2.children[0]?.textContent, "B-updated");
+      assert.strictEqual(ul2.children[1]?.textContent, "A-updated");
+
+      d1();
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should create different cache entries for different template strings", () => {
+      // These have different static parts, so should be cached separately
+      const t1 = html`<div class="first">A</div>`;
+      const t2 = html`<div class="second">B</div>`;
+
+      const { fragment: f1, dispose: d1 } = t1.render();
+      const { fragment: f2, dispose: d2 } = t2.render();
+
+      assert.strictEqual((f1.firstChild as Element).className, "first");
+      assert.strictEqual((f2.firstChild as Element).className, "second");
+
+      d1();
+      d2();
+    });
+
+    it("should handle boolean/null/undefined values in cached templates", () => {
+      const show = signal<boolean | null | undefined>(true);
+
+      function createTemplate() {
+        return html`<div>
+          ${() => show.value && html`<span>Visible</span>`}
+        </div>`;
+      }
+
+      const { fragment, dispose } = createTemplate().render();
+      document.body.appendChild(fragment);
+
+      const div = document.body.firstChild as HTMLDivElement;
+      assert.strictEqual(div.querySelector("span")?.textContent, "Visible");
+
+      show.value = false;
+      assert.strictEqual(div.querySelector("span"), null);
+
+      show.value = null;
+      assert.strictEqual(div.querySelector("span"), null);
+
+      show.value = undefined;
+      assert.strictEqual(div.querySelector("span"), null);
+
+      show.value = true;
+      assert.strictEqual(div.querySelector("span")?.textContent, "Visible");
+
+      dispose();
+      document.body.innerHTML = "";
+    });
+
+    it("should properly dispose all bindings from cached templates", () => {
+      const count = signal(0);
+      let computedCalls = 0;
+
+      function createTemplate() {
+        return html`<div>
+          ${() => {
+            computedCalls++;
+            return count.value;
+          }}
+        </div>`;
+      }
+
+      const { dispose } = createTemplate().render();
+
+      // Initial render
+      assert.strictEqual(computedCalls, 1);
+
+      // Should still react
+      count.value = 1;
+      assert.strictEqual(computedCalls, 2);
+
+      // Dispose
+      dispose();
+
+      // Should not react anymore
+      count.value = 2;
+      assert.strictEqual(computedCalls, 2);
+    });
+
+    it("should handle rendering same Template instance multiple times", () => {
+      document.body.innerHTML = "";
+      const cls = signal("a");
+      const count = signal(0);
+
+      // Create a single template instance with multi-part attribute
+      const template = html`<div class="prefix ${() => cls.value} suffix">
+        ${() => count.value}
+      </div>`;
+
+      // Render it twice from the same template instance
+      const { fragment: f1, dispose: d1 } = template.render();
+      const { fragment: f2, dispose: d2 } = template.render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const div1 = document.body.children[0] as HTMLDivElement;
+      const div2 = document.body.children[1] as HTMLDivElement;
+
+      // Both should have correct initial values
+      assert.strictEqual(div1.className, "prefix a suffix");
+      assert.strictEqual(div2.className, "prefix a suffix");
+      assert.ok(div1.textContent?.includes("0"));
+      assert.ok(div2.textContent?.includes("0"));
+
+      // Update signals - both should react
+      cls.value = "b";
+      count.value = 42;
+
+      assert.strictEqual(div1.className, "prefix b suffix");
+      assert.strictEqual(div2.className, "prefix b suffix");
+      assert.ok(div1.textContent?.includes("42"));
+      assert.ok(div2.textContent?.includes("42"));
+
+      d1();
+      d2();
+      document.body.innerHTML = "";
+    });
+
+    it("should keep second render reactive after first render is disposed", () => {
+      document.body.innerHTML = "";
+      const cls = signal("a");
+
+      // Create a single template instance with multi-part attribute
+      const template = html`<div
+        class="prefix ${() => cls.value} middle ${() => cls.value} suffix"
+      ></div>`;
+
+      // Render it twice from the same template instance
+      const { fragment: f1, dispose: d1 } = template.render();
+      const { fragment: f2, dispose: d2 } = template.render();
+
+      document.body.appendChild(f1);
+      document.body.appendChild(f2);
+
+      const div1 = document.body.children[0] as HTMLDivElement;
+      const div2 = document.body.children[1] as HTMLDivElement;
+
+      // Both should have correct initial values
+      assert.strictEqual(div1.className, "prefix a middle a suffix");
+      assert.strictEqual(div2.className, "prefix a middle a suffix");
+
+      // Dispose the first render
+      d1();
+
+      // Update signal - second should still react!
+      cls.value = "b";
+
+      // Second render should still be reactive
+      assert.strictEqual(div2.className, "prefix b middle b suffix");
+
+      d2();
+      document.body.innerHTML = "";
+    });
+  });
+
+  describe("GridCell-style component pattern", () => {
+    it("should render cells with conditional special badges", () => {
+      const cells = signal([
+        { id: 1, specialLabel: "×2", value: signal(10) },
+        { id: 2, specialLabel: null as string | null, value: signal(20) },
+        { id: 3, specialLabel: "MAX", value: signal(30) },
+      ]);
+
+      function GridCell(props: {
+        cell: {
+          id: number;
+          specialLabel: string | null;
+          value: ReturnType<typeof signal<number>>;
+        };
+      }) {
+        const { cell } = props;
+        const displayValue = cell.value;
+        const cellClass = computed(() => "cell");
+
+        return html`
+          <div class=${cellClass} data-cell-id=${cell.id}>
+            ${cell.specialLabel
+              ? html`<div class="special-badge">${cell.specialLabel}</div>`
+              : ""}
+            <div class="cell-value">${displayValue}</div>
+          </div>
+        `;
+      }
+
+      const template = html`
+        <div class="grid">
+          ${each(
+            cells,
+            (cell) => cell.id,
+            (cell) => GridCell({ cell: cell.value }),
+          )}
+        </div>
+      `;
+
+      const { fragment, dispose } = template.render();
+      const grid = fragment.firstElementChild;
+      assert.ok(grid, "grid should exist");
+
+      // Check we have 3 cells
+      const cellDivs = grid.querySelectorAll("[data-cell-id]");
+      assert.strictEqual(cellDivs.length, 3, "should have 3 cells");
+
+      // Check first cell has special badge
+      const cell1 = grid.querySelector('[data-cell-id="1"]');
+      const badge1 = cell1?.querySelector(".special-badge");
+      assert.ok(badge1, "cell 1 should have special badge");
+      assert.strictEqual(badge1?.textContent, "×2");
+
+      // Check second cell has no special badge
+      const cell2 = grid.querySelector('[data-cell-id="2"]');
+      const badge2 = cell2?.querySelector(".special-badge");
+      assert.ok(!badge2, "cell 2 should not have special badge");
+
+      // Check third cell has special badge
+      const cell3 = grid.querySelector('[data-cell-id="3"]');
+      const badge3 = cell3?.querySelector(".special-badge");
+      assert.ok(badge3, "cell 3 should have special badge");
+      assert.strictEqual(badge3?.textContent, "MAX");
+
+      dispose();
+    });
+  });
+
+  describe("path resolution edge cases", () => {
+    it("should handle multiple consecutive slots", () => {
+      const a = signal("A");
+      const b = signal("B");
+      const c = signal("C");
+
+      const template = html`<div>${a}${b}${c}</div>`;
+      const { fragment, dispose } = template.render();
+
+      const div = fragment.firstChild as HTMLDivElement;
+      assert.strictEqual(div.textContent, "ABC");
+
+      a.value = "X";
+      b.value = "Y";
+      c.value = "Z";
+      assert.strictEqual(div.textContent, "XYZ");
+
+      dispose();
+    });
+
+    it("should handle slot followed by element with slot", () => {
+      const outer = signal("outer");
+      const inner = signal("inner");
+
+      const template = html`<div>${outer}<span>${inner}</span></div>`;
+      const { fragment, dispose } = template.render();
+
+      const div = fragment.firstChild as HTMLDivElement;
+      assert.ok(div.textContent?.includes("outer"));
+      assert.ok(div.querySelector("span")?.textContent?.includes("inner"));
+
+      outer.value = "OUTER";
+      inner.value = "INNER";
+      assert.ok(div.textContent?.includes("OUTER"));
+      assert.ok(div.querySelector("span")?.textContent?.includes("INNER"));
+
+      dispose();
+    });
+
+    it("should handle deeply nested slots with siblings", () => {
+      const a = signal("A");
+      const b = signal("B");
+      const c = signal("C");
+      const d = signal("D");
+
+      const template = html`
+        <div>
+          ${a}
+          <div>
+            ${b}
+            <div>
+              ${c}
+              <span>${d}</span>
+            </div>
+          </div>
+        </div>
+      `;
+      const { fragment, dispose } = template.render();
+
+      const div = fragment.firstElementChild as HTMLDivElement;
+      assert.ok(div.textContent?.includes("A"));
+      assert.ok(div.textContent?.includes("B"));
+      assert.ok(div.textContent?.includes("C"));
+      assert.ok(div.textContent?.includes("D"));
+
+      a.value = "1";
+      b.value = "2";
+      c.value = "3";
+      d.value = "4";
+
+      assert.ok(div.textContent?.includes("1"));
+      assert.ok(div.textContent?.includes("2"));
+      assert.ok(div.textContent?.includes("3"));
+      assert.ok(div.textContent?.includes("4"));
+
+      dispose();
+    });
+
+    it("should handle multiple elements each with slots", () => {
+      const vals = [signal("A"), signal("B"), signal("C")];
+
+      const template = html`
+        <div>
+          <span class="first">${vals[0]}</span>
+          <span class="second">${vals[1]}</span>
+          <span class="third">${vals[2]}</span>
+        </div>
+      `;
+      const { fragment, dispose } = template.render();
+
+      const div = fragment.firstElementChild as HTMLDivElement;
+      assert.strictEqual(div.querySelector(".first")?.textContent, "A");
+      assert.strictEqual(div.querySelector(".second")?.textContent, "B");
+      assert.strictEqual(div.querySelector(".third")?.textContent, "C");
+
+      vals[0]!.value = "X";
+      vals[1]!.value = "Y";
+      vals[2]!.value = "Z";
+
+      assert.strictEqual(div.querySelector(".first")?.textContent, "X");
+      assert.strictEqual(div.querySelector(".second")?.textContent, "Y");
+      assert.strictEqual(div.querySelector(".third")?.textContent, "Z");
+
+      dispose();
+    });
+
+    it("should handle slot inserting template before element with slot", () => {
+      const showBadge = signal(true);
+      const value = signal(42);
+
+      const template = html`
+        <div>
+          ${() =>
+            showBadge.value ? html`<span class="badge">Badge</span>` : ""}
+          <div class="value">${value}</div>
+        </div>
+      `;
+      const { fragment, dispose } = template.render();
+
+      const div = fragment.firstElementChild as HTMLDivElement;
+      assert.ok(div.querySelector(".badge"), "badge should exist");
+      assert.strictEqual(div.querySelector(".value")?.textContent, "42");
+
+      // Toggle badge off
+      showBadge.value = false;
+      assert.ok(!div.querySelector(".badge"), "badge should be gone");
+      assert.strictEqual(div.querySelector(".value")?.textContent, "42");
+
+      // Update value while badge is off
+      value.value = 100;
+      assert.strictEqual(div.querySelector(".value")?.textContent, "100");
+
+      // Toggle badge back on
+      showBadge.value = true;
+      assert.ok(div.querySelector(".badge"), "badge should be back");
+      assert.strictEqual(div.querySelector(".value")?.textContent, "100");
+
+      dispose();
+    });
+
+    it("should handle array of templates followed by element with slot", () => {
+      const items = signal(["A", "B"]);
+      const footer = signal("Footer");
+
+      const template = html`
+        <div>
+          ${() => items.value.map((i) => html`<span class="item">${i}</span>`)}
+          <div class="footer">${footer}</div>
+        </div>
+      `;
+      const { fragment, dispose } = template.render();
+
+      const div = fragment.firstElementChild as HTMLDivElement;
+      assert.strictEqual(div.querySelectorAll(".item").length, 2);
+      assert.strictEqual(div.querySelector(".footer")?.textContent, "Footer");
+
+      // Update array
+      items.value = ["X", "Y", "Z"];
+      assert.strictEqual(div.querySelectorAll(".item").length, 3);
+      assert.strictEqual(div.querySelector(".footer")?.textContent, "Footer");
+
+      // Update footer
+      footer.value = "End";
+      assert.strictEqual(div.querySelector(".footer")?.textContent, "End");
+
+      dispose();
+    });
+  });
 });

@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library for building websites and web components. ~2.8KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~3.1KB gzipped.
 
 Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
 
@@ -537,7 +537,7 @@ doubled.dispose(); // Stops tracking, frees memory
 You can import just what you need to keep bundle size down:
 
 ```ts
-// Full library (~2.8KB gzipped)
+// Full library (~3.1KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
 // Signals only (no HTML templating - use in any JS project)
