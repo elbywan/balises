@@ -1046,319 +1046,6 @@ describe("Template.render()", () => {
     });
   });
 
-  describe("each() - object reference keys (two-arg form)", () => {
-    it("should render a list using object reference as key", () => {
-      const alice = { name: "Alice" };
-      const bob = { name: "Bob" };
-      const carol = { name: "Carol" };
-      const items = signal([alice, bob, carol]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      const ul = fragment.querySelector("ul")!;
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-      assert.strictEqual(ul.children[1]!.textContent, "Bob");
-      assert.strictEqual(ul.children[2]!.textContent, "Carol");
-    });
-
-    it("should append items efficiently", () => {
-      const alice = { name: "Alice" };
-      const bob = { name: "Bob" };
-      const items = signal([alice]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const firstLi = ul.children[0]!;
-      assert.strictEqual(ul.children.length, 1);
-
-      // Append - same object reference, node is reused
-      items.value = [...items.value, bob];
-
-      assert.strictEqual(ul.children.length, 2);
-      assert.strictEqual(ul.children[0], firstLi); // Same node reused
-      assert.strictEqual(ul.children[1]!.textContent, "Bob");
-
-      ul.remove();
-    });
-
-    it("should handle prepend correctly with object reference keys", () => {
-      const alice = { name: "Alice" };
-      const bob = { name: "Bob" };
-      const carol = { name: "Carol" };
-      const items = signal([bob, carol]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const bobNode = ul.children[0]!;
-      const carolNode = ul.children[1]!;
-
-      // Prepend - object references are preserved, nodes are reordered
-      items.value = [alice, ...items.value];
-
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[0]!.textContent, "Alice"); // New node
-      assert.strictEqual(ul.children[1], bobNode); // Same node, reordered
-      assert.strictEqual(ul.children[2], carolNode); // Same node, reordered
-
-      ul.remove();
-    });
-
-    it("should handle reorder correctly", () => {
-      const alice = { name: "Alice" };
-      const bob = { name: "Bob" };
-      const carol = { name: "Carol" };
-      const items = signal([alice, bob, carol]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const originalNodes = [...ul.children];
-
-      // Reverse order - same objects, nodes are reordered
-      items.value = [carol, bob, alice];
-
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[0], originalNodes[2]); // Carol's node
-      assert.strictEqual(ul.children[1], originalNodes[1]); // Bob's node
-      assert.strictEqual(ul.children[2], originalNodes[0]); // Alice's node
-
-      ul.remove();
-    });
-
-    it("should rebuild when object is recreated", () => {
-      const alice = { name: "Alice" };
-      const items = signal([alice]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const originalNode = ul.children[0]!;
-
-      // Recreate object - different reference, node is rebuilt
-      items.value = [{ name: "Alice" }];
-
-      assert.strictEqual(ul.children.length, 1);
-      assert.notStrictEqual(ul.children[0], originalNode); // Different node
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-
-      ul.remove();
-    });
-
-    it("should work with nested signals", () => {
-      const alice = { name: signal("Alice") };
-      const bob = { name: signal("Bob") };
-      const items = signal([alice, bob]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const firstLi = ul.children[0]!;
-
-      assert.strictEqual(firstLi.textContent, "Alice");
-
-      // Update via nested signal - no list reconciliation
-      alice.name.value = "Alicia";
-
-      assert.strictEqual(ul.children[0], firstLi); // Same node
-      assert.strictEqual(firstLi.textContent, "Alicia");
-
-      ul.remove();
-    });
-
-    it("should handle empty list", () => {
-      const items = signal<{ name: string }[]>([]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li>${item.name}</li>`)}
-      </ul>`.render();
-
-      const ul = fragment.querySelector("ul")!;
-      assert.strictEqual(ul.children.length, 0);
-    });
-
-    it("should use index-based keys for primitives", () => {
-      const items = signal(["Alice", "Bob", "Carol"]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (name) => html`<li>${name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-      assert.strictEqual(ul.children[1]!.textContent, "Bob");
-      assert.strictEqual(ul.children[2]!.textContent, "Carol");
-
-      // Append works
-      items.value = [...items.value, "Dave"];
-      assert.strictEqual(ul.children.length, 4);
-      assert.strictEqual(ul.children[3]!.textContent, "Dave");
-
-      ul.remove();
-    });
-
-    it("should handle duplicate primitives without warning (index-based)", () => {
-      const warnings: string[] = [];
-      const originalWarn = console.warn;
-      console.warn = (msg: string) => warnings.push(msg);
-
-      try {
-        // Same primitive used twice - uses index, so no duplicates
-        const items = signal(["Alice", "Alice", "Bob"]);
-
-        const { fragment } = html`<ul>
-          ${each(items, (name) => html`<li>${name}</li>`)}
-        </ul>`.render();
-
-        const ul = fragment.querySelector("ul")!;
-        // All 3 items rendered (index-based keys: 0, 1, 2)
-        assert.strictEqual(ul.children.length, 3);
-        assert.strictEqual(ul.children[0]!.textContent, "Alice");
-        assert.strictEqual(ul.children[1]!.textContent, "Alice");
-        assert.strictEqual(ul.children[2]!.textContent, "Bob");
-        // No warning
-        assert.strictEqual(warnings.length, 0);
-      } finally {
-        console.warn = originalWarn;
-      }
-    });
-
-    it("should warn on duplicate object references", () => {
-      const warnings: string[] = [];
-      const originalWarn = console.warn;
-      console.warn = (msg: string) => warnings.push(msg);
-
-      try {
-        const alice = { name: "Alice" };
-        // Same object reference used twice
-        const items = signal([alice, alice, { name: "Bob" }]);
-
-        const { fragment } = html`<ul>
-          ${each(items, (item) => html`<li>${item.name}</li>`)}
-        </ul>`.render();
-
-        const ul = fragment.querySelector("ul")!;
-        // Only 2 items rendered (duplicate skipped)
-        assert.strictEqual(ul.children.length, 2);
-        assert.strictEqual(ul.children[0]!.textContent, "Alice");
-        assert.strictEqual(ul.children[1]!.textContent, "Bob");
-        // Warning was issued
-        assert.strictEqual(warnings.length, 1);
-        assert.ok(warnings[0]!.includes("Duplicate key"));
-      } finally {
-        console.warn = originalWarn;
-      }
-    });
-
-    it("should accept plain arrays (static)", () => {
-      const items = ["Alice", "Bob", "Carol"];
-
-      const { fragment } = html`<ul>
-        ${each(items, (name) => html`<li>${name}</li>`)}
-      </ul>`.render();
-
-      const ul = fragment.querySelector("ul")!;
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-      assert.strictEqual(ul.children[1]!.textContent, "Bob");
-      assert.strictEqual(ul.children[2]!.textContent, "Carol");
-    });
-
-    it("should accept plain arrays with keyFn", () => {
-      const items = [
-        { id: 1, name: "Alice" },
-        { id: 2, name: "Bob" },
-      ];
-
-      const { fragment } = html`<ul>
-        ${each(
-          items,
-          (i) => i.id,
-          (item) => html`<li>${item.value.name}</li>`,
-        )}
-      </ul>`.render();
-
-      const ul = fragment.querySelector("ul")!;
-      assert.strictEqual(ul.children.length, 2);
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-      assert.strictEqual(ul.children[1]!.textContent, "Bob");
-    });
-
-    it("should accept getter functions for reactive store access", () => {
-      const state = store({ items: [{ name: "Alice" }, { name: "Bob" }] });
-
-      const { fragment } = html`<ul>
-        ${each(
-          () => state.items,
-          (item) => html`<li>${item.name}</li>`,
-        )}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      assert.strictEqual(ul.children.length, 2);
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-
-      // Update store - should react
-      state.items = [...state.items, { name: "Carol" }];
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[2]!.textContent, "Carol");
-
-      ul.remove();
-    });
-
-    it("should accept getter functions with keyFn", () => {
-      const state = store({
-        items: [
-          { id: 1, name: "Alice" },
-          { id: 2, name: "Bob" },
-        ],
-      });
-
-      const { fragment } = html`<ul>
-        ${each(
-          () => state.items,
-          (i) => i.id,
-          (item) => html`<li>${item.value.name}</li>`,
-        )}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const firstLi = ul.children[0]!;
-      assert.strictEqual(ul.children.length, 2);
-
-      // Append - store proxies are not re-wrapped, so nodes are reused
-      state.items = [...state.items, { id: 3, name: "Carol" }];
-      assert.strictEqual(ul.children.length, 3);
-      assert.strictEqual(ul.children[0], firstLi); // Same node reused
-      assert.strictEqual(ul.children[2]!.textContent, "Carol");
-
-      ul.remove();
-    });
-  });
-
   /**
    * Additional each() edge case tests
    */
@@ -1791,7 +1478,11 @@ describe("Template.render()", () => {
           (g) => g.id,
           (g) =>
             html`<ul>
-              ${each(g.value.items, (item) => html`<li>${item}</li>`)}
+              ${each(
+                g.value.items,
+                (item, i) => i,
+                (item) => html`<li>${() => item.value}</li>`,
+              )}
             </ul>`,
         )}
       </div>`.render();
@@ -1852,27 +1543,38 @@ describe("Template.render()", () => {
     });
 
     /**
-     * Edge case: each() with function items (using reference as key)
+     * Edge case: each() with function items
      *
-     * Functions should use their reference as key.
+     * Functions should work as list items with explicit key.
      */
-    it("should use function reference as key", () => {
+    it("should handle function items with explicit key", () => {
       const fn1 = () => "fn1";
       const fn2 = () => "fn2";
-      const items = signal([fn1, fn2]);
+      const items = signal([
+        { id: 1, fn: fn1 },
+        { id: 2, fn: fn2 },
+      ]);
 
       const { fragment } = html`<ul>
-        ${each(items, (fn) => html`<li>${fn()}</li>`)}
+        ${each(
+          items,
+          (i) => i.id,
+          (i) => html`<li>${() => i.value.fn()}</li>`,
+        )}
       </ul>`.render();
 
       document.body.appendChild(fragment);
       const ul = document.body.querySelector("ul")!;
 
       assert.strictEqual(ul.children.length, 2);
+      assert.strictEqual(ul.children[0]!.textContent, "fn1");
       const node1 = ul.children[0]!;
 
       // Swap order
-      items.value = [fn2, fn1];
+      items.value = [
+        { id: 2, fn: fn2 },
+        { id: 1, fn: fn1 },
+      ];
 
       // Nodes should be reused and reordered
       assert.strictEqual(ul.children[1], node1);
@@ -1921,47 +1623,19 @@ describe("Template.render()", () => {
   });
 
   /**
-   * Comparison tests: Two-arg vs Three-arg form behavior
+   * each() keyed list behavior tests
    *
-   * These tests demonstrate the key behavioral differences between
-   * the two forms of each().
+   * These tests demonstrate the key behaviors of each().
    */
-  describe("each() - two-arg vs three-arg comparison", () => {
+  describe("each() - keyed list behavior", () => {
     beforeEach(() => {
       document.body.innerHTML = "";
     });
 
     /**
-     * Two-arg form: DOM is recreated when object reference changes
-     * even if the data is logically the same.
+     * DOM is preserved when key matches, even with different object reference.
      */
-    it("two-arg form: should recreate DOM when object reference changes", () => {
-      const alice = { id: 1, name: "Alice" };
-      const items = signal([alice]);
-
-      const { fragment } = html`<ul>
-        ${each(items, (item) => html`<li data-id=${item.id}>${item.name}</li>`)}
-      </ul>`.render();
-
-      document.body.appendChild(fragment);
-      const ul = document.body.querySelector("ul")!;
-      const originalNode = ul.children[0]!;
-
-      assert.strictEqual(originalNode.textContent, "Alice");
-
-      // Replace with new object having same data - DOM is recreated
-      items.value = [{ id: 1, name: "Alice" }];
-
-      assert.strictEqual(ul.children.length, 1);
-      assert.notStrictEqual(ul.children[0], originalNode); // Different node!
-      assert.strictEqual(ul.children[0]!.textContent, "Alice");
-    });
-
-    /**
-     * Three-arg form: DOM is preserved when key matches,
-     * even with different object reference.
-     */
-    it("three-arg form: should preserve DOM when key matches with new object", () => {
+    it("should preserve DOM when key matches with new object", () => {
       const items = signal([{ id: 1, name: "Alice" }]);
 
       const { fragment } = html`<ul>
@@ -1987,9 +1661,9 @@ describe("Template.render()", () => {
     });
 
     /**
-     * Three-arg form: Signal updates propagate to the template
+     * Signal updates propagate to the template
      */
-    it("three-arg form: should update content reactively via signal", () => {
+    it("should update content reactively via signal", () => {
       const items = signal([{ id: 1, name: "Alice" }]);
 
       let renderCount = 0;
@@ -2020,9 +1694,9 @@ describe("Template.render()", () => {
     });
 
     /**
-     * Three-arg form: New keys still create new DOM
+     * New keys still create new DOM
      */
-    it("three-arg form: should create new DOM for new keys", () => {
+    it("should create new DOM for new keys", () => {
       const items = signal([{ id: 1, name: "Alice" }]);
 
       const { fragment } = html`<ul>
@@ -2051,9 +1725,9 @@ describe("Template.render()", () => {
     });
 
     /**
-     * Three-arg form: Removed keys dispose their templates
+     * Removed keys dispose their templates
      */
-    it("three-arg form: should dispose templates when keys are removed", () => {
+    it("should dispose templates when keys are removed", () => {
       const items = signal([
         { id: 1, name: "Alice" },
         { id: 2, name: "Bob" },
@@ -2084,9 +1758,9 @@ describe("Template.render()", () => {
     });
 
     /**
-     * Three-arg form with peek(): Read without reactivity
+     * peek() should read without tracking
      */
-    it("three-arg form: peek() should read without tracking", () => {
+    it("peek() should read without tracking", () => {
       const items = signal([{ id: 1, name: "Alice" }]);
       const clickedIds: number[] = [];
 

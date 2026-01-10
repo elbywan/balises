@@ -4,9 +4,7 @@
  * Provides efficient, keyed list rendering with minimal DOM operations.
  * Supports signals, computeds, getters, and plain arrays.
  *
- * Two forms:
- * - Two-arg: uses object reference as key, render receives raw item
- * - Three-arg: uses explicit keyFn, render receives ReadonlySignal<T> for DOM reuse
+ * Uses explicit keyFn for keying, render receives ReadonlySignal<T> for DOM reuse.
  *
  * @example
  * ```ts
@@ -16,7 +14,6 @@
  * const html = baseHtml.with(eachPlugin);
  * const items = signal([{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }]);
  *
- * // Three-arg form: DOM reused when keys match
  * html`<ul>
  *   ${each(items, i => i.id, itemSignal => html`<li>${() => itemSignal.value.name}</li>`)}
  * </ul>`.render();
@@ -36,10 +33,6 @@ import { Template, type InterpolationPlugin } from "./template.js";
 /** Marker symbol for each() descriptors */
 const EACH = Symbol("each");
 
-/** Type guard for primitives */
-const isPrimitive = (v: unknown): v is string | number | boolean | symbol =>
-  typeof v !== "object" && typeof v !== "function";
-
 /** Each descriptor - returned by each() */
 export interface EachDescriptor<T> {
   readonly [EACH]: true;
@@ -47,12 +40,8 @@ export interface EachDescriptor<T> {
   __list__: T[] | Reactive<T[]> | (() => T[]);
   /** @internal Key extraction function */
   __keyFn__: (item: T, index: number) => unknown;
-  /** @internal Render function for each item (type varies by form) */
-  __renderFn__:
-    | ((item: T, index: number) => Template)
-    | ((item: ReadonlySignal<T>, index: number) => Template);
-  /** @internal Whether this is the three-arg (keyed) form */
-  __keyed__: boolean;
+  /** @internal Render function for each item */
+  __renderFn__: (item: ReadonlySignal<T>, index: number) => Template;
 }
 
 /** Cache entry for list items */
@@ -92,52 +81,25 @@ function insertContent(
 /**
  * Create a keyed list descriptor.
  *
- * Two-argument form: uses object reference as key (or index for primitives).
- * Render function receives the raw item. DOM is reused only when object reference matches.
- *
- * Three-argument form: uses explicit keyFn.
- * Render function receives a ReadonlySignal<T> wrapping the item.
+ * Uses explicit keyFn for keying. Render function receives a ReadonlySignal<T> wrapping the item.
  * DOM is reused when keys match, and the signal is updated with new item data.
  *
  * @example
  * ```ts
- * // Two-arg: object reference as key, receives raw item
- * each(items, item => html`<li>${item.name}</li>`)
- *
- * // Three-arg: explicit key, receives ReadonlySignal for DOM reuse
+ * // Explicit key, receives ReadonlySignal for DOM reuse
  * each(items, item => item.id, itemSignal => html`<li>${() => itemSignal.value.name}</li>`)
  * ```
  */
 export function each<T>(
   list: T[] | Reactive<T[]> | (() => T[]),
-  renderFn: (item: T, index: number) => Template,
-): EachDescriptor<T>;
-export function each<T>(
-  list: T[] | Reactive<T[]> | (() => T[]),
   keyFn: (item: T, index: number) => unknown,
   renderFn: (item: ReadonlySignal<T>, index: number) => Template,
-): EachDescriptor<T>;
-export function each<T>(
-  list: T[] | Reactive<T[]> | (() => T[]),
-  keyFnOrRenderFn:
-    | ((item: T, index: number) => unknown)
-    | ((item: T, index: number) => Template),
-  maybeRenderFn?: (item: ReadonlySignal<T>, index: number) => Template,
 ): EachDescriptor<T> {
-  const hasExplicitKeyFn = maybeRenderFn !== undefined;
-  const keyFn = hasExplicitKeyFn
-    ? (keyFnOrRenderFn as (item: T, index: number) => unknown)
-    : (item: T, index: number) => (isPrimitive(item) ? index : item);
-  const renderFn = hasExplicitKeyFn
-    ? maybeRenderFn
-    : (keyFnOrRenderFn as (item: T, index: number) => Template);
-
   return {
     [EACH]: true,
     __list__: list,
     __keyFn__: keyFn,
     __renderFn__: renderFn,
-    __keyed__: hasExplicitKeyFn,
   };
 }
 
@@ -163,7 +125,7 @@ function bindEach<T>(
   marker: Comment,
   disposers: (() => void)[],
 ): void {
-  const { __list__, __keyFn__, __renderFn__, __keyed__ } = desc;
+  const { __list__, __keyFn__, __renderFn__ } = desc;
   const parent = marker.parentNode!;
 
   // Insert a start marker before the end marker for efficient range deletion
@@ -198,65 +160,26 @@ function bindEach<T>(
   ): CacheEntry<T> => {
     const cached = cache.get(key);
 
-    if (__keyed__) {
-      // Three-arg form: reuse if key exists, update signal
-      if (cached) {
-        cached.itemSignal!.value = item;
-        cached.item = item;
-        return cached;
-      }
-      // Create new entry with signal
-      const itemSignal = signal(item);
-      const readonlySignal = new ReadonlySignal(itemSignal);
-      const nodes: Node[] = [];
-      const itemDisposers: (() => void)[] = [];
-      insertContent(
-        marker,
-        (__renderFn__ as (item: ReadonlySignal<T>, index: number) => Template)(
-          readonlySignal,
-          index,
-        ),
-        nodes,
-        itemDisposers,
-      );
-      const entry: CacheEntry<T> = {
-        nodes,
-        dispose: () => itemDisposers.forEach((d) => d()),
-        item,
-        itemSignal,
-      };
-      cache.set(key, entry);
-      return entry;
-    } else {
-      // Two-arg form: reuse only if same object reference
-      if (cached && cached.item === item) {
-        return cached;
-      }
-      // Dispose old entry if key exists but item changed
-      if (cached) {
-        cached.dispose();
-        for (const node of cached.nodes) {
-          (node as ChildNode).remove();
-        }
-        cache.delete(key);
-      }
-      // Create new entry
-      const nodes: Node[] = [];
-      const itemDisposers: (() => void)[] = [];
-      insertContent(
-        marker,
-        (__renderFn__ as (item: T, index: number) => Template)(item, index),
-        nodes,
-        itemDisposers,
-      );
-      const entry: CacheEntry<T> = {
-        nodes,
-        dispose: () => itemDisposers.forEach((d) => d()),
-        item,
-      };
-      cache.set(key, entry);
-      return entry;
+    // Reuse if key exists, update signal
+    if (cached) {
+      cached.itemSignal!.value = item;
+      cached.item = item;
+      return cached;
     }
+    // Create new entry with signal
+    const itemSignal = signal(item);
+    const readonlySignal = new ReadonlySignal(itemSignal);
+    const nodes: Node[] = [];
+    const itemDisposers: (() => void)[] = [];
+    insertContent(marker, __renderFn__(readonlySignal, index), nodes, itemDisposers);
+    const entry: CacheEntry<T> = {
+      nodes,
+      dispose: () => itemDisposers.forEach((d) => d()),
+      item,
+      itemSignal,
+    };
+    cache.set(key, entry);
+    return entry;
   };
 
   /**

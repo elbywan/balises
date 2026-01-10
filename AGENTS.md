@@ -156,9 +156,7 @@ The library has multiple export points for tree-shaking:
 - Opt-in via `balises/each` import, enabled with `html.with(eachPlugin)`
 - Efficiently renders lists with keys to avoid recreating DOM
 - Caches templates by key
-- Two forms with different behavior:
-  - `each(list, keyFn, renderFn)` - Three-arg: explicit key, renderFn receives `ReadonlySignal<T>`, DOM reused when keys match
-  - `each(list, renderFn)` - Two-arg: object reference as key, renderFn receives raw `T`, DOM reused only on same reference
+- Signature: `each(list, keyFn, renderFn)` - renderFn receives `ReadonlySignal<T>`, DOM reused when keys match
 - Supports arrays, signals, computeds, and getter functions
 - Reorders/adds/removes nodes surgically
 
@@ -630,13 +628,10 @@ html`<div>${() => count.value * 2}</div>`;
 html`<div>${computed(() => count.value * 2)}</div>`;
 ```
 
-### 6. Each() Three-Arg Form Receives ReadonlySignal
+### 6. each() Receives ReadonlySignal
 
 ```typescript
-// Two-arg form: receives raw item (unchanged)
-each(items, (item) => html`<li>${item.name}</li>`);
-
-// Three-arg form: receives ReadonlySignal<T>
+// each() receives ReadonlySignal<T>
 // ❌ Wrong - accessing properties directly
 each(
   items,
@@ -652,9 +647,9 @@ each(
 );
 ```
 
-### 7. Optimize Three-Arg Form with peek() for Static Values
+### 7. Optimize each() with peek() for Static Values
 
-When using `each()` with the three-arg form, if some properties never change (like an ID used as the key), capture them once with `peek()` to reduce reactive overhead:
+When using `each()`, if some properties never change (like an ID used as the key), capture them once with `peek()` to reduce reactive overhead:
 
 ```typescript
 // ❌ Suboptimal - creates computed for id even though it never changes

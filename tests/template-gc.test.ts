@@ -958,7 +958,8 @@ describe("Template GC after dispose()", () => {
         const { dispose } = html`<ul>
           ${each(
             () => [1, 2, 3].map((n) => n * factor.value),
-            (item) => html`<li>${item}</li>`,
+            (n) => n,
+            (item) => html`<li>${() => item.value}</li>`,
           )}
         </ul>`.render();
 

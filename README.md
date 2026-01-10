@@ -268,19 +268,12 @@ When rendering lists that change frequently, use `each()` for keyed reconciliati
 
 **Note:** The `each()` function is opt-in via the `balises/each` import to keep the base bundle small. Use `html.with(eachPlugin)` to enable keyed list support.
 
-**Two forms:**
-
-1. **Two-arg form** (object reference as key): Render receives raw item. DOM reused only when same object reference appears.
-2. **Three-arg form** (explicit key function): Render receives `ReadonlySignal<T>`. DOM reused when keys match, even with new object references.
-
 ```ts
 import { html as baseHtml, signal } from "balises";
 import eachPlugin, { each } from "balises/each";
 
 const html = baseHtml.with(eachPlugin);
 
-// Three-arg form: explicit key, receives ReadonlySignal
-// DOM is preserved when keys match (ideal for API data)
 const users = signal([
   { id: 1, name: "Alice" },
   { id: 2, name: "Bob" },
@@ -302,25 +295,15 @@ users.value = [
   { id: 2, name: "Bobby" },
   { id: 3, name: "Carol" }, // New key - new DOM created
 ];
-
-// Two-arg form: object reference as key, receives raw item
-const items = signal([{ name: "Item 1" }, { name: "Item 2" }]);
-
-html`
-  <ul>
-    ${each(items, (item) => html`<li>${item.name}</li>`)}
-  </ul>
-`.render();
 ```
 
-Signatures:
+Signature:
 
 ```ts
-each(list, keyFn, renderFn); // Three-arg: keyFn extracts key, renderFn receives ReadonlySignal<T>
-each(list, renderFn); // Two-arg: object reference as key, renderFn receives raw T
+each(list, keyFn, renderFn); // keyFn extracts key, renderFn receives ReadonlySignal<T>
 ```
 
-**Important:** When using the three-arg form, access item properties through `itemSignal.value` and wrap in `() => ...` for reactive updates.
+**Important:** Access item properties through `itemSignal.value` and wrap in `() => ...` for reactive updates.
 
 ## Reactivity API
 
