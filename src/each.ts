@@ -181,131 +181,340 @@ function bindEach<T>(
   // Wrap in computed for reactivity
   const listComputed = computed(getList);
 
-  // Cache: key -> { nodes, dispose, item, itemSignal? }
+  // State: parallel arrays for keys and entries (kept in sync)
+  let oldKeys: unknown[] = [];
+  let oldEntries: CacheEntry<T>[] = [];
+  // Cache for O(1) lookup by key
   const cache = new Map<unknown, CacheEntry<T>>();
 
-  // Track previous order for LIS-based reordering
-  let prevKeys: unknown[] = [];
+  /**
+   * Create or update an entry for an item.
+   * Returns the entry (new or existing).
+   */
+  const getOrCreateEntry = (
+    item: T,
+    key: unknown,
+    index: number,
+  ): CacheEntry<T> => {
+    const cached = cache.get(key);
 
+    if (__keyed__) {
+      // Three-arg form: reuse if key exists, update signal
+      if (cached) {
+        cached.itemSignal!.value = item;
+        cached.item = item;
+        return cached;
+      }
+      // Create new entry with signal
+      const itemSignal = signal(item);
+      const readonlySignal = new ReadonlySignal(itemSignal);
+      const nodes: Node[] = [];
+      const itemDisposers: (() => void)[] = [];
+      insertContent(
+        marker,
+        (__renderFn__ as (item: ReadonlySignal<T>, index: number) => Template)(
+          readonlySignal,
+          index,
+        ),
+        nodes,
+        itemDisposers,
+      );
+      const entry: CacheEntry<T> = {
+        nodes,
+        dispose: () => itemDisposers.forEach((d) => d()),
+        item,
+        itemSignal,
+      };
+      cache.set(key, entry);
+      return entry;
+    } else {
+      // Two-arg form: reuse only if same object reference
+      if (cached && cached.item === item) {
+        return cached;
+      }
+      // Dispose old entry if key exists but item changed
+      if (cached) {
+        cached.dispose();
+        for (const node of cached.nodes) {
+          (node as ChildNode).remove();
+        }
+        cache.delete(key);
+      }
+      // Create new entry
+      const nodes: Node[] = [];
+      const itemDisposers: (() => void)[] = [];
+      insertContent(
+        marker,
+        (__renderFn__ as (item: T, index: number) => Template)(item, index),
+        nodes,
+        itemDisposers,
+      );
+      const entry: CacheEntry<T> = {
+        nodes,
+        dispose: () => itemDisposers.forEach((d) => d()),
+        item,
+      };
+      cache.set(key, entry);
+      return entry;
+    }
+  };
+
+  /**
+   * Remove an entry and its DOM nodes.
+   */
+  const removeEntry = (entry: CacheEntry<T>, key: unknown): void => {
+    entry.dispose();
+    for (const node of entry.nodes) {
+      (node as ChildNode).remove();
+    }
+    cache.delete(key);
+  };
+
+  /**
+   * Move entry's nodes before a reference node.
+   */
+  const moveEntryBefore = (entry: CacheEntry<T>, ref: Node | null): void => {
+    for (const node of entry.nodes) {
+      parent.insertBefore(node, ref);
+    }
+  };
+
+  /**
+   * Get the first DOM node of an entry, or the marker if entry has no nodes.
+   */
+  const getFirstNode = (entry: CacheEntry<T>): Node => {
+    return entry.nodes[0] ?? marker;
+  };
+
+  /**
+   * Two-pointer reconciliation algorithm.
+   * Based on the algorithm used by Lit, Vue, and ivi.
+   * Handles common cases (append, prepend, swap, reverse) in O(n) time.
+   */
   const reconcile = () => {
     const items = listComputed.value;
-    const seenKeys = new Set<unknown>();
-    const newKeys: unknown[] = [];
-    const newEntries: CacheEntry<T>[] = [];
+    const newLen = items.length;
+    const oldLen = oldKeys.length;
+
+    // Fast path: empty list
+    if (newLen === 0) {
+      if (oldLen > 0) {
+        // Clear all - use replaceChildren for bulk DOM removal
+        parent.replaceChildren(startMarker, marker);
+        for (const entry of oldEntries) {
+          entry.dispose();
+        }
+        cache.clear();
+        oldKeys = [];
+        oldEntries = [];
+      }
+      return;
+    }
+
+    // Fast path: first render
+    if (oldLen === 0) {
+      const newKeys: unknown[] = [];
+      const newEntries: CacheEntry<T>[] = [];
+      let hasDuplicateWarning = false;
+      const seenKeys = new Set<unknown>();
+
+      for (let i = 0; i < newLen; i++) {
+        const item = items[i]!;
+        const key = __keyFn__(item, i);
+        if (seenKeys.has(key)) {
+          if (!hasDuplicateWarning) {
+            console.warn(`[each] Duplicate key: ${String(key)}. Skipping.`);
+            hasDuplicateWarning = true;
+          }
+          continue;
+        }
+        seenKeys.add(key);
+        const entry = getOrCreateEntry(item, key, i);
+        newKeys.push(key);
+        newEntries.push(entry);
+      }
+      oldKeys = newKeys;
+      oldEntries = newEntries;
+      return;
+    }
+
+    // Build new keys array and check for duplicates
+    const newKeys: unknown[] = new Array(newLen);
     let hasDuplicateWarning = false;
+    const seenKeys = new Set<unknown>();
 
-    // Process items, create/reuse entries
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]!;
-      const key = __keyFn__(item, i);
-
-      // Warn and skip duplicates (only warn once)
+    for (let i = 0; i < newLen; i++) {
+      const key = __keyFn__(items[i]!, i);
       if (seenKeys.has(key)) {
         if (!hasDuplicateWarning) {
           console.warn(`[each] Duplicate key: ${String(key)}. Skipping.`);
           hasDuplicateWarning = true;
         }
+        // Mark as undefined to skip later
+        newKeys[i] = undefined;
+      } else {
+        seenKeys.add(key);
+        newKeys[i] = key;
+      }
+    }
+
+    // Two-pointer algorithm
+    let oldHead = 0;
+    let oldTail = oldLen - 1;
+    let newHead = 0;
+    let newTail = newLen - 1;
+
+    // Result arrays
+    const newEntries: (CacheEntry<T> | null)[] = new Array(newLen).fill(null);
+
+    // Maps built lazily only when needed
+    let newKeyToIndex: Map<unknown, number> | undefined;
+    let oldKeyToIndex: Map<unknown, number> | undefined;
+
+    // Main reconciliation loop
+    while (oldHead <= oldTail && newHead <= newTail) {
+      // Skip undefined (duplicate) keys in new array
+      if (newKeys[newHead] === undefined) {
+        newHead++;
         continue;
       }
-      seenKeys.add(key);
+      if (newKeys[newTail] === undefined) {
+        newTail--;
+        continue;
+      }
 
-      const cached = cache.get(key);
+      const oldHeadKey = oldKeys[oldHead];
+      const oldTailKey = oldKeys[oldTail];
+      const newHeadKey = newKeys[newHead];
+      const newTailKey = newKeys[newTail];
 
-      if (__keyed__) {
-        // Three-arg form: reuse if key exists, update signal
-        if (cached) {
-          cached.itemSignal!.value = item;
-          cached.item = item;
-          newKeys.push(key);
-          newEntries.push(cached);
-        } else {
-          // Create new entry with signal
-          const itemSignal = signal(item);
-          const readonlySignal = new ReadonlySignal(itemSignal);
-          const nodes: Node[] = [];
-          const itemDisposers: (() => void)[] = [];
-          insertContent(
-            marker,
-            (
-              __renderFn__ as (
-                item: ReadonlySignal<T>,
-                index: number,
-              ) => Template
-            )(readonlySignal, i),
-            nodes,
-            itemDisposers,
-          );
-          const entry: CacheEntry<T> = {
-            nodes,
-            dispose: () => itemDisposers.forEach((d) => d()),
-            item,
-            itemSignal,
-          };
-          cache.set(key, entry);
-          newKeys.push(key);
-          newEntries.push(entry);
-        }
+      if (oldHeadKey === newHeadKey) {
+        // Head matches head - update in place
+        newEntries[newHead] = getOrCreateEntry(
+          items[newHead]!,
+          newHeadKey!,
+          newHead,
+        );
+        oldHead++;
+        newHead++;
+      } else if (oldTailKey === newTailKey) {
+        // Tail matches tail - update in place
+        newEntries[newTail] = getOrCreateEntry(
+          items[newTail]!,
+          newTailKey!,
+          newTail,
+        );
+        oldTail--;
+        newTail--;
+      } else if (oldHeadKey === newTailKey) {
+        // Old head matches new tail - move to end
+        const entry = getOrCreateEntry(items[newTail]!, newTailKey!, newTail);
+        newEntries[newTail] = entry;
+        // Move after current oldTail's nodes
+        const afterOldTail =
+          oldEntries[oldTail]!.nodes[oldEntries[oldTail]!.nodes.length - 1]
+            ?.nextSibling ?? marker;
+        moveEntryBefore(entry, afterOldTail);
+        oldHead++;
+        newTail--;
+      } else if (oldTailKey === newHeadKey) {
+        // Old tail matches new head - move to beginning
+        const entry = getOrCreateEntry(items[newHead]!, newHeadKey!, newHead);
+        newEntries[newHead] = entry;
+        // Move before current oldHead's nodes
+        moveEntryBefore(entry, getFirstNode(oldEntries[oldHead]!));
+        oldTail--;
+        newHead++;
       } else {
-        // Two-arg form: reuse only if same object reference
-        if (cached && cached.item === item) {
-          newKeys.push(key);
-          newEntries.push(cached);
+        // No simple match - need to use maps
+        if (!newKeyToIndex) {
+          newKeyToIndex = new Map();
+          for (let i = newHead; i <= newTail; i++) {
+            const k = newKeys[i];
+            if (k !== undefined) newKeyToIndex.set(k, i);
+          }
+        }
+        if (!oldKeyToIndex) {
+          oldKeyToIndex = new Map();
+          for (let i = oldHead; i <= oldTail; i++) {
+            oldKeyToIndex.set(oldKeys[i], i);
+          }
+        }
+
+        const newIdx = newKeyToIndex.get(oldHeadKey);
+        if (newIdx === undefined) {
+          // Old head key not in new list - remove it
+          removeEntry(oldEntries[oldHead]!, oldHeadKey!);
+          oldHead++;
         } else {
-          // Dispose old entry if key exists but item changed
-          if (cached) {
-            cached.dispose();
-            for (const node of cached.nodes) {
-              (node as ChildNode).remove();
-            }
-            cache.delete(key);
+          const oldIdx = oldKeyToIndex.get(newHeadKey);
+          if (oldIdx === undefined) {
+            // New head key not in old list - create and insert
+            const entry = getOrCreateEntry(
+              items[newHead]!,
+              newHeadKey!,
+              newHead,
+            );
+            newEntries[newHead] = entry;
+            moveEntryBefore(entry, getFirstNode(oldEntries[oldHead]!));
+            newHead++;
+          } else {
+            // Both keys exist but in different positions - move old to new position
+            const entry = getOrCreateEntry(
+              items[newHead]!,
+              newHeadKey!,
+              newHead,
+            );
+            newEntries[newHead] = entry;
+            moveEntryBefore(entry, getFirstNode(oldEntries[oldHead]!));
+            // Mark old position as handled by setting to a sentinel
+            oldKeys[oldIdx] = undefined as unknown;
+            newHead++;
           }
-          // Create new entry
-          const nodes: Node[] = [];
-          const itemDisposers: (() => void)[] = [];
-          insertContent(
-            marker,
-            (__renderFn__ as (item: T, index: number) => Template)(item, i),
-            nodes,
-            itemDisposers,
-          );
-          const entry: CacheEntry<T> = {
-            nodes,
-            dispose: () => itemDisposers.forEach((d) => d()),
-            item,
-          };
-          cache.set(key, entry);
-          newKeys.push(key);
-          newEntries.push(entry);
         }
       }
     }
 
-    // Remove stale entries
-    if (seenKeys.size === 0 && cache.size > 0) {
-      // Fast path: clearing all items - use replaceChildren for bulk DOM removal
-      // This is faster than Range.deleteContents() as it triggers browser fast paths
-      parent.replaceChildren(startMarker, marker);
-      // Dispose all entries (for signal cleanup)
-      for (const entry of cache.values()) {
-        entry.dispose();
+    // Remove remaining old items
+    while (oldHead <= oldTail) {
+      const key = oldKeys[oldHead];
+      if (key !== undefined) {
+        removeEntry(oldEntries[oldHead]!, key);
       }
-      cache.clear();
-    } else {
-      // Slow path: partial removal
-      for (const [key, entry] of cache) {
-        if (!seenKeys.has(key)) {
-          entry.dispose();
-          for (const node of entry.nodes) {
-            (node as ChildNode).remove();
-          }
-          cache.delete(key);
-        }
-      }
+      oldHead++;
     }
 
-    // Reorder nodes using LIS optimization
-    reorderNodes(newEntries, newKeys, prevKeys, marker, parent);
-    prevKeys = newKeys;
+    // Add remaining new items
+    while (newHead <= newTail) {
+      const key = newKeys[newHead];
+      if (key !== undefined) {
+        const entry = getOrCreateEntry(items[newHead]!, key, newHead);
+        newEntries[newHead] = entry;
+        // Insert before the next settled entry or marker
+        let insertRef: Node = marker;
+        for (let i = newHead + 1; i < newLen; i++) {
+          if (newEntries[i]) {
+            insertRef = getFirstNode(newEntries[i]!);
+            break;
+          }
+        }
+        moveEntryBefore(entry, insertRef);
+      }
+      newHead++;
+    }
+
+    // Build final arrays (filter out nulls from skipped duplicates)
+    const finalKeys: unknown[] = [];
+    const finalEntries: CacheEntry<T>[] = [];
+    for (let i = 0; i < newLen; i++) {
+      const entry = newEntries[i];
+      if (entry) {
+        finalKeys.push(newKeys[i]);
+        finalEntries.push(entry);
+      }
+    }
+    oldKeys = finalKeys;
+    oldEntries = finalEntries;
   };
 
   // Initial render and subscribe
@@ -318,7 +527,7 @@ function bindEach<T>(
     // Bulk DOM removal using replaceChildren
     if (cache.size > 0) {
       parent.replaceChildren(startMarker, marker);
-      for (const entry of cache.values()) {
+      for (const entry of oldEntries) {
         entry.dispose();
       }
       cache.clear();
@@ -326,126 +535,4 @@ function bindEach<T>(
     // Remove the markers themselves
     startMarker.remove();
   });
-}
-
-/**
- * Reorder nodes to match the new order using LIS optimization.
- *
- * Uses Longest Increasing Subsequence to minimize DOM moves.
- * Only nodes that are NOT part of the LIS need to be moved.
- */
-function reorderNodes<T>(
-  entries: CacheEntry<T>[],
-  newKeys: unknown[],
-  prevKeys: unknown[],
-  marker: Comment,
-  parent: ParentNode,
-): void {
-  const len = entries.length;
-  if (len === 0) return;
-
-  // Skip reordering on first render - nodes are already in correct order
-  if (prevKeys.length === 0) return;
-
-  // Build a map of key -> old index
-  const prevIndexMap = new Map<unknown, number>();
-  for (let i = 0; i < prevKeys.length; i++) {
-    prevIndexMap.set(prevKeys[i], i);
-  }
-
-  // Build array of old indices for keys that existed before (-1 for new)
-  const oldIndices: number[] = [];
-  let allNew = true;
-  for (let i = 0; i < len; i++) {
-    const oldIdx = prevIndexMap.get(newKeys[i]);
-    oldIndices.push(oldIdx !== undefined ? ((allNew = false), oldIdx) : -1);
-  }
-
-  // Skip reordering if ALL items are new - nodes were just created in correct order
-  if (allNew) {
-    return;
-  }
-
-  // Find LIS of old indices (only considering items that existed before)
-  const lisIndices = longestIncreasingSubsequence(oldIndices);
-  const lisSet = new Set(lisIndices);
-
-  // Move nodes that are NOT in the LIS
-  // Process in reverse order, using insertBefore to place nodes
-  let insertionPoint: Node | null = marker;
-
-  for (let i = len - 1; i >= 0; i--) {
-    const entry = entries[i]!;
-    const nodes = entry.nodes;
-
-    if (!lisSet.has(i)) {
-      // This item needs to be moved
-      for (let j = nodes.length - 1; j >= 0; j--) {
-        parent.insertBefore(nodes[j]!, insertionPoint);
-        insertionPoint = nodes[j]!;
-      }
-    }
-
-    // Update insertion point to the first node of current entry
-    if (nodes.length > 0) {
-      insertionPoint = nodes[0]!;
-    }
-  }
-}
-
-/**
- * Find the longest increasing subsequence indices.
- * Returns the indices in the input array that form the LIS.
- *
- * Uses binary search for O(n log n) complexity.
- * Items with value -1 (new items) are never part of the LIS.
- */
-function longestIncreasingSubsequence(arr: number[]): number[] {
-  const len = arr.length;
-  if (len === 0) return [];
-
-  // tails[i] = index in arr of smallest tail element for LIS of length i+1
-  const tails: number[] = [];
-  // predecessor[i] = index in arr of element before arr[i] in the LIS
-  const predecessor: number[] = new Array(len).fill(-1);
-
-  for (let i = 0; i < len; i++) {
-    const val = arr[i]!;
-    // Skip new items (-1)
-    if (val === -1) continue;
-
-    // Binary search for position in tails
-    let lo = 0;
-    let hi = tails.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (arr[tails[mid]!]! < val) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-
-    // lo is the position where val should go
-    if (lo > 0) {
-      predecessor[i] = tails[lo - 1]!;
-    }
-
-    if (lo === tails.length) {
-      tails.push(i);
-    } else {
-      tails[lo] = i;
-    }
-  }
-
-  // Reconstruct LIS indices
-  const result: number[] = [];
-  let k = tails.length > 0 ? tails[tails.length - 1]! : -1;
-  while (k !== -1) {
-    result.push(k);
-    k = predecessor[k]!;
-  }
-  result.reverse();
-
-  return result;
 }
