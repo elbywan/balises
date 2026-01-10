@@ -156,8 +156,9 @@ export class Computed<T> {
             c.#isSlots.get(old)?.notify();
             c.#isSlots.get(c.#value)?.notify();
           }
-          const subs = c.#subs.slice();
-          for (let j = 0; j < subs.length; j++) subs[j]!();
+          // Reverse iteration: safe for self-unsubscription with swap-and-pop removal
+          const subs = c.#subs;
+          for (let j = subs.length - 1; j >= 0; j--) subs[j]!();
         }
       };
       void (isBatching() ? enqueueBatchOne(notify) : notify());
