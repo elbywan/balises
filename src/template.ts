@@ -286,7 +286,12 @@ export class Template {
       }
     }
 
-    return { fragment: frag, dispose: () => disposers.forEach((f) => f()) };
+    return {
+      fragment: frag,
+      dispose: () => {
+        for (const f of disposers) f();
+      },
+    };
   }
 
   /** Bind content slot - handles plugins, templates, arrays, and reactive values */
@@ -305,9 +310,9 @@ export class Template {
       childDisposers: (() => void)[] = [];
 
     const clear = () => {
-      childDisposers.forEach((f) => f());
+      for (const f of childDisposers) f();
       childDisposers = [];
-      currentNodes.forEach((n) => (n as ChildNode).remove());
+      for (const n of currentNodes) (n as ChildNode).remove();
       currentNodes = [];
     };
 

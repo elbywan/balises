@@ -4,12 +4,12 @@
 
 import { removeFromArray, IsSlot } from "./signal.js";
 import {
-  context,
   setContext,
+  context,
   isBatching,
   enqueueBatchOne,
+  disposalStack,
   registerDisposer,
-  hasDisposalScope,
   onTrack,
   type Subscriber,
   type TrackableSource,
@@ -36,8 +36,8 @@ export class Computed<T> {
     this.#fn = fn;
     this.#recompute();
 
-    // Auto-register disposal in current root scope (inline check to avoid function call overhead)
-    if (hasDisposalScope()) registerDisposer(() => this.dispose());
+    // Auto-register disposal in current scope
+    if (disposalStack) registerDisposer(() => this.dispose());
   }
 
   get value(): T {

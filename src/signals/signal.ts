@@ -163,7 +163,7 @@ export class Signal<T> {
    */
   is(value: T): boolean {
     if (context) {
-      const slots = this.#isSlots ?? (this.#isSlots = new Map());
+      const slots = (this.#isSlots ??= new Map());
       let slot = slots.get(value);
       if (!slot) slots.set(value, (slot = new IsSlot(slots, value)));
       context.trackSource(slot);

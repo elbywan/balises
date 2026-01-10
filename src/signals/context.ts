@@ -62,7 +62,7 @@ export function enqueueBatchAll(subs: Subscriber[]): void {
 }
 
 /** Scope disposal: collect all disposers in a scope */
-let disposalStack: Array<Array<() => void>> | null = null;
+export let disposalStack: Array<Array<() => void>> | null = null;
 
 /**
  * Create a disposal scope that collects all subscriptions and computeds created within.
@@ -112,15 +112,6 @@ export function scope<T>(fn: () => T): [result: T, dispose: () => void] {
  */
 export function registerDisposer(dispose: () => void): void {
   disposalStack?.at(-1)?.push(dispose);
-}
-
-/**
- * Check if there's an active disposal scope.
- * Used by Computed to avoid function call overhead when no scope is active.
- * @internal
- */
-export function hasDisposalScope(): boolean {
-  return disposalStack !== null;
 }
 
 /**
