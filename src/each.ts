@@ -282,11 +282,9 @@ function bindEach<T>(
 
     // Remove stale entries
     if (seenKeys.size === 0 && cache.size > 0) {
-      // Fast path: clearing all items - use Range for bulk DOM removal
-      const range = document.createRange();
-      range.setStartAfter(startMarker);
-      range.setEndBefore(marker);
-      range.deleteContents();
+      // Fast path: clearing all items - use replaceChildren for bulk DOM removal
+      // This is faster than Range.deleteContents() as it triggers browser fast paths
+      parent.replaceChildren(startMarker, marker);
       // Dispose all entries (for signal cleanup)
       for (const entry of cache.values()) {
         entry.dispose();
@@ -317,12 +315,9 @@ function bindEach<T>(
   disposers.push(() => {
     unsub();
     listComputed.dispose();
-    // Bulk DOM removal using Range
+    // Bulk DOM removal using replaceChildren
     if (cache.size > 0) {
-      const range = document.createRange();
-      range.setStartAfter(startMarker);
-      range.setEndBefore(marker);
-      range.deleteContents();
+      parent.replaceChildren(startMarker, marker);
       for (const entry of cache.values()) {
         entry.dispose();
       }
