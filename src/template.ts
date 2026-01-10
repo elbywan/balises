@@ -49,16 +49,18 @@ export interface RenderResult {
 /**
  * Binding descriptor stored in cache.
  * Uses tuple format for compact storage:
- * - [0, path, slotIndex] - text content binding
- * - [1, path, attrName, staticParts, slotIndices] - attribute binding
- * - [2, path, propName, slotIndex] - property binding
- * - [3, path, eventName, slotIndex] - event binding
+ * - [0, nodeIndex, slotIndex] - text content binding
+ * - [1, nodeIndex, attrName, staticParts, slotIndices] - attribute binding
+ * - [2, nodeIndex, propName, slotIndex] - property binding
+ * - [3, nodeIndex, eventName, slotIndex] - event binding
+ *
+ * nodeIndex is the index in a TreeWalker traversal (elements + comments only).
  */
 type Binding =
-  | [0, number[], number]
-  | [1, number[], string, string[], number[]]
-  | [2, number[], string, number]
-  | [3, number[], string, number];
+  | [0, number, number]
+  | [1, number, string, string[], number[]]
+  | [2, number, string, number]
+  | [3, number, string, number];
 
 /** Cached template: prototype fragment and binding descriptors */
 type Cached = [DocumentFragment, Binding[]];
@@ -97,11 +99,34 @@ function bind(v: unknown, update: (v: unknown) => void, d: (() => void)[]) {
   } else update(v);
 }
 
-/** Walk a path of child indices to find a node in a fragment */
-function walk(root: Node, path: number[]): Node {
-  let n = root;
-  for (let i = 0; i < path.length; i++) n = n.childNodes[path[i]!]!;
-  return n;
+/**
+ * Collect nodes for all bindings using a single TreeWalker pass.
+ * TreeWalker with filter 129 (SHOW_ELEMENT | SHOW_COMMENT) visits nodes
+ * in the same order they were created, matching our nodeIndex counter.
+ * Bindings are in document order but may share nodes (multiple attrs).
+ */
+function collectBindingNodes(
+  frag: DocumentFragment,
+  bindings: Binding[],
+): Node[] {
+  if (!bindings.length) return [];
+
+  const result: Node[] = new Array(bindings.length);
+  const walker = document.createTreeWalker(frag, 129); // SHOW_ELEMENT | SHOW_COMMENT
+  let nodeIndex = -1;
+  let node: Node | null = null;
+
+  for (let i = 0; i < bindings.length; i++) {
+    const targetIndex = bindings[i]![1];
+    // Advance walker to the target node
+    while (nodeIndex < targetIndex) {
+      node = walker.nextNode();
+      nodeIndex++;
+    }
+    result[i] = node!;
+  }
+
+  return result;
 }
 
 /** A parsed HTML template. Call render() to create live DOM. */
@@ -138,14 +163,14 @@ export class Template {
     const frag = document.createDocumentFragment();
     const bindings: Binding[] = [];
     const stack: (Element | DocumentFragment)[] = [frag];
-    const path: number[] = [];
+    // nodeIndex counts elements and comments (what TreeWalker visits)
+    let nodeIndex = 0;
 
     new HTMLParser().parseTemplate(this.#strings, {
       onText: (t) => stack[stack.length - 1]!.append(t),
 
       onOpenTag: (tag, attrs, selfClose) => {
         const parent = stack[stack.length - 1]!;
-        const idx = parent.childNodes.length;
         const svg =
           tag === "svg" ||
           tag === "SVG" ||
@@ -154,35 +179,31 @@ export class Template {
           ? document.createElementNS(SVG_NS, tag)
           : document.createElement(tag);
 
+        const elIndex = nodeIndex++;
         for (const [name, statics, slots] of attrs) {
           if (!slots.length) el.setAttribute(name, statics[0] ?? "");
           else {
-            const p = [...path, idx];
             const c = name[0];
-            if (c === "@") bindings.push([3, p, name.slice(1), slots[0]!]);
-            else if (c === ".") bindings.push([2, p, name.slice(1), slots[0]!]);
-            else bindings.push([1, p, name, statics, slots]);
+            if (c === "@")
+              bindings.push([3, elIndex, name.slice(1), slots[0]!]);
+            else if (c === ".")
+              bindings.push([2, elIndex, name.slice(1), slots[0]!]);
+            else bindings.push([1, elIndex, name, statics, slots]);
           }
         }
 
         parent.appendChild(el);
-        if (!selfClose) {
-          stack.push(el);
-          path.push(idx);
-        }
+        if (!selfClose) stack.push(el);
       },
 
       onClose: () => {
-        if (stack.length > 1) {
-          stack.pop();
-          path.pop();
-        }
+        if (stack.length > 1) stack.pop();
       },
 
       onSlot: (i) => {
         const parent = stack[stack.length - 1]!;
         parent.appendChild(document.createComment(""));
-        bindings.push([0, [...path, parent.childNodes.length - 1], i]);
+        bindings.push([0, nodeIndex++, i]);
       },
     });
 
@@ -195,8 +216,8 @@ export class Template {
     const disposers: (() => void)[] = [];
     const values = this.#values;
 
-    // Walk all paths first to get stable node references
-    const nodes = bindings.map((b) => walk(frag, b[1]));
+    // Single TreeWalker pass to collect all binding nodes
+    const nodes = collectBindingNodes(frag, bindings);
 
     for (let i = 0; i < bindings.length; i++) {
       const b = bindings[i]!;
