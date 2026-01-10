@@ -143,13 +143,6 @@ function bindEach<T>(
   const getFirstNode = (key: unknown): Node =>
     cache.get(key)?.nodes[0] ?? marker;
 
-  const getNextSibling = (key: unknown): Node => {
-    const nodes = cache.get(key)?.nodes;
-    return nodes?.length
-      ? (nodes[nodes.length - 1]!.nextSibling ?? marker)
-      : marker;
-  };
-
   // --- Reconciliation ---
 
   const reconcile = () => {
@@ -262,7 +255,9 @@ function bindEach<T>(
         // Case 3: Old head moved to new tail
         const entry = cache.get(newTailKey)!;
         entry.itemSignal.value = items[newTail]!;
-        moveEntry(entry, getNextSibling(oldTailKey));
+        const tailNodes = cache.get(oldTailKey)!.nodes;
+        const ref = tailNodes[tailNodes.length - 1]!.nextSibling ?? marker;
+        moveEntry(entry, ref);
         newKeys[newTail] = undefined;
         oldHead++;
         newTail--;
@@ -328,22 +323,22 @@ function bindEach<T>(
     }
 
     // Insert remaining new items
-    while (newHead <= newTail) {
-      const key = newKeys[newHead];
-      if (key !== undefined) {
-        // Find next already-processed item to insert before
-        let ref: Node = marker;
-        for (let i = newHead + 1; i < newLen; i++) {
-          const k = __keyFn__(items[i]!, i);
-          if (cache.has(k)) {
-            ref = getFirstNode(k);
-            break;
-          }
-        }
-        createEntry(items[newHead]!, key, newHead, ref);
-        newKeys[newHead] = undefined;
+    // Find reference: first cached item after newTail, or marker
+    let insertRef: Node = marker;
+    for (let i = newTail + 1; i < newLen; i++) {
+      const k = __keyFn__(items[i]!, i);
+      if (cache.has(k)) {
+        insertRef = getFirstNode(k);
+        break;
       }
-      newHead++;
+    }
+    // Insert in reverse order so each goes before the previous
+    for (let i = newTail; i >= newHead; i--) {
+      const key = newKeys[i];
+      if (key !== undefined) {
+        createEntry(items[i]!, key, i, insertRef);
+        insertRef = cache.get(key)!.nodes[0] ?? insertRef;
+      }
     }
 
     // Update state: rebuild oldKeys from seen set (preserves insertion order)
