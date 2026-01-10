@@ -652,7 +652,42 @@ each(
 );
 ```
 
-### 7. Batch Doesn't Prevent Recomputation
+### 7. Optimize Three-Arg Form with peek() for Static Values
+
+When using `each()` with the three-arg form, if some properties never change (like an ID used as the key), capture them once with `peek()` to reduce reactive overhead:
+
+```typescript
+// ❌ Suboptimal - creates computed for id even though it never changes
+each(
+  items,
+  (i) => i.id,
+  (itemSignal) => html`
+    <tr data-id="${() => itemSignal.value.id}">
+      <td>${() => itemSignal.value.id}</td>
+      <td>${() => itemSignal.value.name}</td>
+    </tr>
+  `,
+);
+
+// ✅ Optimal - capture static id once, only name is reactive
+each(
+  items,
+  (i) => i.id,
+  (itemSignal) => {
+    const id = itemSignal.peek().id; // Capture once - no reactivity needed
+    return html`
+      <tr data-id="${id}">
+        <td>${id}</td>
+        <td>${() => itemSignal.value.name}</td>
+      </tr>
+    `;
+  },
+);
+```
+
+This reduces the number of computed values created per list item, significantly improving performance for large lists.
+
+### 8. Batch Doesn't Prevent Recomputation
 
 ```typescript
 const a = signal(1);
@@ -669,7 +704,7 @@ batch(() => {
 // Batch only defers subscriber notifications, not computed recalculation
 ```
 
-### 8. SVG Elements Need Correct Namespace
+### 9. SVG Elements Need Correct Namespace
 
 The parser automatically handles SVG namespacing:
 
