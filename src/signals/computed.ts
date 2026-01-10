@@ -9,6 +9,7 @@ import {
   isBatching,
   enqueueBatchOne,
   registerDisposer,
+  hasDisposalScope,
   onTrack,
   type Subscriber,
   type TrackableSource,
@@ -35,8 +36,8 @@ export class Computed<T> {
     this.#fn = fn;
     this.#recompute();
 
-    // Auto-register disposal in current root scope
-    registerDisposer(() => this.dispose());
+    // Auto-register disposal in current root scope (inline check to avoid function call overhead)
+    if (hasDisposalScope()) registerDisposer(() => this.dispose());
   }
 
   get value(): T {

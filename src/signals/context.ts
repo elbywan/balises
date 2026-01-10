@@ -115,6 +115,15 @@ export function registerDisposer(dispose: () => void): void {
 }
 
 /**
+ * Check if there's an active disposal scope.
+ * Used by Computed to avoid function call overhead when no scope is active.
+ * @internal
+ */
+export function hasDisposalScope(): boolean {
+  return disposalStack !== null;
+}
+
+/**
  * Hook for tracking signal/computed accesses.
  * Set by async.ts when track() is active to capture dependencies.
  * Using an object wrapper so async.ts can mutate the current value.
