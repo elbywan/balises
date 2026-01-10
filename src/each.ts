@@ -166,6 +166,10 @@ function bindEach<T>(
   const { __list__, __keyFn__, __renderFn__, __keyed__ } = desc;
   const parent = marker.parentNode!;
 
+  // Insert a start marker before the end marker for efficient range deletion
+  const startMarker = document.createComment("");
+  parent.insertBefore(startMarker, marker);
+
   // Get current array value
   const getList = (): T[] => {
     if (typeof __list__ === "function" && !isSignal(__list__)) {
@@ -277,13 +281,27 @@ function bindEach<T>(
     }
 
     // Remove stale entries
-    for (const [key, entry] of cache) {
-      if (!seenKeys.has(key)) {
+    if (seenKeys.size === 0 && cache.size > 0) {
+      // Fast path: clearing all items - use Range for bulk DOM removal
+      const range = document.createRange();
+      range.setStartAfter(startMarker);
+      range.setEndBefore(marker);
+      range.deleteContents();
+      // Dispose all entries (for signal cleanup)
+      for (const entry of cache.values()) {
         entry.dispose();
-        for (const node of entry.nodes) {
-          (node as ChildNode).remove();
+      }
+      cache.clear();
+    } else {
+      // Slow path: partial removal
+      for (const [key, entry] of cache) {
+        if (!seenKeys.has(key)) {
+          entry.dispose();
+          for (const node of entry.nodes) {
+            (node as ChildNode).remove();
+          }
+          cache.delete(key);
         }
-        cache.delete(key);
       }
     }
 
@@ -299,13 +317,19 @@ function bindEach<T>(
   disposers.push(() => {
     unsub();
     listComputed.dispose();
-    for (const entry of cache.values()) {
-      entry.dispose();
-      for (const node of entry.nodes) {
-        (node as ChildNode).remove();
+    // Bulk DOM removal using Range
+    if (cache.size > 0) {
+      const range = document.createRange();
+      range.setStartAfter(startMarker);
+      range.setEndBefore(marker);
+      range.deleteContents();
+      for (const entry of cache.values()) {
+        entry.dispose();
       }
+      cache.clear();
     }
-    cache.clear();
+    // Remove the markers themselves
+    startMarker.remove();
   });
 }
 

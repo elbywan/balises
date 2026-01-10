@@ -228,10 +228,10 @@ export class Template {
         const value = values[b[2]];
         const t = typeof value;
         if (t === "string" || t === "number" || t === "bigint") {
-          // Static primitive - insert text node directly
+          // Static primitive - insert text node directly, no disposer needed
+          // (text nodes have no subscriptions and are removed with parent)
           const n = document.createTextNode(String(value));
           node.parentNode!.insertBefore(n, node);
-          disposers.push(() => n.remove());
         } else if (value == null || t === "boolean") {
           // null, undefined, boolean - render nothing, no disposer needed
         } else {
