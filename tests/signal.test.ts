@@ -881,6 +881,46 @@ describe("Computed caching behavior", () => {
     // After dispose, value should be the last computed value
     assert.strictEqual(c.value, 4);
   });
+
+  /**
+   * Unsubscribe during computed subscriber notification
+   *
+   * When a computed subscriber unsubscribes itself during notification,
+   * all other subscribers should still be called. This tests that the
+   * subscriber array is copied before iteration to avoid issues with
+   * swap-and-pop removal during iteration.
+   */
+  it("should call all computed subscribers even when one unsubscribes during notification", () => {
+    const s = signal(0);
+    const c = computed(() => s.value * 2);
+
+    let sub1Called = 0;
+    let sub2Called = 0;
+    let sub3Called = 0;
+
+    // Store unsubscribe in object so callback can reference it
+    const holder: { unsub?: () => void } = {};
+
+    c.subscribe(() => {
+      sub2Called++;
+    });
+
+    holder.unsub = c.subscribe(() => {
+      sub1Called++;
+      holder.unsub!(); // Unsubscribe itself during notification
+    });
+
+    c.subscribe(() => {
+      sub3Called++;
+    });
+
+    s.value = 1;
+
+    // All subscribers should have been called exactly once
+    assert.strictEqual(sub1Called, 1, "sub1 should be called once");
+    assert.strictEqual(sub2Called, 1, "sub2 should be called once");
+    assert.strictEqual(sub3Called, 1, "sub3 should be called once");
+  });
 });
 
 describe("Computed loop protection", () => {

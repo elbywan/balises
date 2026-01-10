@@ -156,7 +156,7 @@ export class Computed<T> {
             c.#isSlots.get(old)?.notify();
             c.#isSlots.get(c.#value)?.notify();
           }
-          const subs = c.#subs;
+          const subs = c.#subs.slice();
           for (let j = 0; j < subs.length; j++) subs[j]!();
         }
       };
