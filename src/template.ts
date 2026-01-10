@@ -224,8 +224,20 @@ export class Template {
       const node = nodes[i]!;
 
       if (b[0] === 0) {
-        // Content binding
-        this.#bindContent(node as Comment, values[b[2]], disposers);
+        // Content binding - fast path for static values inline
+        const value = values[b[2]];
+        const t = typeof value;
+        if (t === "string" || t === "number" || t === "bigint") {
+          // Static primitive - insert text node directly
+          const n = document.createTextNode(String(value));
+          node.parentNode!.insertBefore(n, node);
+          disposers.push(() => n.remove());
+        } else if (value == null || t === "boolean") {
+          // null, undefined, boolean - render nothing, no disposer needed
+        } else {
+          // Functions, signals, objects, arrays, templates - full binding
+          this.#bindContent(node as Comment, value, disposers);
+        }
       } else if (b[0] === 1) {
         // Attribute binding
         const [, , name, statics, slots] = b;
@@ -277,7 +289,7 @@ export class Template {
     return { fragment: frag, dispose: () => disposers.forEach((f) => f()) };
   }
 
-  /** Bind content slot - handles plugins, templates, arrays, and primitives */
+  /** Bind content slot - handles plugins, templates, arrays, and reactive values */
   #bindContent(marker: Comment, value: unknown, disposers: (() => void)[]) {
     // Try plugins first
     for (const plugin of this.#plugins) {
@@ -288,6 +300,7 @@ export class Template {
       }
     }
 
+    // Full reactive path for functions, signals, objects, arrays, templates
     let currentNodes: Node[] = [],
       childDisposers: (() => void)[] = [];
 
@@ -313,7 +326,9 @@ export class Template {
       }
       clear();
       const parent = marker.parentNode!;
-      for (const item of [v].flat()) {
+      // Optimize: avoid [v].flat() for non-arrays
+      const items = Array.isArray(v) ? v.flat() : [v];
+      for (const item of items) {
         if (item instanceof Template) {
           const { fragment, dispose } = item.render();
           childDisposers.push(dispose);
