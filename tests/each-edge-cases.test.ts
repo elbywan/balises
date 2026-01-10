@@ -7,7 +7,6 @@ import { signal } from "../src/signals/index.js";
 const html = baseHtml.with(eachPlugin);
 
 describe("each() edge cases - potential bugs", () => {
-  
   // BUG 1: undefined as a valid key
   // The algorithm uses undefined as a sentinel, so this could cause issues
   it("should handle undefined as a key value (degenerates to all duplicates)", () => {
@@ -33,11 +32,11 @@ describe("each() edge cases - potential bugs", () => {
 
       document.body.appendChild(fragment);
       const ul = document.body.querySelector("ul")!;
-      
+
       // Should only render first item (others are duplicates)
       assert.strictEqual(ul.children.length, 1);
       assert.strictEqual(ul.children[0]!.textContent, "A");
-      assert.ok(warnCalls.some(w => w.includes("Duplicate key")));
+      assert.ok(warnCalls.some((w) => w.includes("Duplicate key")));
 
       ul.remove();
     } finally {
@@ -56,13 +55,14 @@ describe("each() edge cases - potential bugs", () => {
       ${each(
         items,
         (i) => i.id,
-        (i) => html`<li data-id="${String(i.peek().id)}">${() => i.value.name}</li>`,
+        (i) =>
+          html`<li data-id="${String(i.peek().id)}">${() => i.value.name}</li>`,
       )}
     </ul>`.render();
 
     document.body.appendChild(fragment);
     const ul = document.body.querySelector("ul")!;
-    
+
     assert.strictEqual(ul.children.length, 2);
     assert.strictEqual(ul.children[0]!.getAttribute("data-id"), "null");
     assert.strictEqual(ul.children[0]!.textContent, "NullItem");
@@ -92,13 +92,13 @@ describe("each() edge cases - potential bugs", () => {
       ${each(
         items,
         (i) => i.id,
-        (i) => i.peek().show ? html`<li>${i.peek().id}</li>` : html``,
+        (i) => (i.peek().show ? html`<li>${i.peek().id}</li>` : html``),
       )}
     </ul>`.render();
 
     document.body.appendChild(fragment);
     const ul = document.body.querySelector("ul")!;
-    
+
     // Only item 2 should have visible content
     assert.strictEqual(ul.querySelectorAll("li").length, 1);
     assert.strictEqual(ul.querySelector("li")!.textContent, "2");
@@ -118,9 +118,7 @@ describe("each() edge cases - potential bugs", () => {
 
   // BUG 4: Multiple consecutive inserts at the end
   it("should handle multiple new items appended at once", () => {
-    const items = signal([
-      { id: 1, name: "A" },
-    ]);
+    const items = signal([{ id: 1, name: "A" }]);
 
     const { fragment } = html`<ul>
       ${each(
@@ -132,7 +130,7 @@ describe("each() edge cases - potential bugs", () => {
 
     document.body.appendChild(fragment);
     const ul = document.body.querySelector("ul")!;
-    
+
     // Append multiple items
     items.value = [
       { id: 1, name: "A" },
@@ -141,7 +139,7 @@ describe("each() edge cases - potential bugs", () => {
       { id: 4, name: "D" },
     ];
 
-    const result = [...ul.children].map(c => c.getAttribute("data-id"));
+    const result = [...ul.children].map((c) => c.getAttribute("data-id"));
     assert.deepStrictEqual(result, ["1", "2", "3", "4"]);
 
     ul.remove();
@@ -149,9 +147,7 @@ describe("each() edge cases - potential bugs", () => {
 
   // BUG 5: Multiple consecutive inserts at the beginning
   it("should handle multiple new items prepended at once", () => {
-    const items = signal([
-      { id: 4, name: "D" },
-    ]);
+    const items = signal([{ id: 4, name: "D" }]);
 
     const { fragment } = html`<ul>
       ${each(
@@ -163,7 +159,7 @@ describe("each() edge cases - potential bugs", () => {
 
     document.body.appendChild(fragment);
     const ul = document.body.querySelector("ul")!;
-    
+
     // Prepend multiple items
     items.value = [
       { id: 1, name: "A" },
@@ -172,7 +168,7 @@ describe("each() edge cases - potential bugs", () => {
       { id: 4, name: "D" },
     ];
 
-    const result = [...ul.children].map(c => c.getAttribute("data-id"));
+    const result = [...ul.children].map((c) => c.getAttribute("data-id"));
     assert.deepStrictEqual(result, ["1", "2", "3", "4"]);
 
     ul.remove();
@@ -195,7 +191,7 @@ describe("each() edge cases - potential bugs", () => {
 
     document.body.appendChild(fragment);
     const ul = document.body.querySelector("ul")!;
-    
+
     // Insert multiple items in middle
     items.value = [
       { id: 1, name: "A" },
@@ -205,7 +201,7 @@ describe("each() edge cases - potential bugs", () => {
       { id: 5, name: "E" },
     ];
 
-    const result = [...ul.children].map(c => c.getAttribute("data-id"));
+    const result = [...ul.children].map((c) => c.getAttribute("data-id"));
     assert.deepStrictEqual(result, ["1", "2", "3", "4", "5"]);
 
     ul.remove();

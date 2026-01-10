@@ -575,8 +575,12 @@ function bindEach<T>(
     // UPDATE STATE
     // ========================================================================
 
-    // Build final keys array, filtering out undefined (duplicates)
-    oldKeys = newKeys.filter((k) => k !== undefined);
+    // Update oldKeys for next reconciliation.
+    // If no duplicates were found, reuse the array directly (common case).
+    // Otherwise, filter out undefined entries (duplicates).
+    oldKeys = hasDuplicateWarning
+      ? newKeys.filter((k) => k !== undefined)
+      : newKeys;
   };
 
   // ==========================================================================
