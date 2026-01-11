@@ -122,6 +122,10 @@ describe("Template.render()", () => {
   });
 
   describe("interpolation - attributes", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
     it("should render dynamic attributes", () => {
       const className = "active";
       const { fragment } = html`<div class=${className}></div>`.render();
@@ -244,6 +248,10 @@ describe("Template.render()", () => {
   });
 
   describe("reactive bindings", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
     it("should update text content when signal changes", () => {
       const count = signal(0);
       const { fragment } = html`<div>${count}</div>`.render();
@@ -299,6 +307,10 @@ describe("Template.render()", () => {
   });
 
   describe("dispose", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
     it("should clean up nested template disposers", () => {
       const innerCount = signal(0);
       const inner = html`<span>Value: ${innerCount}</span>`;
@@ -393,6 +405,10 @@ describe("Template.render()", () => {
    * Edge case tests for template rendering
    */
   describe("edge cases", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
     /**
      * Edge case: Empty template
      *
@@ -842,6 +858,10 @@ describe("Template.render()", () => {
   });
 
   describe("each() - keyed list rendering", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
     it("should render a list of items", () => {
       const items = signal([
         { id: 1, name: "Alice" },
@@ -2521,6 +2541,10 @@ describe("Template.render()", () => {
   });
 
   describe("template caching", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+    });
+
     it("should reuse cached prototype for same template strings", () => {
       // Use the same tagged template literal twice
       function createTemplate() {

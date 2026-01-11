@@ -1,62 +1,8 @@
-import { describe, it } from "node:test";
+import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { signal, computed } from "../src/signals/index.js";
-import v8 from "node:v8";
-import vm from "node:vm";
-
-v8.setFlagsFromString("--expose-gc");
-const gc = vm.runInNewContext("gc") as () => void;
-
-/**
- * Force GC and wait until condition is met or timeout.
- */
-async function forceGCUntil(
-  condition: () => boolean,
-  timeoutMs = 2000,
-): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    gc();
-    await new Promise((r) => setTimeout(r, 10));
-    if (condition()) return true;
-  }
-  return false;
-}
-
-/**
- * Helper to track GC of multiple objects.
- */
-function createGCTracker() {
-  const collected = new Set<string>();
-  const registry = new FinalizationRegistry((label: string) => {
-    collected.add(label);
-  });
-
-  return {
-    track(obj: object, label: string) {
-      registry.register(obj, label);
-    },
-    isCollected(label: string) {
-      return collected.has(label);
-    },
-    async waitFor(label: string, timeoutMs = 2000) {
-      const ok = await forceGCUntil(() => collected.has(label), timeoutMs);
-      if (!ok) {
-        throw new Error(`GC timeout: "${label}" not collected`);
-      }
-    },
-    async waitForAll(labels: string[], timeoutMs = 2000) {
-      const ok = await forceGCUntil(
-        () => labels.every((l) => collected.has(l)),
-        timeoutMs,
-      );
-      if (!ok) {
-        const missing = labels.filter((l) => !collected.has(l));
-        throw new Error(`GC timeout: not collected: ${missing.join(", ")}`);
-      }
-    },
-  };
-}
+import { html } from "../src/template.js";
+import { createGCTracker } from "./gc-utils.js";
 
 describe("signal.is()", () => {
   describe("basic functionality", () => {
@@ -959,5 +905,163 @@ describe(".is() slot cleanup", () => {
     c.subscribe(() => {});
     assert.strictEqual(c.value, "new");
     c.dispose();
+  });
+});
+
+/**
+ * Integration tests for .is() with template rendering.
+ * Tests the primary use case: tab selection, accordion panels, etc.
+ */
+describe("signal.is() with template rendering", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("should efficiently update class on selected tab", () => {
+    const selectedTab = signal<string>("tab1");
+    let tab1ComputeCount = 0;
+    let tab2ComputeCount = 0;
+
+    const { fragment, dispose } = html`
+      <div>
+        <button
+          class=${() => {
+            tab1ComputeCount++;
+            return selectedTab.is("tab1") ? "selected" : "";
+          }}
+        >
+          Tab 1
+        </button>
+        <button
+          class=${() => {
+            tab2ComputeCount++;
+            return selectedTab.is("tab2") ? "selected" : "";
+          }}
+        >
+          Tab 2
+        </button>
+      </div>
+    `.render();
+
+    document.body.appendChild(fragment);
+    const buttons = document.body.querySelectorAll("button");
+
+    // Initial render
+    assert.strictEqual(buttons[0]!.getAttribute("class"), "selected");
+    assert.strictEqual(buttons[1]!.getAttribute("class"), "");
+    assert.strictEqual(tab1ComputeCount, 1);
+    assert.strictEqual(tab2ComputeCount, 1);
+
+    // Change to tab2 - both tabs affected (tab1 deselected, tab2 selected)
+    selectedTab.value = "tab2";
+    assert.strictEqual(buttons[0]!.getAttribute("class"), "");
+    assert.strictEqual(buttons[1]!.getAttribute("class"), "selected");
+    assert.strictEqual(tab1ComputeCount, 2);
+    assert.strictEqual(tab2ComputeCount, 2);
+
+    // Change to tab3 (neither) - only tab2 recomputes (was selected, now deselected)
+    // tab1 was already deselected, so its IsSlot("tab1") is not notified
+    selectedTab.value = "tab3";
+    assert.strictEqual(buttons[0]!.getAttribute("class"), "");
+    assert.strictEqual(buttons[1]!.getAttribute("class"), "");
+    assert.strictEqual(tab1ComputeCount, 2); // NOT recomputed! O(1) optimization
+    assert.strictEqual(tab2ComputeCount, 3);
+
+    // Back to tab1 - only tab1 recomputes (IsSlot("tab1") notified)
+    selectedTab.value = "tab1";
+    assert.strictEqual(buttons[0]!.getAttribute("class"), "selected");
+    assert.strictEqual(buttons[1]!.getAttribute("class"), "");
+    assert.strictEqual(tab1ComputeCount, 3);
+    assert.strictEqual(tab2ComputeCount, 3); // NOT recomputed! O(1) optimization
+
+    dispose();
+  });
+
+  it("should show conditional content based on .is()", () => {
+    const activePanel = signal<number>(1);
+
+    const { fragment, dispose } = html`
+      <div>
+        ${() =>
+          activePanel.is(1) ? html`<div class="panel">Panel 1</div>` : null}
+        ${() =>
+          activePanel.is(2) ? html`<div class="panel">Panel 2</div>` : null}
+        ${() =>
+          activePanel.is(3) ? html`<div class="panel">Panel 3</div>` : null}
+      </div>
+    `.render();
+
+    document.body.appendChild(fragment);
+    const container = document.body.querySelector("div")!;
+
+    // Only panel 1 visible
+    assert.strictEqual(container.querySelectorAll(".panel").length, 1);
+    assert.strictEqual(
+      container.querySelector(".panel")!.textContent,
+      "Panel 1",
+    );
+
+    // Switch to panel 2
+    activePanel.value = 2;
+    assert.strictEqual(container.querySelectorAll(".panel").length, 1);
+    assert.strictEqual(
+      container.querySelector(".panel")!.textContent,
+      "Panel 2",
+    );
+
+    // Switch to panel 3
+    activePanel.value = 3;
+    assert.strictEqual(container.querySelectorAll(".panel").length, 1);
+    assert.strictEqual(
+      container.querySelector(".panel")!.textContent,
+      "Panel 3",
+    );
+
+    // Switch to none (e.g., 0)
+    activePanel.value = 0;
+    assert.strictEqual(container.querySelectorAll(".panel").length, 0);
+
+    dispose();
+  });
+
+  it("should work with computed.is() in templates", () => {
+    const count = signal(5);
+    const category = computed(() => {
+      if (count.value < 5) return "low";
+      if (count.value < 10) return "medium";
+      return "high";
+    });
+
+    const { fragment, dispose } = html`
+      <div>
+        <span class=${() => (category.is("low") ? "active" : "")}>Low</span>
+        <span class=${() => (category.is("medium") ? "active" : "")}
+          >Medium</span
+        >
+        <span class=${() => (category.is("high") ? "active" : "")}>High</span>
+      </div>
+    `.render();
+
+    document.body.appendChild(fragment);
+    const spans = document.body.querySelectorAll("span");
+
+    // Initially medium (count=5)
+    assert.strictEqual(spans[0]!.getAttribute("class"), "");
+    assert.strictEqual(spans[1]!.getAttribute("class"), "active");
+    assert.strictEqual(spans[2]!.getAttribute("class"), "");
+
+    // Change to low (count=3)
+    count.value = 3;
+    assert.strictEqual(spans[0]!.getAttribute("class"), "active");
+    assert.strictEqual(spans[1]!.getAttribute("class"), "");
+    assert.strictEqual(spans[2]!.getAttribute("class"), "");
+
+    // Change to high (count=15)
+    count.value = 15;
+    assert.strictEqual(spans[0]!.getAttribute("class"), "");
+    assert.strictEqual(spans[1]!.getAttribute("class"), "");
+    assert.strictEqual(spans[2]!.getAttribute("class"), "active");
+
+    dispose();
   });
 });

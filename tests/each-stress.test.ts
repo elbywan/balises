@@ -19,65 +19,12 @@ import assert from "node:assert";
 import { html as baseHtml } from "../src/template.js";
 import eachPlugin, { each } from "../src/each.js";
 import { signal } from "../src/signals/index.js";
-import v8 from "node:v8";
-import vm from "node:vm";
+import { createGCTracker } from "./gc-utils.js";
 
 const html = baseHtml.with(eachPlugin);
 
 // Fixed seed for reproducibility
 const SEED = 12345;
-
-// ============ GC Setup ============
-
-v8.setFlagsFromString("--expose-gc");
-const gc = vm.runInNewContext("gc") as () => void;
-
-/**
- * Force GC and wait until condition is met or timeout.
- */
-async function forceGCUntil(
-  condition: () => boolean,
-  timeoutMs = 2000,
-): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    gc();
-    await new Promise((r) => setTimeout(r, 10));
-    if (condition()) return true;
-  }
-  return false;
-}
-
-/**
- * Helper to track GC of multiple objects.
- */
-function createGCTracker() {
-  const collected = new Set<string>();
-  const registry = new FinalizationRegistry((label: string) => {
-    collected.add(label);
-  });
-
-  return {
-    track(obj: object, label: string) {
-      registry.register(obj, label);
-    },
-    isCollected(label: string) {
-      return collected.has(label);
-    },
-    async waitForAll(labels: string[], timeoutMs = 2000) {
-      const ok = await forceGCUntil(
-        () => labels.every((l) => collected.has(l)),
-        timeoutMs,
-      );
-      if (!ok) {
-        const missing = labels.filter((l) => !collected.has(l));
-        throw new Error(
-          `GC timeout: not collected: ${missing.join(", ")} (seed=${SEED})`,
-        );
-      }
-    },
-  };
-}
 
 // ============ Test Utilities ============
 
@@ -986,6 +933,182 @@ describe("each() stress tests", () => {
     });
   });
 
+  // ============ Property-Based Tests (Multiple Seeds) ============
+
+  describe("property-based tests (multi-seed)", () => {
+    /**
+     * Test with multiple random seeds to increase coverage diversity.
+     * Each seed produces a completely different sequence of operations,
+     * helping catch edge cases that a single fixed seed might miss.
+     */
+    const SEEDS = [1, 42, 12345, 99999, 314159, 271828, 161803, 141421];
+
+    it("should correctly reconcile shuffles across many seeds", () => {
+      for (const seed of SEEDS) {
+        const random = seededRandom(seed);
+        const initial = createItems(30);
+        const { items, ul, dispose } = renderList(initial);
+        const nodeMap = captureNodeMap(ul);
+
+        // Shuffle 5 times with this seed
+        for (let i = 0; i < 5; i++) {
+          items.value = shuffle(items.value, random);
+          verifyDOM(ul, items.value, nodeMap, 30, `seed=${seed}-shuffle-${i}`);
+        }
+
+        dispose();
+        ul.remove();
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("should correctly handle insertions across many seeds", () => {
+      for (const seed of SEEDS) {
+        const random = seededRandom(seed);
+        const initial = createItems(20);
+        const { items, ul, dispose } = renderList(initial);
+
+        // Insert 10 items at random positions
+        const newItems = createItems(10, 1000 + seed);
+        items.value = insertAtRandomPositions(initial, newItems, random);
+
+        // Verify order
+        const ids = [...ul.children].map((c) =>
+          Number(c.getAttribute("data-id")),
+        );
+        const expected = items.value.map((i) => i.id);
+        assert.deepStrictEqual(
+          ids,
+          expected,
+          `seed=${seed}: DOM order mismatch after insertion`,
+        );
+
+        dispose();
+        ul.remove();
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("should correctly handle deletions across many seeds", () => {
+      for (const seed of SEEDS) {
+        const random = seededRandom(seed);
+        const initial = createItems(40);
+        const { items, ul, dispose } = renderList(initial);
+        const nodeMap = captureNodeMap(ul);
+
+        // Remove ~50% of items
+        const [remaining] = removeRandom(initial, 20, random);
+        items.value = remaining;
+
+        // Verify remaining nodes are reused
+        const remainingIds = new Set(remaining.map((i) => i.id));
+        for (const child of ul.children) {
+          const id = Number(child.getAttribute("data-id"));
+          assert.ok(
+            remainingIds.has(id),
+            `seed=${seed}: unexpected id ${id} in DOM`,
+          );
+          assert.strictEqual(
+            child,
+            nodeMap.get(id),
+            `seed=${seed}: node ${id} should be reused`,
+          );
+        }
+
+        dispose();
+        ul.remove();
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("should correctly handle combined mutations across many seeds", () => {
+      for (const seed of SEEDS) {
+        const random = seededRandom(seed);
+        const initial = createItems(25);
+        const { items, ul, dispose } = renderList(initial);
+
+        // Track which original IDs still exist
+        const originalIds = new Set(initial.map((i) => i.id));
+        let nextId = 1000 + seed;
+        let current = initial;
+
+        // 5 rounds of mutations
+        for (let round = 0; round < 5; round++) {
+          // Shuffle
+          current = shuffle(current, random);
+
+          // Delete ~20%
+          const deleteCount = Math.max(1, Math.floor(current.length * 0.2));
+          const [remaining, removed] = removeRandom(
+            current,
+            deleteCount,
+            random,
+          );
+          for (const r of removed) originalIds.delete(r.id);
+          current = remaining;
+
+          // Insert ~20%
+          const insertCount = Math.max(1, Math.floor(current.length * 0.2));
+          const newItems = createItems(insertCount, nextId);
+          nextId += insertCount;
+          current = insertAtRandomPositions(current, newItems, random);
+
+          items.value = current;
+
+          // Verify DOM order
+          const ids = [...ul.children].map((c) =>
+            Number(c.getAttribute("data-id")),
+          );
+          const expected = current.map((i) => i.id);
+          assert.deepStrictEqual(
+            ids,
+            expected,
+            `seed=${seed}-round-${round}: DOM order mismatch`,
+          );
+        }
+
+        dispose();
+        ul.remove();
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("should maintain node identity for surviving items across many seeds", () => {
+      for (const seed of SEEDS) {
+        const random = seededRandom(seed);
+        const initial = createItems(20);
+        const { items, ul, dispose } = renderList(initial);
+        const originalNodeMap = captureNodeMap(ul);
+
+        // Complex mutation: shuffle + partial delete + some inserts
+        let current = shuffle(initial, random);
+        const [remaining] = removeRandom(current, 5, random);
+        const newItems = createItems(3, 1000 + seed);
+        current = insertAtRandomPositions(remaining, newItems, random);
+        items.value = current;
+
+        // Verify all surviving original items kept their nodes
+        const survivingOriginalIds = new Set(
+          remaining.filter((i) => i.id < 1000).map((i) => i.id),
+        );
+        for (const child of ul.children) {
+          const id = Number(child.getAttribute("data-id"));
+          if (survivingOriginalIds.has(id)) {
+            assert.strictEqual(
+              child,
+              originalNodeMap.get(id),
+              `seed=${seed}: original node ${id} should be reused`,
+            );
+          }
+        }
+
+        dispose();
+        ul.remove();
+        document.body.innerHTML = "";
+      }
+    });
+  });
+
   // ============ Garbage Collection Tests ============
 
   describe("garbage collection", () => {
@@ -1025,6 +1148,8 @@ describe("each() stress tests", () => {
 
       await tracker.waitForAll(
         Array.from({ length: 100 }, (_, i) => `node-${i}`),
+        2000,
+        `seed=${SEED}`,
       );
     });
 
@@ -1063,6 +1188,8 @@ describe("each() stress tests", () => {
 
       await tracker.waitForAll(
         Array.from({ length: 100 }, (_, i) => `node-${i}`),
+        2000,
+        `seed=${SEED}`,
       );
     });
 
@@ -1102,6 +1229,8 @@ describe("each() stress tests", () => {
       // All 100 original nodes should be GC'd (50 were removed mid-test, 50 on dispose)
       await tracker.waitForAll(
         Array.from({ length: 100 }, (_, i) => `node-${i}`),
+        2000,
+        `seed=${SEED}`,
       );
     });
 
@@ -1164,6 +1293,8 @@ describe("each() stress tests", () => {
       // Note: We don't know exact count, but wait for initial 50
       await tracker.waitForAll(
         Array.from({ length: 50 }, (_, i) => `initial-${i}`),
+        2000,
+        `seed=${SEED}`,
       );
     });
 
@@ -1214,6 +1345,8 @@ describe("each() stress tests", () => {
 
       await tracker.waitForAll(
         Array.from({ length: 20 }, (_, i) => `comp-${i}`),
+        2000,
+        `seed=${SEED}`,
       );
 
       // Verify all name signals have no targets

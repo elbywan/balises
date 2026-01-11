@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { html as baseHtml } from "../src/template.js";
 import eachPlugin, { each } from "../src/each.js";
@@ -7,6 +7,10 @@ import { signal } from "../src/signals/index.js";
 const html = baseHtml.with(eachPlugin);
 
 describe("each() edge cases - potential bugs", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
   // BUG 1: undefined as a valid key
   // The algorithm uses undefined as a sentinel, so this could cause issues
   it("should handle undefined as a key value (degenerates to all duplicates)", () => {

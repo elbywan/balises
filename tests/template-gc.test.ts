@@ -14,65 +14,10 @@ import assert from "node:assert";
 import { html as baseHtml } from "../src/template.js";
 import eachPlugin, { each } from "../src/each.js";
 import { signal, store, effect, computed } from "../src/signals/index.js";
-import v8 from "node:v8";
-import vm from "node:vm";
+import { createGCTracker } from "./gc-utils.js";
 
 // Compose html with each plugin for these tests
 const html = baseHtml.with(eachPlugin);
-
-v8.setFlagsFromString("--expose-gc");
-const gc = vm.runInNewContext("gc") as () => void;
-
-/**
- * Force GC and wait until condition is met or timeout.
- */
-async function forceGCUntil(
-  condition: () => boolean,
-  timeoutMs = 2000,
-): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    gc();
-    await new Promise((r) => setTimeout(r, 10));
-    if (condition()) return true;
-  }
-  return false;
-}
-
-/**
- * Helper to track GC of multiple objects.
- */
-function createGCTracker() {
-  const collected = new Set<string>();
-  const registry = new FinalizationRegistry((label: string) => {
-    collected.add(label);
-  });
-
-  return {
-    track(obj: object, label: string) {
-      registry.register(obj, label);
-    },
-    isCollected(label: string) {
-      return collected.has(label);
-    },
-    async waitFor(label: string, timeoutMs = 2000) {
-      const ok = await forceGCUntil(() => collected.has(label), timeoutMs);
-      if (!ok) {
-        throw new Error(`GC timeout: "${label}" not collected`);
-      }
-    },
-    async waitForAll(labels: string[], timeoutMs = 2000) {
-      const ok = await forceGCUntil(
-        () => labels.every((l) => collected.has(l)),
-        timeoutMs,
-      );
-      if (!ok) {
-        const missing = labels.filter((l) => !collected.has(l));
-        throw new Error(`GC timeout: not collected: ${missing.join(", ")}`);
-      }
-    },
-  };
-}
 
 describe("Template GC after dispose()", () => {
   describe("text content bindings", () => {
