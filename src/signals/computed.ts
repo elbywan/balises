@@ -185,8 +185,12 @@ export class Computed<T> {
 
     const prev = context;
     setContext(this);
+    let threw = false;
     try {
       this.#value = this.#fn();
+    } catch (err) {
+      threw = true;
+      throw err;
     } finally {
       setContext(prev);
 
@@ -198,7 +202,7 @@ export class Computed<T> {
         sources.length = newLen;
       }
 
-      this.#dirty = false;
+      if (!threw) this.#dirty = false;
       this.#computing = false;
     }
   }

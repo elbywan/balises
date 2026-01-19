@@ -443,6 +443,24 @@ describe("Computed", () => {
     assert.throws(() => c.value, /Test error/);
   });
 
+  it("should stay dirty after errors until a successful recompute", () => {
+    const flag = signal(false);
+    const c = computed(() => {
+      if (flag.value) throw new Error("Boom");
+      return 1;
+    });
+
+    assert.strictEqual(c.value, 1);
+
+    flag.value = true;
+    assert.throws(() => c.value, /Boom/);
+    // Accessing again without changes should still throw (no cached stale value)
+    assert.throws(() => c.value, /Boom/);
+
+    flag.value = false;
+    assert.strictEqual(c.value, 1);
+  });
+
   /**
    * Edge case: Diamond dependency pattern
    *
