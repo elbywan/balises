@@ -123,6 +123,11 @@ function bindEach<T>(
     ).render();
     const nodes = [...fragment.childNodes];
     parent.insertBefore(fragment, ref);
+    if (!nodes.length) {
+      const placeholder = document.createComment("");
+      parent.insertBefore(placeholder, ref);
+      nodes.push(placeholder);
+    }
     const entry: CacheEntry<T> = { nodes, dispose, itemSignal };
     cache.set(key, entry);
     return entry;

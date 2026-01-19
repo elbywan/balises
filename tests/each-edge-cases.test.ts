@@ -120,6 +120,41 @@ describe("each() edge cases - potential bugs", () => {
     ul.remove();
   });
 
+  it("should handle reordering when tail entry renders no nodes", () => {
+    const items = signal([
+      { id: "a", show: true },
+      { id: "b", show: false },
+    ]);
+
+    const { fragment } = html`<div>
+      ${each(
+        items,
+        (i) => i.id,
+        (i) =>
+          i.peek().show
+            ? html`<span class="item">${() => i.value.id}</span>`
+            : html``,
+      )}
+    </div>`.render();
+
+    document.body.appendChild(fragment);
+    const container = document.body.querySelector("div")!;
+
+    assert.strictEqual(container.querySelectorAll(".item").length, 1);
+    assert.strictEqual(container.querySelector(".item")!.textContent, "a");
+
+    // Swap order so old head moves to new tail and old tail has no nodes
+    items.value = [
+      { id: "b", show: false },
+      { id: "a", show: true },
+    ];
+
+    assert.strictEqual(container.querySelectorAll(".item").length, 1);
+    assert.strictEqual(container.querySelector(".item")!.textContent, "a");
+
+    container.remove();
+  });
+
   // BUG 4: Multiple consecutive inserts at the end
   it("should handle multiple new items appended at once", () => {
     const items = signal([{ id: 1, name: "A" }]);
