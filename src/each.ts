@@ -153,9 +153,7 @@ function bindEach<T>(
     // Fast path: empty list
     if (newLen === 0) {
       if (oldLen > 0) {
-        parent.replaceChildren(startMarker, marker);
-        for (const entry of cache.values()) entry.dispose();
-        cache.clear();
+        for (const key of [...cache.keys()]) removeEntry(key);
         oldKeys = [];
       }
       return;
@@ -353,9 +351,7 @@ function bindEach<T>(
     unsub();
     listComputed.dispose();
     if (cache.size > 0) {
-      parent.replaceChildren(startMarker, marker);
-      for (const entry of cache.values()) entry.dispose();
-      cache.clear();
+      for (const key of [...cache.keys()]) removeEntry(key);
     }
     startMarker.remove();
   });

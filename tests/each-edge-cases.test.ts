@@ -252,6 +252,39 @@ describe("each() edge cases - potential bugs", () => {
     ul.remove();
   });
 
+  // BUG 8: Siblings outside each() should not be removed on empty list
+  it("should preserve colocated nodes when list becomes empty", () => {
+    const items = signal([
+      { id: 1, name: "A" },
+      { id: 2, name: "B" },
+    ]);
+
+    const { fragment } = html`<div>
+      <span id="before">Before</span>
+      ${each(
+        items,
+        (i) => i.id,
+        (i) => html`<span class="item">${() => i.value.name}</span>`,
+      )}
+      <span id="after">After</span>
+    </div>`.render();
+
+    document.body.appendChild(fragment);
+    const container = document.body.querySelector("div")!;
+
+    assert.strictEqual(container.querySelectorAll(".item").length, 2);
+    assert.ok(container.querySelector("#before"));
+    assert.ok(container.querySelector("#after"));
+
+    items.value = [];
+
+    assert.strictEqual(container.querySelectorAll(".item").length, 0);
+    assert.ok(container.querySelector("#before"));
+    assert.ok(container.querySelector("#after"));
+
+    container.remove();
+  });
+
   // BUG 8: Symbol keys
   it("should handle Symbol keys correctly", () => {
     const symA = Symbol("a");
