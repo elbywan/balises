@@ -113,8 +113,11 @@ const html = baseHtml.with(asyncPlugin);
 const userId = signal(1);
 
 html`
-  ${async function* () {
+  ${async function* (settled, ctx) {
+    void settled;
     const id = userId.value; // Track dependency - restarts when userId changes
+    const prev = ctx?.lastId;
+    if (ctx) ctx.lastId = id;
 
     yield html`<div class="loading">Loading...</div>`;
 
@@ -129,6 +132,8 @@ userId.value = 2;
 
 Async generators replace the entire yielded content on each yield. For surgical updates within a stable DOM structure, use reactive bindings (`${() => state.value}`) instead.
 
+Generators receive a mutable context object as their second argument. This object persists across restarts and can hold user-defined state for diffing or caching. Use the `AsyncGeneratorContext<T>` type from `balises/async` for type safety.
+
 ### DOM Preservation on Restart
 
 When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM and enable surgical updates via reactive bindings, return the `settled` parameter:
@@ -142,8 +147,9 @@ const userId = signal(1);
 const state = store({ user: null, loading: false });
 
 html`
-  ${async function* (settled?: RenderedContent) {
+  ${async function* (settled?: RenderedContent, ctx?: { lastId?: number }) {
     const id = userId.value;
+    if (ctx) ctx.lastId = id;
 
     if (settled) {
       // Restart: update state, preserve existing DOM

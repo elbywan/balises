@@ -2,7 +2,10 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { html as baseHtml, Template } from "../src/template.js";
 import eachPlugin, { each } from "../src/each.js";
-import asyncPlugin, { type RenderedContent } from "../src/async.js";
+import asyncPlugin, {
+  type AsyncGeneratorContext,
+  type RenderedContent,
+} from "../src/async.js";
 import { signal, store, computed, batch } from "../src/signals/index.js";
 
 // Compose html with plugins for tests that use each() and async generators
@@ -1957,6 +1960,38 @@ describe("Template.render()", () => {
         "User 2 loaded",
       );
       assert.strictEqual(renderCount.value, 2);
+    });
+
+    it("should provide a persistent context object across restarts", async () => {
+      const userId = signal(1);
+      const contexts: AsyncGeneratorContext<{ lastId?: number }>[] = [];
+      const lastIds: (number | undefined)[] = [];
+
+      const { fragment } = html`<div>
+        ${async function* (
+          settled?: RenderedContent,
+          ctx?: AsyncGeneratorContext<{ lastId?: number }>,
+        ) {
+          void settled;
+          assert.ok(ctx);
+          contexts.push(ctx);
+          lastIds.push(ctx.lastId);
+          const id = userId.value;
+          ctx.lastId = id;
+          yield html`<span>${id}</span>`;
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      assert.strictEqual(lastIds[0], undefined);
+
+      userId.value = 2;
+      await tick();
+
+      assert.strictEqual(lastIds[1], 1);
+      assert.strictEqual(contexts[1], contexts[0]);
     });
 
     it("should call generator.return() on dispose", async () => {

@@ -187,8 +187,10 @@ const CODE_EXAMPLES = {
     "\n" +
     "// Progressive loading with automatic restart\n" +
     "html`\n" +
-    "  ${async function* () {\n" +
+    "  ${async function* (settled, ctx) {\n" +
+    "    void settled;\n" +
     "    const id = userId.value; // Track dependency\n" +
+    "    ctx.lastId = id; // Persist across restarts\n" +
     "\n" +
     "    yield html`<div>Loading...</div>`;\n" +
     "\n" +
@@ -202,8 +204,9 @@ const CODE_EXAMPLES = {
     "// Use 'settled' to preserve DOM on restart\n" +
     "const state = store({ user: null, loading: false });\n" +
     "\n" +
-    "async function* loadUser(settled) {\n" +
+    "async function* loadUser(settled, ctx) {\n" +
     "  const id = userId.value; // Track dependency\n" +
+    "  ctx.lastId = id;\n" +
     "\n" +
     "  state.loading = true;\n" +
     "  state.user = await fetchUser(id);\n" +
@@ -435,6 +438,12 @@ class DocsApp extends HTMLElement {
             generator restarts when any tracked signal changes:
           </p>
           <code-block data-code="asyncgen"></code-block>
+          <br />
+          <p>
+            Async generators receive a mutable context object as their second
+            argument. This object persists across restarts for user-defined
+            state.
+          </p>
           <br />
           <p class="note">
             <strong>Tip:</strong> Use async generators for loading states and

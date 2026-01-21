@@ -44,8 +44,13 @@ type SubscribableSource = Reactive<unknown>;
  * ```ts
  * import asyncPlugin, { type RenderedContent } from "balises/async";
  *
- * async function* loadUser(settled?: RenderedContent) {
+ * async function* loadUser(
+ *   settled?: RenderedContent,
+ *   ctx?: AsyncGeneratorContext<{ lastId?: number }>,
+ * ) {
  *   const id = userId.value; // Track dependency
+ *   const previous = ctx?.lastId;
+ *   ctx && (ctx.lastId = id);
  *
  *   if (settled) {
  *     // Restart: update state, keep existing DOM
@@ -67,6 +72,12 @@ export interface RenderedContent {
   readonly __brand: "RenderedContent";
 }
 
+/**
+ * Mutable context object that persists across async generator restarts.
+ */
+export type AsyncGeneratorContext<T extends object = Record<string, unknown>> =
+  T;
+
 /** Internal structure for RenderedContent */
 interface RenderedContentInternal extends RenderedContent {
   readonly nodes: Node[];
@@ -76,6 +87,7 @@ interface RenderedContentInternal extends RenderedContent {
 /** Async generator function type */
 type AsyncGenFn = (
   settled?: RenderedContent,
+  ctx?: AsyncGeneratorContext,
 ) => AsyncGenerator<unknown, unknown, unknown>;
 
 /**
@@ -200,6 +212,7 @@ function bindAsyncGenerator(
   let iterationId = 0;
   let depUnsubscribers: (() => void)[] = [];
   let lastSettled: RenderedContentInternal | null = null;
+  const context: AsyncGeneratorContext = {};
 
   const clearNodes = () => {
     for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
@@ -238,7 +251,7 @@ function bindAsyncGenerator(
 
     if (disposed) return;
 
-    generator = genFn(lastSettled ?? undefined);
+    generator = genFn(lastSettled ?? undefined, context);
     let lastYielded: unknown = null;
 
     while (!disposed && thisIteration === iterationId) {
