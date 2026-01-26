@@ -21,6 +21,10 @@ const FEATURES = [
     desc: "Works directly in browsers with ES modules",
   },
   {
+    title: "Smart conditionals",
+    desc: "when() and match() with optional caching for instant switching",
+  },
+  {
     title: "Async generators",
     desc: "Progressive loading with automatic dependency restart",
   },
@@ -60,6 +64,16 @@ const API_ITEMS = [
     title: "each(list, keyFn?, renderFn)",
     code: "each",
     desc: "Efficient keyed list rendering. Import from <code>balises/each</code> and use <code>html.with(eachPlugin)</code>.",
+  },
+  {
+    title: "when(condition, [ifTrue, ifFalse?], opts?)",
+    code: "when",
+    desc: "Conditional rendering. Branches are reused when condition stays same. Use <code>{ cache: true }</code> to keep branches in memory. Import from <code>balises/match</code>.",
+  },
+  {
+    title: "match(selector, cases, opts?)",
+    code: "match",
+    desc: "Multi-branch conditional rendering. Use <code>_</code> for default case, <code>{ cache: true }</code> for tab-like switching. Import from <code>balises/match</code>.",
   },
   {
     title: "async function* ()",
@@ -178,6 +192,43 @@ const CODE_EXAMPLES = {
     "\n" +
     "// With getter function (for stores)\n" +
     "${each(() => state.items, i => html`<li>${i}</li>`)}",
+
+  when:
+    "// Import and enable the match plugin\n" +
+    'import { html as baseHtml } from "balises";\n' +
+    'import matchPlugin, { when } from "balises/match";\n' +
+    "const html = baseHtml.with(matchPlugin);\n" +
+    "\n" +
+    "// Boolean condition with two branches\n" +
+    "${when(() => !!state.user, [\n" +
+    "  () => html`<Profile>${() => state.user.name}</Profile>`,\n" +
+    "  () => html`<LoginPrompt />`\n" +
+    "])}\n" +
+    "\n" +
+    "// With cache: true for instant switching back\n" +
+    "${when(() => state.expanded, [\n" +
+    "  () => html`<ExpandedView />`,\n" +
+    "  () => html`<CollapsedView />`\n" +
+    "], { cache: true })}",
+
+  match:
+    "// Import and enable the match plugin\n" +
+    'import { html as baseHtml } from "balises";\n' +
+    'import matchPlugin, { match } from "balises/match";\n' +
+    "const html = baseHtml.with(matchPlugin);\n" +
+    "\n" +
+    "// Loading states (default: dispose on switch)\n" +
+    "${match(() => state.status, {\n" +
+    "  loading: () => html`<Spinner />`,\n" +
+    "  success: () => html`<Content />`,\n" +
+    "  _: () => html`<Fallback />`\n" +
+    "})}\n" +
+    "\n" +
+    "// Tabs with caching for instant switching\n" +
+    "${match(() => state.tab, {\n" +
+    "  home: () => html`<Home />`,\n" +
+    "  settings: () => html`<Settings />`\n" +
+    "}, { cache: true })}",
 
   asyncgen:
     "// Import and enable the async plugin\n" +
@@ -427,6 +478,24 @@ class DocsApp extends HTMLElement {
             Better for composition and reusability:
           </p>
           <code-block data-code="composable"></code-block>
+        </section>
+
+        <!-- Conditional Rendering Section -->
+        <section>
+          <h2>Conditional Rendering</h2>
+          <p>
+            Use <code>when()</code> and <code>match()</code> for cached
+            conditional rendering. Branches are preserved based on the
+            selector's <strong>result</strong>, not the underlying data. Import
+            from <code>balises/match</code>:
+          </p>
+          <code-block data-code="when"></code-block>
+          <br />
+          <p>
+            For multiple cases, use <code>match()</code>. Each branch is cached
+            separately and reused when revisited:
+          </p>
+          <code-block data-code="match"></code-block>
         </section>
 
         <!-- Async Generators Section -->

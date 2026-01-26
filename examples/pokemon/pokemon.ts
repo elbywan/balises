@@ -8,7 +8,10 @@
  * - Cross-tab bridges: "Add to Team" from Pokedex, "View in Pokedex" from Battle
  */
 
-import { html, store, effect, scope } from "../../src/index.js";
+import { html as baseHtml, store, effect, scope } from "../../src/index.js";
+import matchPlugin, { match } from "../../src/match.js";
+
+const html = baseHtml.with(matchPlugin);
 import type { FavoritePokemon } from "./types.js";
 import { getDefaultLanguage } from "./utils/language.js";
 import {
@@ -337,34 +340,37 @@ export class PokemonAppElement extends HTMLElement {
           </button>
         </nav>
 
-        <!-- Tab Content -->
+        <!-- Tab Content - using match() with caching for instant tab switching -->
         <div class="tab-content">
-          ${() => {
-            if (this.#appState.activeTab === "pokedex") {
-              return Pokedex({
-                state: this.#pokedexState,
-                sharedState: this.#sharedState,
-                pokemonService: this.#pokemonService,
-                onLanguageChange: handleLanguageChange,
-                onPokemonChange: handlePokemonChange,
-                getRootElement,
-                rosterActions,
-              });
-            } else {
-              return Battle({
-                state: this.#battleState,
-                sharedState: this.#sharedState,
-                pokemonService: this.#pokemonService,
-                onLanguageChange: handleLanguageChange,
-                getRootElement,
-                // Bridge props
-                viewInPokedex,
-                // Roster props
-                removeFromRoster,
-                resetRoster,
-              });
-            }
-          }}
+          ${match(
+            () => this.#appState.activeTab,
+            {
+              pokedex: () =>
+                Pokedex({
+                  state: this.#pokedexState,
+                  sharedState: this.#sharedState,
+                  pokemonService: this.#pokemonService,
+                  onLanguageChange: handleLanguageChange,
+                  onPokemonChange: handlePokemonChange,
+                  getRootElement,
+                  rosterActions,
+                }),
+              battle: () =>
+                Battle({
+                  state: this.#battleState,
+                  sharedState: this.#sharedState,
+                  pokemonService: this.#pokemonService,
+                  onLanguageChange: handleLanguageChange,
+                  getRootElement,
+                  // Bridge props
+                  viewInPokedex,
+                  // Roster props
+                  removeFromRoster,
+                  resetRoster,
+                }),
+            },
+            { cache: true },
+          )}
         </div>
       </div>
     `.render();

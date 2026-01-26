@@ -60,6 +60,10 @@
     "./each": {
       "import": "./dist/esm/each.js",
       "types": "./dist/esm/each.d.ts"
+    },
+    "./match": {
+      "import": "./dist/esm/match.js",
+      "types": "./dist/esm/match.d.ts"
     }
   },
   "scripts": {

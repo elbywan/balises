@@ -33,6 +33,8 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Async Generators](#async-generators)
   - [DOM Preservation on Restart](#dom-preservation-on-restart)
 - [Template Syntax](#template-syntax)
+  - [Efficient List Rendering with each()](#efficient-list-rendering-with-each)
+  - [Conditional Rendering with when() and match()](#conditional-rendering-with-when-and-match)
 - [Reactivity API](#reactivity-api)
 - [Web Components](#web-components)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
@@ -311,6 +313,77 @@ each(list, keyFn, renderFn); // keyFn extracts key, renderFn receives ReadonlySi
 
 **Important:** Access item properties through `itemSignal.value` and wrap in `() => ...` for reactive updates.
 
+### Conditional Rendering with `when()` and `match()`
+
+When conditionally rendering content, a naive approach re-creates templates on every change, even when the condition result stays the same. Use `when()` and `match()` for conditional rendering where branches are rendered based on the selector's **result**, not the underlying data.
+
+**Note:** Import from `balises/match` and use `html.with(matchPlugin)` to enable.
+
+```ts
+import { html as baseHtml, store } from "balises";
+import matchPlugin, { when } from "balises/match";
+
+const html = baseHtml.with(matchPlugin);
+const state = store({ user: null });
+
+html`
+  ${when(
+    () => !!state.user,
+    [
+      () => html`<Profile>${() => state.user.name}</Profile>`,
+      () => html`<LoginPrompt />`,
+    ],
+  )}
+`.render();
+
+// When user changes from Alice to Bob, !!state.user stays true
+// so the Profile branch is REUSED (not recreated)
+state.user = { name: "Alice" };
+state.user = { name: "Bob" }; // Same branch, just updates the name binding
+```
+
+The second argument is an array `[ifTrue, ifFalse?]`. If `ifFalse` is omitted, renders nothing when false.
+
+For multiple cases, use `match()`:
+
+```ts
+import matchPlugin, { match } from "balises/match";
+
+const status = signal<"idle" | "loading" | "error" | "success">("idle");
+
+html`
+  ${match(() => status.value, {
+    idle: () => html`<IdleState />`,
+    loading: () => html`<Spinner />`,
+    error: () => html`<ErrorMessage />`,
+    success: () => html`<content />`,
+    _: () => html`<Fallback />`, // Optional default case
+  })}
+`.render();
+```
+
+By default, branches are disposed when switching away (freeing memory). For scenarios where you want instant switching back (like tabs), use `{ cache: true }`:
+
+```ts
+html`
+  ${match(
+    () => state.activeTab,
+    {
+      home: () => html`<Home />`,
+      settings: () => html`<Settings />`,
+    },
+    { cache: true }, // Keep branches in memory for instant switching
+  )}
+`.render();
+
+// With cache: true, switching back reuses the same DOM nodes
+state.activeTab = "settings"; // Creates Settings
+state.activeTab = "home"; // Creates Home
+state.activeTab = "settings"; // Reuses cached Settings (same DOM!)
+```
+
+Reactive bindings inside branches continue to work normally regardless of caching.
+
 ## Reactivity API
 
 ### `signal<T>(value)`
@@ -570,7 +643,7 @@ import { batch, scope } from "balises/signals/context";
 
 ### Template Plugins
 
-The `each()` and async generator features are provided as opt-in plugins to keep the base bundle minimal. Use `html.with()` to compose plugins:
+The `each()`, `when()`/`match()`, and async generator features are provided as opt-in plugins to keep the base bundle minimal. Use `html.with()` to compose plugins:
 
 ```ts
 // With each() support for keyed lists
@@ -579,18 +652,25 @@ import eachPlugin, { each } from "balises/each";
 
 const html = baseHtml.with(eachPlugin);
 
+// With when()/match() for cached conditional rendering
+import { html as baseHtml } from "balises";
+import matchPlugin, { when, match } from "balises/match";
+
+const html = baseHtml.with(matchPlugin);
+
 // With async generator support
 import { html as baseHtml } from "balises";
 import asyncPlugin from "balises/async";
 
 const html = baseHtml.with(asyncPlugin);
 
-// With both plugins
+// With multiple plugins
 import { html as baseHtml } from "balises";
 import eachPlugin, { each } from "balises/each";
+import matchPlugin, { when, match } from "balises/match";
 import asyncPlugin from "balises/async";
 
-const html = baseHtml.with(eachPlugin, asyncPlugin);
+const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin);
 ```
 
 ### Using as a Standalone Signals Library

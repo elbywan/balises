@@ -5,9 +5,10 @@
 
 import { html as baseHtml, type ReadonlySignal } from "../../../src/index.js";
 import eachPlugin, { each } from "../../../src/each.js";
+import matchPlugin, { match } from "../../../src/match.js";
 import { DEFAULT_ROSTER_IDS } from "../utils/storage.js";
 
-const html = baseHtml.with(eachPlugin);
+const html = baseHtml.with(eachPlugin, matchPlugin);
 import type {
   Pokemon,
   BattleState,
@@ -841,21 +842,16 @@ export function Battle(props: BattleProps) {
   };
 
   const renderPhase = () => {
-    switch (state.phase) {
-      case "splash":
-        return renderSplash();
-      case "team_select":
-        return renderTeamSelect();
-      case "battle":
-      case "switching":
-        return renderBattle();
-      case "victory":
-        return renderGameOver(true);
-      case "game_over":
-        return renderGameOver(false);
-      default:
-        return null;
-    }
+    // Using match() for state-machine-like phase rendering
+    // Each branch is cached and reused when revisited
+    return match(() => state.phase, {
+      splash: () => renderSplash(),
+      team_select: () => renderTeamSelect(),
+      battle: () => renderBattle(),
+      switching: () => renderBattle(),
+      victory: () => renderGameOver(true),
+      game_over: () => renderGameOver(false),
+    });
   };
 
   const renderSplash = () => {
@@ -1081,6 +1077,6 @@ export function Battle(props: BattleProps) {
 
   // Main render
   return html`
-    <div class="pokemon-battle">${renderHeader()} ${() => renderPhase()}</div>
+    <div class="pokemon-battle">${renderHeader()} ${renderPhase()}</div>
   `;
 }

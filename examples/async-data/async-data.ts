@@ -10,8 +10,9 @@
 
 import { html as baseHtml, signal, store } from "../../src/index.js";
 import asyncPlugin, { type RenderedContent } from "../../src/async.js";
+import matchPlugin, { when } from "../../src/match.js";
 
-const html = baseHtml.with(asyncPlugin);
+const html = baseHtml.with(asyncPlugin, matchPlugin);
 
 // Types for JSONPlaceholder API
 interface User {
@@ -415,25 +416,28 @@ class AsyncDataElement extends HTMLElement {
       </div>
 
       <div class="info-panel">
-        ${() =>
-          this.#mode.value === "preserved"
-            ? html`
-                <h4>DOM Preserved Mode</h4>
-                <p>
-                  Uses the <code>settled</code> pattern. When switching users,
-                  the existing DOM is preserved and content updates via reactive
-                  bindings. Notice the "Updating..." badge and how the layout
-                  stays stable - no loading spinner replaces the content.
-                </p>
-              `
-            : html`
-                <h4>Progressive Mode</h4>
-                <p>
-                  Traditional async generator approach. Each user switch yields
-                  new content at each step: loading → user info → posts. The
-                  entire DOM is replaced on each transition.
-                </p>
-              `}
+        ${when(
+          () => this.#mode.value === "preserved",
+          [
+            () => html`
+              <h4>DOM Preserved Mode</h4>
+              <p>
+                Uses the <code>settled</code> pattern. When switching users, the
+                existing DOM is preserved and content updates via reactive
+                bindings. Notice the "Updating..." badge and how the layout
+                stays stable - no loading spinner replaces the content.
+              </p>
+            `,
+            () => html`
+              <h4>Progressive Mode</h4>
+              <p>
+                Traditional async generator approach. Each user switch yields
+                new content at each step: loading → user info → posts. The
+                entire DOM is replaced on each transition.
+              </p>
+            `,
+          ],
+        )}
       </div>
     `.render();
 
