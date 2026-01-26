@@ -93,9 +93,9 @@ function bindEach<T>(
   disposers: (() => void)[],
 ): void {
   const { __list__, __keyFn__, __renderFn__ } = desc;
-  const parent = marker.parentNode!;
+  const initialParent = marker.parentNode!;
   const startMarker = document.createComment("");
-  parent.insertBefore(startMarker, marker);
+  initialParent.insertBefore(startMarker, marker);
 
   // Normalize list access
   const getList = (): T[] => {
@@ -111,6 +111,7 @@ function bindEach<T>(
   // --- Entry helpers ---
 
   const createEntry = (
+    parent: Node,
     item: T,
     key: unknown,
     index: number,
@@ -141,7 +142,11 @@ function bindEach<T>(
     cache.delete(key);
   };
 
-  const moveEntry = (entry: CacheEntry<T>, ref: Node | null): void => {
+  const moveEntry = (
+    parent: Node,
+    entry: CacheEntry<T>,
+    ref: Node | null,
+  ): void => {
     for (const node of entry.nodes) parent.insertBefore(node, ref);
   };
 
@@ -150,7 +155,24 @@ function bindEach<T>(
 
   // --- Reconciliation ---
 
+  let pendingReattachCheck = false;
+
   const reconcile = () => {
+    // When marker is detached (e.g., inside a hidden when()/match() branch with cache:true),
+    // we can't do DOM operations. Schedule a microtask to retry after re-attachment.
+    const parent = marker.parentNode;
+    if (!parent) {
+      if (!pendingReattachCheck) {
+        pendingReattachCheck = true;
+        queueMicrotask(() => {
+          pendingReattachCheck = false;
+          // If re-attached, reconcile now
+          if (marker.parentNode) reconcile();
+        });
+      }
+      return;
+    }
+
     const items = listComputed.value;
     const newLen = items.length;
     const oldLen = oldKeys.length;
@@ -180,7 +202,7 @@ function bindEach<T>(
           continue;
         }
         seen.add(key);
-        createEntry(item, key, i, marker);
+        createEntry(parent, item, key, i, marker);
         newKeys.push(key);
       }
       oldKeys = newKeys;
@@ -260,7 +282,7 @@ function bindEach<T>(
         entry.itemSignal.value = items[newTail]!;
         const tailNodes = cache.get(oldTailKey)!.nodes;
         const ref = tailNodes[tailNodes.length - 1]!.nextSibling ?? marker;
-        moveEntry(entry, ref);
+        moveEntry(parent, entry, ref);
         newKeys[newTail] = undefined;
         oldHead++;
         newTail--;
@@ -268,7 +290,7 @@ function bindEach<T>(
         // Case 4: Old tail moved to new head
         const entry = cache.get(newHeadKey)!;
         entry.itemSignal.value = items[newHead]!;
-        moveEntry(entry, getFirstNode(oldHeadKey));
+        moveEntry(parent, entry, getFirstNode(oldHeadKey));
         newKeys[newHead] = undefined;
         oldTail--;
         newHead++;
@@ -299,6 +321,7 @@ function bindEach<T>(
           if (oldIdx === undefined) {
             // New head not in old list - insert
             createEntry(
+              parent,
               items[newHead]!,
               newHeadKey!,
               newHead,
@@ -310,7 +333,7 @@ function bindEach<T>(
             // Move existing item to new head position
             const entry = cache.get(newHeadKey)!;
             entry.itemSignal.value = items[newHead]!;
-            moveEntry(entry, getFirstNode(oldHeadKey));
+            moveEntry(parent, entry, getFirstNode(oldHeadKey));
             oldKeys[oldIdx] = undefined; // Mark as moved
             newKeys[newHead] = undefined;
             newHead++;
@@ -339,7 +362,7 @@ function bindEach<T>(
     for (let i = newTail; i >= newHead; i--) {
       const key = newKeys[i];
       if (key !== undefined) {
-        createEntry(items[i]!, key, i, insertRef);
+        createEntry(parent, items[i]!, key, i, insertRef);
         insertRef = cache.get(key)!.nodes[0] ?? insertRef;
       }
     }

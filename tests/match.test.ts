@@ -2,10 +2,12 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { html as baseHtml } from "../src/template.js";
 import matchPlugin, { when, match } from "../src/match.js";
+import eachPlugin, { each } from "../src/each.js";
 import { signal, store } from "../src/signals/index.js";
 import { createGCTracker } from "./gc-utils.js";
 
 const html = baseHtml.with(matchPlugin);
+const htmlWithEach = baseHtml.with(matchPlugin).with(eachPlugin);
 
 describe("when()", () => {
   beforeEach(() => {
@@ -1029,5 +1031,94 @@ describe("GC after dispose()", () => {
     state.mode = "c";
     state.mode = "a";
     assert.strictEqual(renderCount, 2, "should not re-render after dispose");
+  });
+
+  it("should handle each() nested in when() without errors when list updates while hidden", async () => {
+    const show = signal(true);
+    const items = signal([{ id: 1 }, { id: 2 }]);
+
+    // IMPORTANT: each() is directly inside when() without a wrapper element.
+    // This means each()'s marker nodes are direct children of the container div,
+    // and when when() caches the branch, those markers get detached from the container.
+    // When the list updates while hidden, each() must handle the detached state gracefully.
+    const { fragment, dispose } = htmlWithEach`<div>
+      ${when(
+        () => show.value,
+        [
+          () =>
+            htmlWithEach`${each(
+              items,
+              (i) => i.id,
+              (item) => htmlWithEach`<span>${() => item.value.id}</span>`,
+            )}`,
+          () => htmlWithEach`<div>Hidden</div>`,
+        ],
+        { cache: true },
+      )}
+    </div>`.render();
+
+    document.body.appendChild(fragment);
+    assert.strictEqual(document.querySelectorAll("span").length, 2);
+
+    // Hide branch - each()'s markers are cached and removed from the container
+    show.value = false;
+    assert.strictEqual(document.querySelectorAll("span").length, 0);
+    assert.strictEqual(document.body.textContent?.trim(), "Hidden");
+
+    // Update list while hidden - this would throw before the fix
+    // because each() tries to reconcile using detached marker nodes:
+    // parent.insertBefore(node, marker) fails when marker is not a child of parent
+    assert.doesNotThrow(() => {
+      items.value = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    });
+
+    // Show branch again
+    show.value = true;
+
+    // Wait for microtask to complete (orphaned nodes are inserted via queueMicrotask)
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    // Should render updated list
+    assert.strictEqual(document.querySelectorAll("span").length, 3);
+
+    dispose();
+  });
+
+  it("should handle each() nested in when() without cache option", () => {
+    const show = signal(true);
+    const items = signal([{ id: 1 }, { id: 2 }]);
+
+    const { fragment, dispose } = htmlWithEach`<div>
+      ${when(
+        () => show.value,
+        [
+          () =>
+            htmlWithEach`<ul>${each(
+              items,
+              (i) => i.id,
+              (item) => htmlWithEach`<li>${() => item.value.id}</li>`,
+            )}</ul>`,
+          () => htmlWithEach`<div>Hidden</div>`,
+        ],
+      )}
+    </div>`.render();
+
+    document.body.appendChild(fragment);
+    assert.strictEqual(document.querySelectorAll("li").length, 2);
+
+    // Hide branch - branch is disposed
+    show.value = false;
+    assert.strictEqual(document.querySelectorAll("li").length, 0);
+
+    // Update list while hidden - should not throw
+    assert.doesNotThrow(() => {
+      items.value = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    });
+
+    // Show branch again - new branch created with updated list
+    show.value = true;
+    assert.strictEqual(document.querySelectorAll("li").length, 3);
+
+    dispose();
   });
 });
