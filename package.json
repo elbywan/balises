@@ -64,6 +64,10 @@
     "./match": {
       "import": "./dist/esm/match.js",
       "types": "./dist/esm/match.d.ts"
+    },
+    "./memo": {
+      "import": "./dist/esm/memo.js",
+      "types": "./dist/esm/memo.d.ts"
     }
   },
   "scripts": {

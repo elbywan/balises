@@ -97,9 +97,62 @@ const { fragment, dispose } = html`
 document.body.appendChild(fragment);
 ```
 
-Pass the store itself (not individual values) so reactivity works.
+## Memo Components
 
-Wrap expressions in functions like `${() => state.count}` to track dependencies.
+The `memo()` utility prevents unnecessary DOM re-renders of functional components by memoizing their output per call site. When a memoized component is called with the same props (by shallow equality), the plugin skips re-rendering and keeps the existing DOM.
+
+**Note:** Memo is opt-in via `balises/memo` and requires plugin registration with `html.with(memoPlugin)`.
+
+```ts
+import { html as baseHtml, signal } from "balises";
+import memoPlugin, { memo } from "balises/memo";
+
+const html = baseHtml.with(memoPlugin);
+const count = signal(0);
+
+// Memoized functional component
+const Counter = memo(({ count }) => {
+  console.log("Counter rendered"); // Only logs when props change
+  return html`<div>Count: ${() => count.value}</div>`;
+});
+
+// Inside a reactive binding, Counter is re-called when count changes.
+// When props are equal, memo() returns the same descriptor reference,
+// so computed skips via Object.is without touching the DOM.
+html`<div>${() => Counter({ count: count.value })}</div>`.render();
+```
+
+### How It Works
+
+`memo()` wraps a component so that calling it returns a `MemoDescriptor` instead of rendering directly. The `memoPlugin` intercepts these descriptors in the template system and uses a `WeakMap` keyed by DOM marker nodes to maintain per-call-site caches. Each reactive slot gets its own cache entry, so the same memoized component used in multiple slots won't share state or corrupt the DOM. When props are shallowly equal to the cached props, the plugin skips re-rendering entirely.
+
+### Custom Comparison
+
+Provide an optional comparator function for fine-grained control over when components re-render. Return `true` if props are equal (skip re-render):
+
+```ts
+const Counter = memo(
+  ({ count }) => html`<div>${count}</div>`,
+  (prev, next) => {
+    // Only re-render if count differs by more than 5
+    return Math.abs(prev.count - next.count) <= 5;
+  },
+);
+```
+
+### When to Use Memo
+
+**Use memo() when:**
+
+- Component is inside a reactive binding (`${() => Component({ ... })}`) and may be re-called with identical props
+- Component function performs expensive computation
+- You want to avoid re-creating DOM subtrees when props haven't changed
+
+**Don't use memo() when:**
+
+- Component is used statically (`${Component({ ... })}`) — it already runs only once
+- Props always change on every re-evaluation
+- Component is simple and re-rendering is cheap
 
 ## Async Generators
 

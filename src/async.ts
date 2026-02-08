@@ -27,7 +27,7 @@ import {
   type Subscriber,
   type TrackableSource,
 } from "./signals/context.js";
-import { Template, type InterpolationPlugin } from "./template.js";
+import { renderValue, type InterpolationPlugin } from "./template.js";
 import { isSignal, type Reactive } from "./signals/index.js";
 
 /** Reactive source type - TrackableSource may or may not be subscribable */
@@ -105,32 +105,6 @@ function isAsyncGeneratorFunction(
       Object.prototype.toString.call(constructor.prototype) ===
         "[object AsyncGeneratorFunction]")
   );
-}
-
-/**
- * Render content and insert nodes before marker.
- * Handles Templates and primitives.
- */
-function insertContent(
-  marker: Comment,
-  value: unknown,
-  nodes: Node[],
-  disposers: (() => void)[],
-): void {
-  const parent = marker.parentNode!;
-
-  for (const item of Array.isArray(value) ? value : [value]) {
-    if (item instanceof Template) {
-      const { fragment, dispose } = item.render();
-      disposers.push(dispose);
-      nodes.push(...fragment.childNodes);
-      parent.insertBefore(fragment, marker);
-    } else if (item != null && typeof item !== "boolean") {
-      const node = document.createTextNode(String(item));
-      nodes.push(node);
-      parent.insertBefore(node, marker);
-    }
-  }
 }
 
 /**
@@ -242,7 +216,7 @@ function bindAsyncGenerator(
 
   const render = (value: unknown) => {
     clearNodes();
-    insertContent(marker, value, currentNodes, childDisposers);
+    renderValue(marker, value, currentNodes, childDisposers);
   };
 
   const runGenerator = async () => {

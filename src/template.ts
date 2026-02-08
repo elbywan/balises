@@ -28,7 +28,38 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 export interface InterpolationPlugin {
   (
     value: unknown,
-  ): ((marker: Comment, disposers: (() => void)[]) => void) | null;
+  ): ((marker: Comment, disposers: (() => void)[]) => void | false) | null;
+}
+
+/**
+ * Render a value into DOM nodes before a marker.
+ * Handles Templates, arrays, primitives, null/undefined/booleans.
+ * Returns the created nodes and disposers for cleanup.
+ *
+ * Exported for use by plugins that need to render content
+ * without duplicating the core rendering logic.
+ */
+export function renderValue(
+  marker: Comment,
+  value: unknown,
+  nodes: Node[],
+  disposers: (() => void)[],
+): void {
+  const parent = marker.parentNode!;
+  const items = Array.isArray(value) ? value.flat() : [value];
+
+  for (const item of items) {
+    if (item instanceof Template) {
+      const { fragment, dispose } = item.render();
+      disposers.push(dispose);
+      nodes.push(...fragment.childNodes);
+      parent.insertBefore(fragment, marker);
+    } else if (item != null && typeof item !== "boolean") {
+      const n = document.createTextNode(String(item));
+      nodes.push(n);
+      parent.insertBefore(n, marker);
+    }
+  }
 }
 
 /**
@@ -308,15 +339,50 @@ export class Template {
     // Full reactive path for functions, signals, objects, arrays, templates
     let currentNodes: Node[] = [],
       childDisposers: (() => void)[] = [];
+    // Cleanup callback registered by a plugin that took over rendering.
+    // Called when transitioning back to default rendering or on dispose.
+    let pluginCleanup: (() => void) | null = null;
 
     const clear = () => {
+      if (pluginCleanup) {
+        pluginCleanup();
+        pluginCleanup = null;
+      }
       for (const f of childDisposers) f();
       childDisposers = [];
       for (const n of currentNodes) (n as ChildNode).remove();
       currentNodes = [];
     };
 
+    const plugins = this.#plugins;
+
     const update = (v: unknown) => {
+      // Try plugins on computed results (e.g., MemoDescriptor from reactive bindings)
+      if (plugins.length > 0) {
+        for (const plugin of plugins) {
+          const binder = plugin(v);
+          if (binder) {
+            // Run binder, then clear old content unless the binder returned
+            // `false` to signal "skip — preserve existing DOM". This enables
+            // plugins like memo to opt out of clearing on cache hits while
+            // ensuring all other plugins (each, async, match, user plugins)
+            // get correct clear-after-bind behavior by default.
+            const prevLen = disposers.length;
+            const skip = binder(marker, disposers) === false;
+            const added = disposers.splice(prevLen);
+            if (!skip) {
+              clear();
+            }
+            if (added.length) {
+              pluginCleanup = () => {
+                for (const f of added) f();
+              };
+            }
+            return;
+          }
+        }
+      }
+
       // Fast path: update existing text node for primitives
       if (
         v != null &&
@@ -330,21 +396,7 @@ export class Template {
         return;
       }
       clear();
-      const parent = marker.parentNode!;
-      // Optimize: avoid [v].flat() for non-arrays
-      const items = Array.isArray(v) ? v.flat() : [v];
-      for (const item of items) {
-        if (item instanceof Template) {
-          const { fragment, dispose } = item.render();
-          childDisposers.push(dispose);
-          currentNodes.push(...fragment.childNodes);
-          parent.insertBefore(fragment, marker);
-        } else if (item != null && typeof item !== "boolean") {
-          const n = document.createTextNode(String(item));
-          currentNodes.push(n);
-          parent.insertBefore(n, marker);
-        }
-      }
+      renderValue(marker, v, currentNodes, childDisposers);
     };
 
     bind(value, update, disposers);
