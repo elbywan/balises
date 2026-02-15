@@ -30,15 +30,17 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Function Components](#function-components)
+- [Memo Components](#memo-components)
 - [Async Generators](#async-generators)
-  - [DOM Preservation on Restart](#dom-preservation-on-restart)
-- [Template Syntax](#template-syntax)
-  - [Efficient List Rendering with each()](#efficient-list-rendering-with-each)
-  - [Conditional Rendering with when() and match()](#conditional-rendering-with-when-and-match)
-- [Reactivity API](#reactivity-api)
 - [Web Components](#web-components)
+- [Template Syntax](#template-syntax)
+- [Reactivity API](#reactivity-api)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
+- [Writing Plugins](#writing-plugins)
+- [Using as a Standalone Signals Library](#using-as-a-standalone-signals-library)
+- [Full Example](#full-example)
 - [Benchmarks](#benchmarks)
+- [License](#license)
 
 ## Installation
 
@@ -113,7 +115,7 @@ const count = signal(0);
 // Memoized functional component
 const Counter = memo(({ count }) => {
   console.log("Counter rendered"); // Only logs when props change
-  return html`<div>Count: ${() => count.value}</div>`;
+  return html`<div>Count: ${count}</div>`;
 });
 
 // Inside a reactive binding, Counter is re-called when count changes.
@@ -124,7 +126,7 @@ html`<div>${() => Counter({ count: count.value })}</div>`.render();
 
 ### How It Works
 
-`memo()` wraps a component so that calling it returns a `MemoDescriptor` instead of rendering directly. The `memoPlugin` intercepts these descriptors in the template system and uses a `WeakMap` keyed by DOM marker nodes to maintain per-call-site caches. Each reactive slot gets its own cache entry, so the same memoized component used in multiple slots won't share state or corrupt the DOM. When props are shallowly equal to the cached props, the plugin skips re-rendering entirely.
+`memo()` uses a dual-cache strategy to minimize DOM work. First, the **closure cache**: when called with equal props (shallow comparison by default), `memo()` returns the same `MemoDescriptor` reference, so `computed` sees the same object via `Object.is` and skips subscriber notification entirely — no DOM update happens. Second, the **per-marker cache**: a `WeakMap` keyed by each slot's marker node. When multiple slots share the same memo component and trigger signal, the closure cache gets invalidated by whichever slot evaluates last, but the per-marker cache detects that each slot's props haven't changed and skips re-rendering. When props do change, the `memoPlugin` executes the component and renders the result.
 
 ### Custom Comparison
 
@@ -726,7 +728,126 @@ import asyncPlugin from "balises/async";
 const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin);
 ```
 
-### Using as a Standalone Signals Library
+## Writing Plugins
+
+A plugin teaches the template system how to handle a new type of interpolated value. The built-in `each`, `async`, `memo`, and `match` features are all plugins - there's nothing special about them.
+
+### The plugin interface
+
+A plugin is a function that receives an interpolated value and either returns `null` (not my thing) or a binder function that owns the slot. Here's a plugin that renders `Date` objects as formatted strings:
+
+```ts
+import { type InterpolationPlugin } from "balises/template";
+
+const datePlugin: InterpolationPlugin = (value) => {
+  // Return null if you don't handle this value.
+  if (!(value instanceof Date)) return null;
+
+  // Return a binder function to own this slot.
+  return (marker, disposers) => {
+    // `marker` is a Comment node - insert content before it.
+    const text = document.createTextNode(value.toLocaleDateString());
+    marker.parentNode!.insertBefore(text, marker);
+    // Push cleanup functions to `disposers` — required when the plugin
+    // might run in the reactive path (e.g. `${() => new Date()}`),
+    // otherwise nodes would accumulate on each re-evaluation.
+    disposers.push(() => text.remove());
+  };
+};
+
+const html = baseHtml.with(datePlugin);
+html`<p>Today is ${new Date()}</p>`.render();
+```
+
+A binder can return `false` to signal "skip clearing — preserve existing DOM". This is used internally by the memo plugin. Most plugins should not return `false`.
+
+That's the whole contract. First plugin to return a binder wins.
+
+### How it works
+
+Plugins are checked in two situations:
+
+1. **Static path** - when the raw interpolated value is not a function/signal/primitive. The plugin's binder runs once and any disposers it pushes run on template `dispose()`.
+
+2. **Reactive path** - when a function like `${() => myValue()}` produces a value that a plugin handles. The template system wraps the function in a `computed`, and on each re-evaluation it checks plugins against the new value. Disposers pushed by the binder are automatically captured and run before the next update (or on dispose).
+
+You don't need to worry about which path you're in - push your cleanup to `disposers` and the template system handles the rest.
+
+### The binder function
+
+The binder receives two arguments:
+
+- **`marker: Comment`** - a comment node in the DOM that marks where your content goes. Always insert before it: `parent.insertBefore(node, marker)`.
+- **`disposers: (() => void)[]`** - push any cleanup functions here (removing nodes, unsubscribing, clearing caches, etc).
+
+### Using `renderValue`
+
+If your plugin produces a value that could be a `Template`, a string, an array, or `null`, use the `renderValue` helper instead of reimplementing the logic:
+
+```ts
+import { renderValue, type InterpolationPlugin } from "balises/template";
+
+const myPlugin: InterpolationPlugin = (value) => {
+  if (!isMyThing(value)) return null;
+
+  return (marker, disposers) => {
+    const nodes: Node[] = [];
+    const childDisposers: (() => void)[] = [];
+
+    // Transform the value somehow, then render the result
+    const result = transform(value);
+    renderValue(marker, result, nodes, childDisposers);
+
+    // Push cleanup
+    disposers.push(() => {
+      for (const d of childDisposers) d();
+      for (const n of nodes) (n as ChildNode).remove();
+    });
+  };
+};
+```
+
+`renderValue` handles `Template` instances (calls `.render()`), arrays (flattened one level), primitives (text nodes), and `null`/`undefined`/`boolean` (renders nothing). It pushes created nodes into `nodes` and template disposers into `childDisposers`.
+
+### Descriptor pattern
+
+The existing plugins all follow the same pattern: a factory function creates a descriptor object branded with a `Symbol`, and the plugin detects that symbol.
+
+```ts
+const MY_THING = Symbol("myThing");
+
+interface MyDescriptor {
+  [MY_THING]: true;
+  data: string;
+}
+
+export function myThing(data: string): MyDescriptor {
+  return { [MY_THING]: true, data };
+}
+
+const myPlugin: InterpolationPlugin = (value) => {
+  if (!(value && typeof value === "object" && MY_THING in value)) return null;
+  const desc = value as MyDescriptor;
+
+  return (marker, disposers) => {
+    // Use desc.data to render
+  };
+};
+
+export default myPlugin;
+```
+
+This keeps the detection cheap (symbol lookup) and lets you carry structured data from the call site to the binder.
+
+### Things to watch out for
+
+- **Insert before the marker**, not after. Inserting after would break ordering with subsequent slots.
+- **`marker.parentNode` can be `null`** if the marker is in a detached fragment (e.g., a cached but hidden `when()` branch). The `each` plugin handles this by retrying via `queueMicrotask`.
+- **First plugin wins.** If two plugins could match the same value, only the first one registered via `.with()` gets it.
+- **Internal reactivity is your job.** If your plugin needs to react to signal changes, set up your own `computed`/`subscribe` calls inside the binder. The template system won't wrap your plugin's output in a computed.
+- **`html.with()` returns a new tag.** You must assign the result: `const html = baseHtml.with(myPlugin)`. Calling `html.with(myPlugin)` without capturing the return value has no effect.
+
+## Using as a Standalone Signals Library
 
 The reactivity system is completely independent of the HTML templating. You can use just the signals in Node.js, Electron, or any JavaScript environment:
 
