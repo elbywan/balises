@@ -43,8 +43,11 @@ export function ComparePanel(props: ComparePanelProps) {
                 🔀
               </button>
               <img
-                src=${state.comparePokemon.sprites.other?.["official-artwork"]
-                  ?.front_default || state.comparePokemon.sprites.front_default}
+                src=${
+                  state.comparePokemon.sprites.other?.["official-artwork"]
+                    ?.front_default ||
+                  state.comparePokemon.sprites.front_default
+                }
                 alt=${state.comparePokemonName || state.comparePokemon.name}
               />
               <h3>${state.comparePokemonName || state.comparePokemon.name}</h3>

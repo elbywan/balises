@@ -2350,7 +2350,6 @@ describe("Template.render()", () => {
 
       it("should preserve DOM when returning settled", async () => {
         const userId = signal(1);
-        let spanElement: Element | null = null;
 
         const { fragment } = html`<div>
           ${async function* (settled?: RenderedContent) {
@@ -2369,7 +2368,7 @@ describe("Template.render()", () => {
         await tick();
 
         const div = document.body.querySelector("div")!;
-        spanElement = div.querySelector("span");
+        const spanElement = div.querySelector("span");
         assert.ok(spanElement);
         assert.strictEqual(spanElement.getAttribute("data-id"), "1");
 
@@ -2387,7 +2386,6 @@ describe("Template.render()", () => {
       it("should allow surgical updates via reactive bindings when preserving DOM", async () => {
         const userId = signal(1);
         const userName = signal("Alice");
-        let spanElement: Element | null = null;
 
         const { fragment } = html`<div>
           ${async function* (settled?: RenderedContent) {
@@ -2409,7 +2407,7 @@ describe("Template.render()", () => {
         await tick();
 
         const div = document.body.querySelector("div")!;
-        spanElement = div.querySelector("span");
+        const spanElement = div.querySelector("span");
         assert.strictEqual(spanElement!.textContent, "Alice");
 
         // Change signal - should preserve DOM but update via reactive binding
@@ -3142,9 +3140,11 @@ describe("Template.render()", () => {
 
         return html`
           <div class=${cellClass} data-cell-id=${cell.id}>
-            ${cell.specialLabel
-              ? html`<div class="special-badge">${cell.specialLabel}</div>`
-              : ""}
+            ${
+              cell.specialLabel
+                ? html`<div class="special-badge">${cell.specialLabel}</div>`
+                : ""
+            }
             <div class="cell-value">${displayValue}</div>
           </div>
         `;

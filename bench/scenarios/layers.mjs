@@ -47,7 +47,7 @@ export const layersBenchmarks = {
 
     let layer = start;
 
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((m) => {
         const a = computed(() => m.b.value);
         const b = computed(() => m.a.value - m.c.value);
@@ -84,7 +84,7 @@ export const layersBenchmarks = {
         };
 
         let layer = start;
-        for (let i = layers; i--; ) {
+        for (let i = layers; i--;) {
           layer = ((m) => ({
             a: maverickComputed(() => m.b()),
             b: maverickComputed(() => m.a() - m.c()),
@@ -121,7 +121,7 @@ export const layersBenchmarks = {
     });
 
     let layer = start;
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((prev) => {
         const next = {
           a: mobx.computed(() => prev.b.get()),
@@ -156,7 +156,7 @@ export const layersBenchmarks = {
 
     const start = { a, b, c, d };
     let layer = start;
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((m) => {
         const props = {
           a: preact.computed(() => m.b.value),
@@ -189,7 +189,7 @@ export const layersBenchmarks = {
 
     const start = observe({ a: 1, b: 2, c: 3, d: 4 });
     let layer = start;
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((prev) => {
         const next = observe({});
         comp(() => (next.a = prev.b));
@@ -223,7 +223,7 @@ export const layersBenchmarks = {
     };
 
     let layer = start;
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((m) => ({
         a: vue.computed(() => m.b.value),
         b: vue.computed(() => m.a.value - m.c.value),
@@ -255,7 +255,7 @@ export const layersBenchmarks = {
 
         const start = { a, b, c, d };
         let layer = start;
-        for (let i = layers; i--; ) {
+        for (let i = layers; i--;) {
           layer = ((m) => ({
             a: solid.createMemo(() => m.b()),
             b: solid.createMemo(() => m.a() - m.c()),
@@ -291,7 +291,7 @@ export const layersBenchmarks = {
     };
 
     let layer = start;
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((m) => ({
         a: usignal.computed(() => m.b.value),
         b: usignal.computed(() => m.a.value - m.c.value),
@@ -322,7 +322,7 @@ export const layersBenchmarks = {
     };
 
     let layer = start;
-    for (let i = layers; i--; ) {
+    for (let i = layers; i--;) {
       layer = ((m) => ({
         a: angular.computed(() => m.b()),
         b: angular.computed(() => m.a() - m.c()),

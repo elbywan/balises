@@ -245,12 +245,7 @@ export interface EffectResult {
 
 /** Current phase of the battle */
 export type BattlePhase =
-  | "splash"
-  | "team_select"
-  | "battle"
-  | "switching"
-  | "game_over"
-  | "victory";
+  "splash" | "team_select" | "battle" | "switching" | "game_over" | "victory";
 
 /** Full battle game state */
 export interface BattleState {

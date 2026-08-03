@@ -137,12 +137,16 @@ export function TeamSelect({
                 @click=${() => !disabled() && onTogglePokemon(pokemon.id)}
                 .disabled=${disabled}
               >
-                ${isCustom(pokemon.id)
-                  ? html`<div class="custom-badge">+</div>`
-                  : null}
+                ${
+                  isCustom(pokemon.id)
+                    ? html`<div class="custom-badge">+</div>`
+                    : null
+                }
                 <img
-                  src=${pokemon.sprites.other?.["official-artwork"]
-                    ?.front_default || pokemon.sprites.front_default}
+                  src=${
+                    pokemon.sprites.other?.["official-artwork"]
+                      ?.front_default || pokemon.sprites.front_default
+                  }
                   alt=${pokemon.name}
                 />
                 <div class="pokemon-select-name">

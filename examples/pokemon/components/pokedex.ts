@@ -73,7 +73,7 @@ export function Pokedex(props: PokedexProps) {
     state.error = null;
 
     // Set up loader delay - show spinner only if loading takes a while
-    let loaderTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    const loaderTimeout = setTimeout(() => {
       if (state.loading) {
         state.showLoader = true;
       }
@@ -91,7 +91,6 @@ export function Pokedex(props: PokedexProps) {
     } finally {
       if (loaderTimeout) {
         clearTimeout(loaderTimeout);
-        loaderTimeout = null;
       }
       state.loading = false;
       state.showLoader = false;

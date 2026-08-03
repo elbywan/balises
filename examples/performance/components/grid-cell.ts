@@ -68,9 +68,11 @@ export function GridCell(props: {
       @click=${handleClick}
       style=${() => (cell.type === "input" ? "cursor: pointer;" : "")}
     >
-      ${cell.specialLabel
-        ? html`<div class="special-badge">${cell.specialLabel}</div>`
-        : ""}
+      ${
+        cell.specialLabel
+          ? html`<div class="special-badge">${cell.specialLabel}</div>`
+          : ""
+      }
       <div class="cell-value">${displayValue}</div>
     </div>
   `;

@@ -44,16 +44,18 @@ export function TeamSlot({
         title=${title}
       >
         <img src=${pokemon.sprite} alt=${pokemon.displayName} />
-        ${showHpText
-          ? html`
-              <div class="slot-info">
-                <span>${pokemon.displayName}</span>
-                <span class="slot-hp"
-                  >${() => pokemon.currentHp}/${pokemon.maxHp}</span
-                >
-              </div>
-            `
-          : null}
+        ${
+          showHpText
+            ? html`
+                <div class="slot-info">
+                  <span>${pokemon.displayName}</span>
+                  <span class="slot-hp"
+                    >${() => pokemon.currentHp}/${pokemon.maxHp}</span
+                  >
+                </div>
+              `
+            : null
+        }
         ${() => (isFainted() ? html`<span class="faint-x">X</span>` : null)}
       </button>
     `;

@@ -183,7 +183,7 @@ const matchPlugin: InterpolationPlugin = (value) => {
       if (key === prevKey) return;
 
       // Remove current nodes from DOM
-      for (let n = startMarker.nextSibling; n && n !== marker; ) {
+      for (let n = startMarker.nextSibling; n && n !== marker;) {
         const next = n.nextSibling;
         if (branches && prevBranch) {
           // Caching: save nodes for later

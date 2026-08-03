@@ -37,9 +37,11 @@ export function MoveButton({
         <span class="move-type">${move.type}</span>
         <span class="move-pp">PP: ${() => move.pp}/${move.maxPp}</span>
       </div>
-      ${move.power > 0
-        ? html`<div class="move-power">PWR: ${move.power}</div>`
-        : null}
+      ${
+        move.power > 0
+          ? html`<div class="move-power">PWR: ${move.power}</div>`
+          : null
+      }
     </button>
   `;
 }

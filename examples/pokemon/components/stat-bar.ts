@@ -39,16 +39,16 @@ export function StatBar(props: StatBarProps) {
         ></div>
       </div>
       <span class="stat-value">${stat.base_stat}</span>
-      ${compareStat !== undefined
-        ? html`<span
-            class="stat-diff ${diff > 0
-              ? "positive"
-              : diff < 0
-                ? "negative"
-                : ""}"
-            >${diff > 0 ? "+" : ""}${diff !== 0 ? diff : "="}</span
-          >`
-        : null}
+      ${
+        compareStat !== undefined
+          ? html`<span
+              class="stat-diff ${
+                diff > 0 ? "positive" : diff < 0 ? "negative" : ""
+              }"
+              >${diff > 0 ? "+" : ""}${diff !== 0 ? diff : "="}</span
+            >`
+          : null
+      }
     </div>
   `;
 }
