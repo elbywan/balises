@@ -101,7 +101,10 @@ const { fragment, dispose } = html`
 document.body.appendChild(fragment);
 ```
 
-## Memo Components
+<details>
+<summary><b>emo Components</b></summary>
+
+<br/>
 
 The `memo()` utility prevents unnecessary DOM re-renders of functional components by memoizing their output per call site: when the same component is called with equal props again (shallow equality by default), it returns the previous result unchanged and the template skips the DOM work entirely.
 
@@ -149,7 +152,12 @@ const Counter = memo(
 - Component is used statically — it already runs only once
 - Props always change, or the component is trivial — memo adds overhead without benefit
 
-## Async Generators
+</details>
+
+<details>
+<summary><b>sync Generators</b></summary>
+
+<br/>
 
 Async generator functions handle loading states and async data flows. The generator automatically restarts when any tracked signal changes.
 
@@ -226,6 +234,8 @@ html`
 ```
 
 The `settled` parameter is `undefined` on first run, and contains an opaque handle to the previous render on restarts. Returning it preserves existing DOM nodes and reactive bindings.
+
+</details>
 
 ## Web Components
 
@@ -517,7 +527,10 @@ class MyApp extends HTMLElement {
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
-## Template Syntax
+<details>
+<summary><b>emplate Syntax</b></summary>
+
+<br/>
 
 The `html` tagged template creates reactive DOM fragments. When you interpolate a signal, that specific part of the DOM updates automatically when the signal changes.
 
@@ -676,7 +689,12 @@ state.activeTab = "settings"; // Reuses cached Settings (same DOM!)
 
 Reactive bindings inside branches continue to work normally regardless of caching.
 
-## Reactivity API
+</details>
+
+<details>
+<summary><b>eactivity API</b></summary>
+
+<br/>
 
 ### `signal<T>(value)`
 
@@ -929,6 +947,8 @@ doubled.dispose(); // Stops tracking, frees memory
 
 After dispose, reading `.value` returns the last computed value, but the computed is no longer part of the reactive graph — it never updates, never notifies, and cannot be tracked as a new dependency.
 
+</details>
+
 ## Tree-Shaking / Modular Imports
 
 You can import just what you need to keep bundle size down:
@@ -985,7 +1005,10 @@ import memoPlugin, { memo } from "balises/memo";
 const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin, memoPlugin);
 ```
 
-## Writing Plugins
+<details>
+<summary><b>riting Plugins</b></summary>
+
+<br/>
 
 A plugin teaches the template system how to handle a new type of interpolated value. The built-in `each`, `async`, `memo`, and `match` features are all plugins - there's nothing special about them.
 
@@ -1105,6 +1128,8 @@ This keeps the detection cheap (symbol lookup) and lets you carry structured dat
 - **Internal reactivity is your job.** If your plugin needs to react to signal changes, set up your own `computed`/`subscribe` calls inside the binder. The template system won't wrap your plugin's output in a computed.
 - **`html.with()` returns a new tag.** You must assign the result: `const html = baseHtml.with(myPlugin)`. Calling `html.with(myPlugin)` without capturing the return value has no effect.
 
+</details>
+
 ## Using as a Standalone Signals Library
 
 The reactivity system is completely independent of the HTML templating. You can use just the signals in Node.js, Electron, or any JavaScript environment:
@@ -1124,7 +1149,10 @@ users.value = [{ name: "Alice" }, { name: "Bob" }];
 // Logs: "Total users: 2"
 ```
 
-## Full Example
+<details>
+<summary><b>ull Example</b></summary>
+
+<br/>
 
 ```ts
 import { html, computed } from "balises";
@@ -1195,7 +1223,12 @@ class Counter extends HTMLElement {
 
 <!-- BENCHMARK_RESULTS_START -->
 
-## Benchmarks
+</details>
+
+<details>
+<summary><b>enchmarks</b></summary>
+
+<br/>
 
 Performance comparison of Balises against other popular reactive libraries. Benchmarks run in isolated processes to prevent V8 JIT contamination.
 
@@ -1295,6 +1328,8 @@ Current standing: balises is a strong #2–3 overall (geomean ~1.1–1.2× behin
 _Last updated: 2026-08-03_
 
 <!-- BENCHMARK_RESULTS_END -->
+
+</details>
 
 ## Scripts
 
