@@ -169,10 +169,9 @@ registerHydrateHandler((value) => {
       try {
         const gen = (value as AsyncGenFn)();
         result = await gen.next();
-        lastYield = result.value;
         while (!result.done) {
+          lastYield = result.value;
           result = await gen.next();
-          if (!result.done) lastYield = result.value;
         }
       } catch {
         return;
