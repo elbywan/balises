@@ -53,9 +53,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"benchmarks@workspace:.":
+"balises-benchmarks@workspace:.":
   version: 0.0.0-use.local
-  resolution: "benchmarks@workspace:."
+  resolution: "balises-benchmarks@workspace:."
   dependencies:
     "@angular/core": "npm:^22.1.0"
     "@maverick-js/signals": "npm:^6.0.0"

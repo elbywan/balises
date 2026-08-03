@@ -16,6 +16,7 @@ import {
   CONDITIONAL_TIERS,
   LIST_TIERS,
   BATCHING_TIERS,
+  CREATE_TIERS,
 } from "./lib/config.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,7 @@ import {
   batchingBenchmarks,
   getExpectedBatching,
 } from "./scenarios/batching.mjs";
+import { createBenchmarks, getExpectedCreate } from "./scenarios/create.mjs";
 
 async function main() {
   const selfOnly = process.argv.includes("--self");
@@ -155,6 +157,21 @@ async function main() {
         verbose,
         getExpectedBatching,
         join(__dirname, "scenarios/batching.mjs"),
+        isolated,
+        libs,
+      );
+      allResults.push(result);
+      displayResults(result.report, result.tiers, result.name, verbose);
+    },
+    create: async () => {
+      const result = await runBenchmarkSuite(
+        "Scenario 7: Signal Creation Overhead",
+        createBenchmarks,
+        CREATE_TIERS,
+        selfOnly,
+        verbose,
+        getExpectedCreate,
+        join(__dirname, "scenarios/create.mjs"),
         isolated,
         libs,
       );
