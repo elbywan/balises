@@ -294,6 +294,34 @@ describe("hydrate with renderToStringAsync", () => {
     dispose();
   });
 
+  it("should render each() rows the server did not render", () => {
+    // The SSR rendered an empty list; at hydration the list has items
+    // (e.g. favorites restored from localStorage) - the rows must appear.
+    const items = signal<number[]>([]);
+    const template = html`<div>
+      ${each(
+        items,
+        (n) => n,
+        (item) => html`<li>${() => item.value}</li>`,
+      )}
+    </div>`;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(template);
+    const dispose = hydrate(template, container);
+    assert.strictEqual(container.querySelectorAll("li").length, 0);
+    items.value = [1, 2, 3];
+    assert.strictEqual(container.querySelectorAll("li").length, 3);
+    assert.strictEqual(
+      [...container.querySelectorAll("li")]
+        .map((li) => li.textContent)
+        .join(","),
+      "1,2,3",
+    );
+    dispose();
+    container.remove();
+  });
+
   it("should hydrate reactive bindings inside the settled async content", async () => {
     const count = signal(1);
     const template = html`<div>

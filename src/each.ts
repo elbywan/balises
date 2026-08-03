@@ -124,6 +124,11 @@ function hydrateEach<T>(
       rowNodes.push(node);
       node = node.nextSibling;
     }
+    // Only rows present in the server markup are adopted; items the
+    // server did not render (e.g. a list that grew between build and
+    // hydration, like restored favorites) are left for the binder to
+    // render fresh - an entry with no nodes would never be displayed.
+    if (!rowNodes.length) continue;
     const itemSignal = signal(item);
     const rowDisposers: (() => void)[] = [];
     const rowTpl = desc.__renderFn__(new ReadonlySignal(itemSignal), i);

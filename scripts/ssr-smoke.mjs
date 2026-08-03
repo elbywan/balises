@@ -69,9 +69,12 @@ function makeFetch(requests) {
   };
 }
 
-async function boot(page, url, requests) {
+async function boot(page, url, requests, seedStorage = {}) {
   const dom = new JSDOM(page, { url, runScripts: "outside-only" });
   const { window } = dom;
+  for (const [k, v] of Object.entries(seedStorage)) {
+    window.localStorage.setItem(k, v);
+  }
   for (const k of [
     "Node",
     "Comment",
@@ -319,7 +322,32 @@ for (const id of ["4", "25", "150", "774"]) {
   );
 }
 
-// 8. Client-only page tab cycles.
+// 8. Restored favorites render as each() rows (the SSR rendered none).
+{
+  const requests = [];
+  const dom = await boot(ssrPage, "http://localhost/pokemon-ssr/", requests);
+  // Add a favorite, then reload: the list must show the restored row.
+  dom.window.eval(
+    `[...document.querySelectorAll(".icon-btn")].find(b => b.textContent?.includes("🤍"))?.click()`,
+  );
+  await new Promise((r) => setTimeout(r, 200));
+  const stored = dom.window.localStorage.getItem("pokemon-favorites");
+  const dom2 = await boot(ssrPage, "http://localhost/pokemon-ssr/", requests, {
+    "pokemon-favorites": stored ?? "",
+  });
+  const s = dom2.window.eval(`(() => ({
+    items: document.querySelectorAll(".favorite-item").length,
+    count: document.querySelector(".favorites-count")?.textContent.trim(),
+    noFavorites: !!document.querySelector(".no-favorites"),
+  }))()`);
+  check(
+    "restored favorites render after reload",
+    s.items === 1 && s.count === "(1)" && !s.noFavorites,
+    `items=${s.items} count=${s.count}`,
+  );
+}
+
+// 9. Client-only page tab cycles.
 {
   const requests = [];
   const dom = await boot(clientPage, "http://localhost/pokemon/", requests);
