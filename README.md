@@ -523,6 +523,13 @@ items.update((arr) => [...arr, 4]);
 items.update((arr) => arr.filter((n) => n !== 2));
 ```
 
+**Note:** `delete` is a structural operation, not a reactive one. Deleting a property removes it (`"key" in state` becomes `false`, reads return `undefined`), but existing computeds that depended on it keep their last value until disposed. To remove a property reactively, set it to `undefined` instead:
+
+```ts
+state.user = undefined; // ✅ Triggers reactivity
+delete state.user; // ❌ Structural removal, no notification
+```
+
 ### `batch<T>(fn)`
 
 Batches multiple signal updates so subscribers only get notified once at the end.
@@ -621,6 +628,8 @@ Stops a computed from tracking dependencies and frees memory.
 const doubled = computed(() => count.value * 2);
 doubled.dispose(); // Stops tracking, frees memory
 ```
+
+After dispose, reading `.value` returns the last computed value, but the computed is no longer part of the reactive graph — it never updates, never notifies, and cannot be tracked as a new dependency.
 
 ## Tree-Shaking / Modular Imports
 

@@ -611,6 +611,44 @@ describe("edge cases", () => {
     assert.strictEqual(calls, 3);
     assert.strictEqual(document.body.textContent, "A");
   });
+
+  it("should not crash on case keys colliding with Object.prototype", () => {
+    // Signal is typed as string to exercise arbitrary selector keys
+    // like "toString"/"constructor" (which exist on Object.prototype).
+    const mode = signal<string>("ok");
+
+    // Keys like "toString"/"constructor" exist on Object.prototype and
+    // must not be picked up as matching cases (which would crash).
+    const { fragment, dispose } = html`<div>
+      ${match(() => mode.value, {
+        ok: () => html`<span class="ok-case">ok</span>`,
+        _: () => html`<span class="fallback">fallback</span>`,
+      })}
+    </div>`.render();
+
+    document.body.appendChild(fragment);
+    assert.strictEqual(document.querySelector(".ok-case")?.textContent, "ok");
+
+    mode.value = "toString";
+    assert.strictEqual(document.querySelector(".ok-case"), null);
+    assert.strictEqual(
+      document.querySelector(".fallback")?.textContent,
+      "fallback",
+    );
+
+    mode.value = "constructor";
+    assert.strictEqual(
+      document.querySelector(".fallback")?.textContent,
+      "fallback",
+    );
+
+    // Switching back to a real case still works
+    mode.value = "ok";
+    assert.strictEqual(document.querySelector(".ok-case")?.textContent, "ok");
+    assert.strictEqual(document.querySelector(".fallback"), null);
+
+    dispose();
+  });
 });
 
 describe("GC after dispose()", () => {
@@ -1080,6 +1118,55 @@ describe("GC after dispose()", () => {
 
     // Should render updated list
     assert.strictEqual(document.querySelectorAll("span").length, 3);
+
+    dispose();
+  });
+
+  it("should re-render nested match() when selector changes while hidden", async () => {
+    const show = signal(true);
+    const inner = signal<"a" | "b">("a");
+
+    // match() is directly inside when() without a wrapper element, so its
+    // markers are detached when the cached branch is hidden. A selector
+    // change while hidden must not be dropped: re-showing the branch in
+    // the same tick should render the new case.
+    const { fragment, dispose } = html`<div>
+      ${when(
+        () => show.value,
+        [
+          () =>
+            html`${match(
+              () => inner.value,
+              {
+                a: () => html`<span class="inner-a">A</span>`,
+                b: () => html`<span class="inner-b">B</span>`,
+              },
+              { cache: true },
+            )}`,
+          () => html`<div>Hidden</div>`,
+        ],
+        { cache: true },
+      )}
+    </div>`.render();
+
+    document.body.appendChild(fragment);
+    assert.strictEqual(document.querySelector(".inner-a")?.textContent, "A");
+
+    // Hide branch - match()'s markers are detached
+    show.value = false;
+    assert.strictEqual(document.querySelectorAll("span").length, 0);
+
+    // Selector change while hidden - must not be dropped
+    inner.value = "b";
+
+    // Show branch again in the same tick
+    show.value = true;
+
+    // Wait for the reattach retry microtask
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    assert.strictEqual(document.querySelector(".inner-b")?.textContent, "B");
+    assert.strictEqual(document.querySelector(".inner-a"), null);
 
     dispose();
   });

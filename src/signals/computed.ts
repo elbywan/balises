@@ -41,6 +41,9 @@ export class Computed<T> {
   }
 
   get value(): T {
+    // Disposed: return the last computed value without recomputing
+    // or tracking - the dead node must not gain new dependents.
+    if (!this.#fn) return this.#value as T;
     if (this.#dirty) this.#recompute();
     if (context && context !== this) context.trackSource(this);
     if (onTrack.current) onTrack.current(this);
@@ -48,6 +51,7 @@ export class Computed<T> {
   }
 
   subscribe(fn: Subscriber): () => void {
+    if (!this.#fn) return () => {};
     this.#subs.push(fn);
     return () => removeFromArray(this.#subs, fn);
   }
@@ -75,6 +79,8 @@ export class Computed<T> {
    * ```
    */
   is(value: T): boolean {
+    // Disposed: frozen comparison against the last value, no slot tracking
+    if (!this.#fn) return Object.is(this.#value, value);
     if (this.#dirty) this.#recompute();
     if (context) {
       const slots = this.#isSlots ?? (this.#isSlots = new Map());
@@ -121,7 +127,8 @@ export class Computed<T> {
    * @internal
    */
   markDirty(): void {
-    if (this.#dirty) return;
+    // Disposed computeds are graph-inert: never propagate dirty marks
+    if (this.#dirty || !this.#fn) return;
 
     // Phase 1: Mark all dependents as dirty, collect subscribers
     const queue: Computed<unknown>[] = [this];

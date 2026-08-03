@@ -555,6 +555,48 @@ describe("HTMLParser", () => {
     });
 
     /**
+     * Edge case: Slash inside unquoted attribute value
+     *
+     * Browsers allow "/" in unquoted values (e.g. href=foo/bar).
+     * Only a "/" directly before ">" terminates the value (self-close).
+     */
+    it("should handle unquoted attribute values containing slashes", () => {
+      parser.parseTemplate(tmpl("<a href=foo/bar>x</a>"), createCallbacks());
+      assert.strictEqual(tags.length, 1);
+      assert.strictEqual(tags[0]!.tag, "a");
+      assert.strictEqual(tags[0]!.selfClosing, false);
+      const attrs = getAttributes();
+      assert.strictEqual(attrs.length, 1);
+      assert.strictEqual(attrs[0]!.name, "href");
+      assert.deepStrictEqual(attrs[0]!.statics, ["foo/bar"]);
+      assert.deepStrictEqual(attrs[0]!.indexes, []);
+    });
+
+    /**
+     * Edge case: Unquoted attribute value starting with a slash
+     */
+    it("should handle unquoted attribute values starting with a slash", () => {
+      parser.parseTemplate(tmpl("<a href=/foo>x</a>"), createCallbacks());
+      const attrs = getAttributes();
+      assert.strictEqual(attrs.length, 1);
+      assert.strictEqual(attrs[0]!.name, "href");
+      assert.deepStrictEqual(attrs[0]!.statics, ["/foo"]);
+    });
+
+    /**
+     * Edge case: Self-closing still works after a slash-containing value
+     */
+    it("should self-close after unquoted attribute value with slash", () => {
+      parser.parseTemplate(tmpl("<img src=a/b/>"), createCallbacks());
+      assert.strictEqual(tags.length, 1);
+      assert.strictEqual(tags[0]!.selfClosing, true);
+      const attrs = getAttributes();
+      assert.strictEqual(attrs.length, 1);
+      assert.strictEqual(attrs[0]!.name, "src");
+      assert.deepStrictEqual(attrs[0]!.statics, ["a/b"]);
+    });
+
+    /**
      * Edge case: Boolean attribute before self-close
      */
     it("should handle boolean attribute before self-close", () => {

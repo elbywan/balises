@@ -64,6 +64,43 @@ describe("Template.render()", () => {
       const input = fragment.firstChild as Element;
       assert.strictEqual(input.hasAttribute("disabled"), true);
     });
+
+    it("should treat void elements as self-closing even without />", () => {
+      // Prettier's HTML embed rewrites `html`-tagged template literals
+      // (adding self-closing slashes and whitespace text nodes), so use an
+      // aliased tag to keep the exact markup under test.
+      const h = html;
+
+      // Text after a void element must be a sibling, not a child
+      const { fragment } = h`<div><img src="x.png">after</div>`.render();
+      const div = fragment.firstChild as Element;
+      const img = div.firstChild as Element;
+      assert.strictEqual(img.tagName, "IMG");
+      assert.strictEqual(img.textContent, "");
+      const text = img.nextSibling;
+      assert.strictEqual(text?.textContent, "after");
+
+      // Following elements must not nest inside the void element
+      const { fragment: f2 } =
+        h`<div><img src="x.png"><span>s</span></div>`.render();
+      const div2 = f2.firstChild as Element;
+      const img2 = div2.firstChild as Element;
+      const span = div2.querySelector("span");
+      assert.ok(span, "span should exist");
+      assert.strictEqual(img2.contains(span), false);
+      assert.strictEqual(img2.nextSibling, span);
+
+      // <br> and <input> between content
+      const { fragment: f3 } =
+        h`<div>a<br>b<input type="text">c</div>`.render();
+      const div3 = f3.firstChild as Element;
+      const children = [...div3.childNodes];
+      assert.strictEqual(children[0]?.textContent, "a");
+      assert.strictEqual((children[1] as Element).tagName, "BR");
+      assert.strictEqual(children[2]?.textContent, "b");
+      assert.strictEqual((children[3] as Element).tagName, "INPUT");
+      assert.strictEqual(children[4]?.textContent, "c");
+    });
   });
 
   describe("interpolation - text content", () => {

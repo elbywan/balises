@@ -56,6 +56,17 @@ export function store<T extends object>(obj: T): T {
       return true;
     },
 
+    deleteProperty(target, key) {
+      if (typeof key === "symbol") {
+        delete target[key as keyof T];
+        return true;
+      }
+      // Drop the property's signal so reads return undefined afterwards
+      // (a re-assignment creates a fresh reactive property).
+      signals.delete(key);
+      return delete target[key as keyof T];
+    },
+
     has(target, key) {
       return key === STORE || key in target;
     },

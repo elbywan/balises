@@ -21,6 +21,27 @@ import { HTMLParser } from "./parser.js";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /**
+ * HTML void elements - never have children or closing tags.
+ * Treated as self-closing even when written without "/>".
+ */
+const VOID_ELEMENTS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
+
+/**
  * Plugin that handles custom interpolation types.
  * Return a bind function if this plugin handles the value, null otherwise.
  * First plugin to return non-null wins.
@@ -193,7 +214,9 @@ export class Template {
         }
 
         parent.appendChild(el);
-        if (!selfClose) stack.push(el);
+        if (!selfClose && !VOID_ELEMENTS.has(tag.toLowerCase())) {
+          stack.push(el);
+        }
       },
 
       onClose: () => {

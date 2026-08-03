@@ -115,10 +115,10 @@ export class HTMLParser {
           this.s = 6;
         }
       } else if (this.s === 6) {
-        // AttrVal
+        // AttrVal - "/" only terminates an unquoted value when self-closing (/>)
         const end = this.q
           ? ch === this.q
-          : this.isW(ch) || ch === ">" || ch === "/";
+          : this.isW(ch) || ch === ">" || (ch === "/" && nx === ">");
         if (end) {
           this.emitAttr();
           this.q = "";

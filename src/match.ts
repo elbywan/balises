@@ -154,14 +154,30 @@ const matchPlugin: InterpolationPlugin = (value) => {
     let prevKey: string | null = null;
     let prevBranch: BranchEntry | null = null;
     const branches = value.cache ? new Map<string, BranchEntry>() : null;
+    let pendingReattachCheck = false;
+    let disposed = false;
 
     // Create computed that tracks the selector
     const keyComputed = computed(() => String(value.selector()));
 
     const update = () => {
+      // A queued reattach retry can fire after dispose - never touch the DOM
+      if (disposed) return;
       const key = keyComputed.value;
       const parent = marker.parentNode;
-      if (!parent) return; // Marker detached, skip update
+      if (!parent) {
+        // Marker detached (e.g., inside a hidden cached when()/match() branch).
+        // Don't drop the update: retry once the marker is re-attached
+        // (typically the same tick, when the outer branch is re-shown).
+        if (!pendingReattachCheck) {
+          pendingReattachCheck = true;
+          queueMicrotask(() => {
+            pendingReattachCheck = false;
+            if (marker.parentNode) update();
+          });
+        }
+        return;
+      }
 
       // Same key - nothing to do (internal bindings handle updates)
       if (key === prevKey) return;
@@ -186,7 +202,14 @@ const matchPlugin: InterpolationPlugin = (value) => {
       // Get or create branch
       let branch = branches?.get(key);
       if (!branch) {
-        const factory = value.cases[key] ?? value.cases["_"];
+        const cases = value.cases;
+        // Only own keys match - inherited Object.prototype keys like
+        // "toString"/"constructor" must never be treated as cases.
+        const factory = Object.hasOwn(cases, key)
+          ? cases[key]
+          : Object.hasOwn(cases, "_")
+            ? cases["_"]
+            : undefined;
         if (!factory) {
           // No matching case - render nothing
           prevKey = key;
@@ -216,6 +239,7 @@ const matchPlugin: InterpolationPlugin = (value) => {
     const unsub = keyComputed.subscribe(update);
 
     disposers.push(() => {
+      disposed = true;
       unsub();
       keyComputed.dispose();
       // Dispose all branches

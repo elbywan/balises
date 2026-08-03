@@ -746,6 +746,29 @@ describe("Computed", () => {
     assert.strictEqual(c.value, 20);
     assert.strictEqual(computeCount, 1);
   });
+
+  it("should not be trackable after dispose", () => {
+    const s = signal(10);
+    const c = computed(() => s.value * 2);
+    void c.value;
+    c.dispose();
+
+    // A computed reading a disposed computed gets the last value once,
+    // but must not link to the dead node (which can never update again).
+    const d = computed(() => c.value + 1);
+    assert.strictEqual(d.value, 21);
+    assert.strictEqual(c.targets.length, 0);
+
+    // Later reads and source changes must not re-link the dead node
+    s.value = 100;
+    assert.strictEqual(d.value, 21);
+    assert.strictEqual(c.targets.length, 0);
+
+    // .is() on a disposed computed must not create tracking slots either
+    const e = computed(() => (c.is(1) ? "one" : "other"));
+    assert.strictEqual(e.value, "other");
+    assert.strictEqual(c.targets.length, 0);
+  });
 });
 
 describe("Computed caching behavior", () => {
@@ -1073,6 +1096,27 @@ describe("Store", () => {
 
     assert.strictEqual(notifyCount, 2);
     assert.strictEqual(firstName.value, "Carol");
+  });
+
+  it("should remove deleted properties", () => {
+    const s = store({ count: 1, name: "x" });
+
+    // Materialize the property first - its signal must be removed too
+    void s.count;
+    assert.strictEqual(s.count, 1);
+
+    delete (s as { count?: number }).count;
+
+    // Property is gone: `in` is false and reads return undefined
+    assert.strictEqual("count" in s, false);
+    assert.strictEqual((s as { count?: number }).count, undefined);
+
+    // Re-adding the property creates a fresh reactive property
+    (s as { count?: number }).count = 5;
+    assert.strictEqual((s as { count?: number }).count, 5);
+
+    // Other properties are unaffected
+    assert.strictEqual(s.name, "x");
   });
 
   /**
