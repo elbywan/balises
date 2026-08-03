@@ -309,8 +309,9 @@ count.value = 5; // Updates the text in place - the server markup is reused
 ```
 
 <details>
-<summary>Fetching data</summary>
+<summary><b>Fetching data</b></summary>
 
+<br/>
 Your normal data-loading code runs on the server: `renderToStringAsync` executes each async generator to completion in Node (real fetches happen there) and renders the generator's final content into the HTML. The loading yields are discarded - the shipped page contains the settled result.
 
 On the client, the same generator hydrates that content **without refetching**: the adopted DOM is passed to the generator as its `settled` handle, and returning it preserves the markup. When a tracked signal changes, the generator restarts and fetches fresh - the exact same code path a client-only render takes:
@@ -328,8 +329,9 @@ async function* loadUser(settled) {
 </details>
 
 <details>
-<summary>Sharing state between the server and the client</summary>
+<summary><b>Sharing state between the server and the client</b></summary>
 
+<br/>
 The client must recreate the state the server rendered with, or the markup and the bindings disagree. Serialize what the client cannot derive into the page, and restore it before hydrating:
 
 ```ts
@@ -355,8 +357,9 @@ Rules of thumb:
 </details>
 
 <details>
-<summary>Static generation (no server)</summary>
+<summary><b>Static generation (no server)</b></summary>
 
+<br/>
 You don't need a running server - generate the HTML at build time and ship it. `examples/pokemon/` is the client-only app; `examples/pokemon-ssr/` is the exact same code pre-rendered at build time (`yarn examples:build` runs `examples/pokemon/build-html.ts`, which calls `renderToStringAsync` in Node and writes the page). The client entry hydrates when markup is present and renders fresh otherwise:
 
 ```ts
@@ -369,8 +372,9 @@ else target.appendChild(template.render().fragment); // Client-only page
 </details>
 
 <details>
-<summary>Async rendering</summary>
+<summary><b>Async rendering</b></summary>
 
+<br/>
 Async generators are supported server-side via `renderToStringAsync`, which runs each generator to completion and renders its final content (the loading yields are discarded):
 
 ```ts
@@ -398,8 +402,9 @@ On the client the same generator hydrates its settled content without refetching
 </details>
 
 <details>
-<summary>Writing SSR-compatible components</summary>
+<summary><b>Writing SSR-compatible components</b></summary>
 
+<br/>
 Components are pure `(state, props) -> template` functions; the server executes the same functions in Node, so the rules follow from that.
 
 **1. No browser globals in component bodies.** `window`, `document`, `localStorage`, `navigator`, `new Audio()`, `setTimeout` side effects crash the build or leak in the build process. Events only fire client-side, so referencing the browser from `@click` handlers is fine:
