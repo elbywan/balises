@@ -395,7 +395,7 @@ On the client the same generator hydrates its settled content without refetching
 
 ### Notes
 
-- The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them.
+- The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them. If the markup does not match the template (markers stripped, structure changed since the build), `hydrate()` falls back to a fresh render of the subtree - the client always wins, exactly like a client-only render.
 - `renderToString` throws on async generators - use `renderToStringAsync`.
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).

@@ -441,7 +441,22 @@ export function hydrate(template: Template, target: ParentNode): () => void {
     );
   }
   const disposers: (() => void)[] = [];
-  hydrateWalk(template, target.firstChild, disposers);
+  const result = hydrateWalk(template, target.firstChild, disposers);
+  if (!result.aligned) {
+    // The server markup does not match the template (markers stripped,
+    // template changed since the build, structure restructured by the
+    // browser parser). Never leave a half-bound tree: dispose whatever
+    // the walk touched and replace everything with a fresh render.
+    for (const f of disposers) f();
+    disposers.length = 0;
+    while (target.firstChild) target.removeChild(target.firstChild);
+    const { fragment, dispose } = template.render();
+    target.appendChild(fragment);
+    return () => {
+      dispose();
+      for (const f of disposers) f();
+    };
+  }
   return () => {
     for (const f of disposers) f();
   };

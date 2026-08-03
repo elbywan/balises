@@ -73,6 +73,22 @@ describe("hydrate", () => {
     dispose();
   });
 
+  it("should replace mismatched markup with a fresh render", () => {
+    // Markers stripped from the server HTML: the walk cannot align, so
+    // hydrate() re-renders the subtree instead of leaving it half-bound.
+    const count = signal(1);
+    const template = html`<p>Count: ${count}</p>`;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = "<p>Count: 1</p>";
+    const dispose = hydrate(template, container);
+    assert.strictEqual(container.textContent, "Count: 1");
+    count.value = 2;
+    assert.strictEqual(container.textContent, "Count: 2");
+    dispose();
+    container.remove();
+  });
+
   it("should hydrate reactive attributes and update them", () => {
     const cls = signal("active");
     const template = html`<div class="box ${cls}"></div>`;
