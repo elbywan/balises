@@ -302,6 +302,7 @@ function bindAsyncGenerator(
   };
 
   const render = (value: unknown) => {
+    if (!marker.parentNode) return; // Binding removed (e.g. hidden branch).
     clearNodes();
     renderValue(marker, value, currentNodes, childDisposers);
   };

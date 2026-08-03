@@ -108,6 +108,38 @@ async function boot(page, url, requests) {
       return Promise.resolve();
     }
   };
+  globalThis.AudioContext = class {
+    currentTime = 0;
+    destination = {};
+    sampleRate = 44100;
+    createGain() {
+      return { connect() {}, gain: { value: 0, setValueAtTime() {} } };
+    }
+    createOscillator() {
+      return {
+        connect() {},
+        start() {},
+        stop() {},
+        frequency: { value: 0, setValueAtTime() {} },
+        type: "",
+      };
+    }
+    createBuffer() {
+      return {};
+    }
+    createBufferSource() {
+      return { connect() {}, start() {}, stop() {}, buffer: null };
+    }
+    createAnalyser() {
+      return { connect() {}, getFloatFrequencyData() {} };
+    }
+    createStereoPanner() {
+      return { connect() {} };
+    }
+    close() {
+      return Promise.resolve();
+    }
+  };
   globalThis.fetch = makeFetch(requests);
   // Cache-bust so each page load re-evaluates the bundle.
   await import(`../examples/pokemon/pokemon.js?smoke=${Math.random()}`);
@@ -213,6 +245,105 @@ for (const id of ["4", "25", "150", "774"]) {
     "navigation after mismatched load: single card",
     s.cards === 1 && s.wrappers === 1,
     `${s.cards} cards, ${s.wrappers} wrappers`,
+  );
+}
+
+// 6. Tab-switch cycles must never accumulate DOM (the match clear bug).
+{
+  const requests = [];
+  const dom = await boot(ssrPage, "http://localhost/pokemon-ssr/", requests);
+  const clickTab = (label) =>
+    dom.window.eval(
+      `[...document.querySelectorAll(".tab-btn")].find(b => b.textContent?.includes("${label}"))?.click()`,
+    );
+  for (let i = 0; i < 4; i++) {
+    clickTab("Battle");
+    await new Promise((r) => setTimeout(r, 60));
+    clickTab("Pokedex");
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  const s = dom.window.eval(`(() => {
+    const tc = document.querySelector(".tab-content");
+    return {
+      children: tc.children.length,
+      viewers: document.querySelectorAll(".pokemon-viewer").length,
+      battles: document.querySelectorAll(".pokemon-battle").length,
+      cards: document.querySelectorAll(".pokemon-card").length,
+    };
+  })()`);
+  check(
+    "ssr tab cycles: no DOM accumulation",
+    s.children === 1 && s.viewers === 1 && s.battles === 0 && s.cards === 1,
+    `children=${s.children} viewers=${s.viewers} battles=${s.battles}`,
+  );
+}
+
+// 7. Battle flow: start -> team select -> tab cycles -> cached team select.
+{
+  const requests = [];
+  const dom = await boot(
+    ssrPage,
+    "http://localhost/pokemon-ssr/#battle",
+    requests,
+  );
+  const clickTab = (label) =>
+    dom.window.eval(
+      `[...document.querySelectorAll(".tab-btn")].find(b => b.textContent?.includes("${label}"))?.click()`,
+    );
+  // The roster loads before the start button appears.
+  for (let i = 0; i < 20; i++) {
+    if (dom.window.eval(`!!document.querySelector(".splash-start-btn")`)) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  dom.window.eval(`document.querySelector(".splash-start-btn")?.click()`);
+  await new Promise((r) => setTimeout(r, 400));
+  for (let i = 0; i < 3; i++) {
+    clickTab("Pokedex");
+    await new Promise((r) => setTimeout(r, 60));
+    clickTab("Battle");
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  const s = dom.window.eval(`(() => {
+    const tc = document.querySelector(".tab-content");
+    return {
+      children: tc.children.length,
+      battles: document.querySelectorAll(".pokemon-battle").length,
+      teams: document.querySelectorAll(".team-select").length,
+      cards: document.querySelectorAll(".pokemon-select-card").length,
+    };
+  })()`);
+  check(
+    "battle flow + cycles: single battle, cached team select",
+    s.children === 1 && s.battles === 1 && s.teams === 1 && s.cards === 34,
+    `children=${s.children} teams=${s.teams} cards=${s.cards}`,
+  );
+}
+
+// 8. Client-only page tab cycles.
+{
+  const requests = [];
+  const dom = await boot(clientPage, "http://localhost/pokemon/", requests);
+  const clickTab = (label) =>
+    dom.window.eval(
+      `[...document.querySelectorAll(".tab-btn")].find(b => b.textContent?.includes("${label}"))?.click()`,
+    );
+  for (let i = 0; i < 4; i++) {
+    clickTab("Battle");
+    await new Promise((r) => setTimeout(r, 60));
+    clickTab("Pokedex");
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  const s = dom.window.eval(`(() => {
+    const tc = document.querySelector(".tab-content");
+    return {
+      children: tc.children.length,
+      viewers: document.querySelectorAll(".pokemon-viewer").length,
+    };
+  })()`);
+  check(
+    "client-only tab cycles: no DOM accumulation",
+    s.children === 1 && s.viewers === 1,
+    `children=${s.children} viewers=${s.viewers}`,
   );
 }
 

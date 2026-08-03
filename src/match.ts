@@ -157,17 +157,21 @@ registerHydrateHandler((value) => {
     const keyComputed = computed(() => String(value.selector()));
     const nodes: Node[] = [];
     const childDisposers: (() => void)[] = [];
+    // Node before the region; clears walk back to it. Walking forward from
+    // contentStart would break after the first clear removes that node.
+    const boundary = contentStart?.previousSibling ?? null;
     const clear = () => {
       for (const d of childDisposers) d();
       childDisposers.length = 0;
-      // Re-collect the current region: concurrent renders (e.g. the async
-      // generator inside a branch) may have inserted nodes that the stale
-      // `nodes` collection does not know about.
-      let current = contentStart;
-      while (current && current !== anchor) {
-        const next = current.nextSibling;
+      // Remove whatever currently sits between the boundary and the
+      // anchor: concurrent renders (e.g. the async generator inside a
+      // branch) may have inserted nodes the stale `nodes` collection
+      // does not know about.
+      let current: Node | null = anchor.previousSibling;
+      while (current && current !== boundary) {
+        const prev: Node | null = current.previousSibling;
         (current as ChildNode).remove();
-        current = next;
+        current = prev;
       }
       nodes.length = 0;
     };

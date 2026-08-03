@@ -318,10 +318,12 @@ function hydrateSlotValue(
       for (const n of region) (n as ChildNode).remove();
       region.length = 0;
     };
+    if (!anchor.parentNode) return true; // Region removed (e.g. hidden branch).
     clearRegion();
     renderFresh(c.value);
     disposers.push(
       c.subscribe(() => {
+        if (!anchor.parentNode) return;
         clearRegion();
         renderFresh(c.value);
       }),
