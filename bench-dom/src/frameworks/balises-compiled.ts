@@ -16,11 +16,6 @@
 import { signal, computed, type Signal } from "balises";
 import type { BenchmarkSuite } from "../types.js";
 
-interface Row {
-  id: number;
-  label: string;
-}
-
 // Random data generation (consistent with js-framework-benchmark)
 const adjectives = [
   "pretty",

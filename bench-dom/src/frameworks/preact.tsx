@@ -132,7 +132,7 @@ interface ApiRef {
   current: Setters | null;
 }
 
-let apiRef: ApiRef = { current: null };
+const apiRef: ApiRef = { current: null };
 
 function App() {
   const [rows, setRows] = useState<Row[]>([]);

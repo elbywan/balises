@@ -37,8 +37,6 @@ server.listen(PORT, async () => {
   await page.waitForFunction(
     () => (window as never as { benchReady?: boolean }).benchReady,
   );
-  const b = () =>
-    (window as never as { benchmarks: Record<string, () => void> }).benchmarks;
   // Warmup
   for (let i = 0; i < 5; i++) {
     await page.evaluate(
