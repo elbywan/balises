@@ -1,5 +1,17 @@
 @import "./base.css";
 
+/* Custom elements default to display:inline, which shrink-to-fits them to
+   their widest unbreakable content (long code lines). Blockify them so pre's
+   overflow-x:auto actually clips and scrolls on narrow screens. */
+docs-app,
+code-block,
+install-tabs,
+feature-item,
+api-item,
+example-card {
+  display: block;
+}
+
 /* Homepage specific overrides */
 header {
   margin-bottom: 4rem;
@@ -215,7 +227,16 @@ a.btn.examples:hover {
 /* API section */
 .api-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
+}
+
+/* Grid items default to min-width:auto (min-content) — long code lines would
+   stretch the implicit auto track past the viewport on narrow screens */
+api-item,
+feature-item,
+example-card {
+  min-width: 0;
 }
 
 .api-item {
@@ -355,6 +376,31 @@ pre:hover .copy-btn {
   opacity: 1;
 }
 
+/* Touch devices have no hover — keep the copy button visible and move it
+   above the code block (right-aligned) so it never covers the first line */
+@media (hover: none) {
+  .code-wrapper {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+  }
+
+  .code-wrapper .copy-btn,
+  .install-cmd .copy-btn,
+  pre .copy-btn {
+    opacity: 1;
+  }
+
+  .code-wrapper .copy-btn {
+    position: static;
+    margin-bottom: 0.5rem;
+  }
+
+  .code-wrapper pre {
+    width: 100%;
+  }
+}
+
 .copy-btn:hover {
   color: var(--text);
   border-color: var(--accent);
@@ -415,8 +461,22 @@ pre[class*="language-"] {
 
 /* Responsive */
 @media (max-width: 480px) {
+  header {
+    margin-bottom: 2rem;
+  }
+
+  header img {
+    width: 220px;
+    height: auto;
+    margin-bottom: 1.25rem;
+  }
+
   h1 {
     font-size: 2.25rem;
+  }
+
+  section {
+    margin-bottom: 2.5rem;
   }
 
   .badges {
@@ -429,5 +489,23 @@ pre[class*="language-"] {
 
   a.btn {
     justify-content: center;
+  }
+
+  /* More code fits per line, less wasted padding */
+  pre[class*="language-"] {
+    padding: 0.875rem 1rem !important;
+  }
+
+  pre[class*="language-"],
+  code[class*="language-"] {
+    font-size: 0.8125rem !important;
+  }
+
+  .demo {
+    padding: 1rem;
+  }
+
+  .demo my-counter {
+    gap: 0.75rem;
   }
 }
