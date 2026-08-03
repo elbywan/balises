@@ -308,15 +308,31 @@ const dispose = hydrate(template, document.querySelector("#app"));
 count.value = 5; // Updates the text in place - the server markup is reused
 ```
 
+### Fetching data
+
+Your normal data-loading code runs on the server: `renderToStringAsync` executes each async generator to completion in Node (real fetches happen there) and renders the generator's final content into the HTML. The loading yields are discarded - the shipped page contains the settled result.
+
+On the client, the same generator hydrates that content **without refetching**: the adopted DOM is passed to the generator as its `settled` handle, and returning it preserves the markup. When a tracked signal changes, the generator restarts and fetches fresh - the exact same code path a client-only render takes:
+
+```ts
+async function* loadUser(settled) {
+  const id = userId.value; // Tracked: a change restarts the generator.
+  if (settled) return settled; // Hydration: keep the server-rendered DOM.
+  yield html`<p>Loading...</p>`;
+  const user = await fetchUser(id); // Runs in Node at build time, in the browser afterwards.
+  return html`<p>${user.name}</p>`;
+}
+```
+
 ### Sharing state between the server and the client
 
-The client must recreate the state the server rendered with, or the markup and the bindings disagree. Serialize the state into the page and restore it before hydrating:
+The client must recreate the state the server rendered with, or the markup and the bindings disagree. Serialize what the client cannot derive into the page, and restore it before hydrating:
 
 ```ts
 // server.ts
 const markup = renderToString(template);
 const page = `<div id="app">${markup}</div>
-  <script id="ssr-data" type="application/json">${JSON.stringify({ count: count.value }).replace(/</g, "\\u003c")}</script>`;
+  <script id="ssr-data" type="application/json">${JSON.stringify({ count: count.value }).replace(/</g, "\u003c")}</script>`;
 ```
 
 ```ts
@@ -328,9 +344,9 @@ hydrate(html`<p>Count: ${count}</p>`, document.querySelector("#app"));
 
 Rules of thumb:
 
-- **The route comes from the URL, not the payload.** If the app is addressable (`#pokedex/4`), the URL hash is the source of truth - the server cannot know it at build time. Reloading `#pokedex/4` on a page pre-rendered with pokemon #1 must show pokemon #4 (the data loader refetches).
-- **Client-only state stays on the client.** Favorites, preferences, anything in localStorage: the server renders the defaults and the client restores its own values _before_ hydrating - the bindings pick them up in place (they apply the current value when it differs from the markup).
-- **The template must be identical on both sides** - same structure and same plugins (`html.with(...)`). Build both from a shared factory: the pokemon example exports `createAppStores()` + `buildAppTemplate()` and runs them in Node and the browser alike.
+- **The route comes from the URL, not the payload.** If the app is addressable (`#/users/42`), the URL hash is the source of truth - the server cannot know it at build time. Reloading such a URL on a page pre-rendered with a different id must show the requested resource (the data loader refetches).
+- **Client-only state stays on the client.** Anything in localStorage (preferences, drafts, persisted data): the server renders the defaults and the client restores its own values _before_ hydrating - the bindings pick them up in place (they apply the current value when it differs from the markup).
+- **The template must be identical on both sides** - same structure and same plugins (`html.with(...)`). Build both from a shared factory so the markup and the bindings can never drift.
 
 ### Static generation (no server)
 
