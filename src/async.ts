@@ -248,7 +248,9 @@ function bindAsyncGenerator(
         return;
       }
 
-      if (thisIteration !== iterationId) return;
+      // The binding may have been disposed or replaced while the
+      // generator was awaiting - never render into a dead slot.
+      if (disposed || thisIteration !== iterationId) return;
 
       const { value, done } = result;
 

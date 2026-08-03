@@ -817,6 +817,39 @@ describe("memo", () => {
       dispose();
     });
 
+    it("should respect each memo instance's own comparator at the same slot", () => {
+      let renders = 0;
+      const base = ({ name }: { name: string }) => {
+        renders++;
+        return html`<b>${name}</b>`;
+      };
+      const Equal = memo(base); // shallow equality: skips equal props
+      const Always = memo(base, () => false); // always re-render
+
+      const useEqual = signal(true);
+
+      const { fragment, dispose } = html`<div>
+        ${() => (useEqual.value ? Equal({ name: "x" }) : Always({ name: "x" }))}
+      </div>`.render();
+      document.body.appendChild(fragment);
+      assert.strictEqual(renders, 1);
+
+      // Always's comparator demands a re-render - the per-marker cache
+      // must not skip with the OTHER instance's comparator.
+      useEqual.value = false;
+      assert.strictEqual(renders, 2);
+
+      // Switching back re-renders too (the cache entry now belongs to Always)
+      useEqual.value = true;
+      assert.strictEqual(renders, 3);
+
+      // Always re-renders every time
+      useEqual.value = false;
+      assert.strictEqual(renders, 4);
+
+      dispose();
+    });
+
     it("should re-render when callback props change identity", () => {
       let renderCount = 0;
       const Button = memo(({ onClick }: { onClick: () => void }) => {
@@ -992,6 +1025,40 @@ describe("memo", () => {
         container.querySelector(".leak-test")?.textContent,
         "2",
       );
+
+      dispose();
+    });
+
+    it("should clean up partially inserted nodes when a nested render throws", () => {
+      const boom = signal(false);
+      const Comp = memo(({ boom: b }: { boom: boolean }) => {
+        if (b) {
+          return [
+            html`<span class="partial">partial</span>`,
+            html`<div>
+              ${() => {
+                throw new Error("boom");
+              }}
+            </div>`,
+          ];
+        }
+        return html`<span class="fine">fine</span>`;
+      });
+
+      const { fragment, dispose } = html`<div>
+        ${() => Comp({ boom: boom.value })}
+      </div>`.render();
+      document.body.appendChild(fragment);
+      assert.strictEqual(document.querySelector(".fine")?.textContent, "fine");
+
+      // Update to a value whose render throws midway through renderValue
+      assert.throws(() => {
+        boom.value = true;
+      }, /boom/);
+
+      // No partial nodes leaked; previous content preserved
+      assert.strictEqual(document.querySelectorAll(".partial").length, 0);
+      assert.strictEqual(document.querySelector(".fine")?.textContent, "fine");
 
       dispose();
     });
@@ -1435,6 +1502,47 @@ describe("memo", () => {
 
       const spansRemoved = document.querySelectorAll(".each-item");
       assert.strictEqual(spansRemoved.length, 2);
+
+      dispose();
+    });
+
+    it("should keep skipping equal props after a real re-render", () => {
+      let renderCount = 0;
+      const Row = memo(({ name }: { name: string }) => {
+        renderCount++;
+        return html`<span class="row">${name}</span>`;
+      });
+
+      const items = signal([{ id: 1, name: "a" }]);
+
+      const { fragment, dispose } = htmlWithEach`<ul>${each(
+        items,
+        (i) => i.id,
+        (itemSignal) =>
+          html`<li>${() => Row({ name: itemSignal.value.name })}</li>`,
+      )}</ul>`.render();
+      document.body.appendChild(fragment);
+      assert.strictEqual(renderCount, 1);
+
+      // Real change: row renamed + new row added
+      items.value = [
+        { id: 1, name: "b" },
+        { id: 2, name: "c" },
+      ];
+      assert.strictEqual(renderCount, 3);
+
+      // Equal-props refreshes must keep skipping - the per-marker cache
+      // entry must survive the re-render that happened above.
+      items.value = [
+        { id: 1, name: "b" },
+        { id: 2, name: "c" },
+      ];
+      assert.strictEqual(renderCount, 3);
+      items.value = [
+        { id: 1, name: "b" },
+        { id: 2, name: "c" },
+      ];
+      assert.strictEqual(renderCount, 3);
 
       dispose();
     });

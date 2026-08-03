@@ -101,7 +101,7 @@ document.body.appendChild(fragment);
 
 ## Memo Components
 
-The `memo()` utility prevents unnecessary DOM re-renders of functional components by memoizing their output per call site. When a memoized component is called with the same props (by shallow equality), the plugin skips re-rendering and keeps the existing DOM.
+The `memo()` utility prevents unnecessary DOM re-renders of functional components by memoizing their output per call site: when the same component is called with equal props again (shallow equality by default), it returns the previous result unchanged and the template skips the DOM work entirely.
 
 **Note:** Memo is opt-in via `balises/memo` and requires plugin registration with `html.with(memoPlugin)`.
 
@@ -112,21 +112,14 @@ import memoPlugin, { memo } from "balises/memo";
 const html = baseHtml.with(memoPlugin);
 const count = signal(0);
 
-// Memoized functional component
 const Counter = memo(({ count }) => {
   console.log("Counter rendered"); // Only logs when props change
   return html`<div>Count: ${count}</div>`;
 });
 
-// Inside a reactive binding, Counter is re-called when count changes.
-// When props are equal, memo() returns the same descriptor reference,
-// so computed skips via Object.is without touching the DOM.
+// Re-called when count changes; equal props skip re-rendering
 html`<div>${() => Counter({ count: count.value })}</div>`.render();
 ```
-
-### How It Works
-
-`memo()` uses a dual-cache strategy to minimize DOM work. First, the **closure cache**: when called with equal props (shallow comparison by default), `memo()` returns the same `MemoDescriptor` reference, so `computed` sees the same object via `Object.is` and skips subscriber notification entirely — no DOM update happens. Second, the **per-marker cache**: a `WeakMap` keyed by each slot's marker node. When multiple slots share the same memo component and trigger signal, the closure cache gets invalidated by whichever slot evaluates last, but the per-marker cache detects that each slot's props haven't changed and skips re-rendering. When props do change, the `memoPlugin` executes the component and renders the result.
 
 ### Custom Comparison
 
@@ -146,15 +139,13 @@ const Counter = memo(
 
 **Use memo() when:**
 
-- Component is inside a reactive binding (`${() => Component({ ... })}`) and may be re-called with identical props
+- Component is inside a reactive binding and may be re-called with identical props
 - Component function performs expensive computation
-- You want to avoid re-creating DOM subtrees when props haven't changed
 
 **Don't use memo() when:**
 
-- Component is used statically (`${Component({ ... })}`) — it already runs only once
-- Props always change on every re-evaluation
-- Component is simple and re-rendering is cheap
+- Component is used statically — it already runs only once
+- Props always change, or the component is trivial — memo adds overhead without benefit
 
 ## Async Generators
 
@@ -707,7 +698,7 @@ import { batch, scope } from "balises/signals/context";
 
 ### Template Plugins
 
-The `each()`, `when()`/`match()`, and async generator features are provided as opt-in plugins to keep the base bundle minimal. Use `html.with()` to compose plugins:
+The `each()`, `when()`/`match()`, `memo()`, and async generator features are provided as opt-in plugins to keep the base bundle minimal. Use `html.with()` to compose plugins:
 
 ```ts
 // With each() support for keyed lists
@@ -733,8 +724,9 @@ import { html as baseHtml } from "balises";
 import eachPlugin, { each } from "balises/each";
 import matchPlugin, { when, match } from "balises/match";
 import asyncPlugin from "balises/async";
+import memoPlugin, { memo } from "balises/memo";
 
-const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin);
+const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin, memoPlugin);
 ```
 
 ## Writing Plugins
@@ -746,6 +738,7 @@ A plugin teaches the template system how to handle a new type of interpolated va
 A plugin is a function that receives an interpolated value and either returns `null` (not my thing) or a binder function that owns the slot. Here's a plugin that renders `Date` objects as formatted strings:
 
 ```ts
+import { html as baseHtml } from "balises";
 import { type InterpolationPlugin } from "balises/template";
 
 const datePlugin: InterpolationPlugin = (value) => {

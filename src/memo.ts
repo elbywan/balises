@@ -172,12 +172,15 @@ const memoPlugin: InterpolationPlugin = (value) => {
     const desc = value as MemoDescriptor;
 
     // Per-marker cache check: if this marker already rendered the same
-    // component with equal props, return false to signal template.ts to
-    // skip clearing — preserving the existing DOM and pluginCleanup.
+    // component with the same comparator and equal props, return false to
+    // signal template.ts to skip clearing — preserving the existing DOM
+    // and pluginCleanup. The comparator is part of the identity: two
+    // memo() instances over the same function may use different ones.
     const cached = markerCache.get(marker);
     if (
       cached &&
       cached.component === desc.component &&
+      cached.areEqual === desc.areEqual &&
       cached.areEqual(cached.lastProps, desc.props)
     ) {
       return false;
@@ -186,19 +189,32 @@ const memoPlugin: InterpolationPlugin = (value) => {
     const result = desc.component(desc.props);
     const nodes: Node[] = [];
     const childDisposers: (() => void)[] = [];
-    renderValue(marker, result, nodes, childDisposers);
+    try {
+      renderValue(marker, result, nodes, childDisposers);
+    } catch (e) {
+      // Partial render: remove already-inserted nodes and run disposers
+      // so a throwing nested template can't leak DOM.
+      for (const d of childDisposers) d();
+      for (const n of nodes) (n as ChildNode).remove();
+      throw e;
+    }
 
     // Set per-marker cache after successful render
-    markerCache.set(marker, {
+    const entry = {
       component: desc.component,
       lastProps: desc.props,
       areEqual: desc.areEqual,
-    });
+    };
+    markerCache.set(marker, entry);
 
     disposers.push(() => {
       for (const d of childDisposers) d();
       for (const n of nodes) (n as ChildNode).remove();
-      markerCache.delete(marker);
+      // Only delete the entry this render created: template.ts runs the
+      // previous cycle's disposer after the binder has already written a
+      // fresh entry, so an unconditional delete would kill the cache on
+      // every re-render.
+      if (markerCache.get(marker) === entry) markerCache.delete(marker);
     });
   };
 };
