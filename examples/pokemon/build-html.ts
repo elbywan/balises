@@ -62,12 +62,14 @@ writeFileSync(clientPath, await format(shell, { parser: "html" }));
 
 // 2. SSR example: the shell with the pre-rendered markup + serialized
 // state, loading its own bundle (pokemon-ssr.js).
+// The SSR page loads the same shared app bundle (pokemon.js); its
+// bootstrap hydrates the pre-rendered markup instead of rendering fresh.
 const ssrPage = shell
   .replace(placeholder, `<x-pokemon-app>${markup}</x-pokemon-app>`)
-  .replace(moduleScript, '<script type="module" src="pokemon-ssr.js">')
+  .replace(moduleScript, '<script type="module" src="../pokemon/pokemon.js">')
   .replace(
-    '<script type="module" src="pokemon-ssr.js">',
-    `<script id="ssr-data" type="application/json">${payload}</script>\n    <script type="module" src="pokemon-ssr.js">`,
+    '<script type="module" src="../pokemon/pokemon.js">',
+    `<script id="ssr-data" type="application/json">${payload}</script>\n    <script type="module" src="../pokemon/pokemon.js">`,
   );
 
 // Format the generated pages (CI runs `prettier --check .` on the repo).
