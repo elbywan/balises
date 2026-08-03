@@ -172,6 +172,33 @@ describe("hydrate", () => {
     c2.remove();
   });
 
+  it("should render the current match branch fresh when the selector changed since the render", async () => {
+    // The SSR rendered branch "a"; at hydration the selector is "b" - the
+    // mismatched markup must be replaced, not half-bound.
+    const mode = signal<"a" | "b">("a");
+    const template = html`<div>
+      ${match(() => mode.value, {
+        a: () => html`<div class="panel-a"><h2>Panel A</h2></div>`,
+        b: () => html`<div class="panel-b"><h2>Panel B</h2></div>`,
+      })}
+    </div>`;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(template);
+    const dispose = hydrate(template, container);
+    // Selector changed between render and hydration.
+    mode.value = "b";
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.strictEqual(
+      container.querySelector(".panel-b")?.textContent,
+      "Panel B",
+    );
+    assert.strictEqual(container.querySelector(".panel-a"), null);
+    assert.strictEqual(container.querySelectorAll("h2").length, 1);
+    dispose();
+    container.remove();
+  });
+
   it("should hydrate memoized components", () => {
     const Card = memo(({ name }: { name: string }) => html`<b>${name}</b>`);
     const name = signal("x");

@@ -190,6 +190,7 @@ registerHydrateHandler((value) => {
     if (!adopted) renderBranch();
     disposers.push(keyComputed.subscribe(renderBranch));
     disposers.push(clear);
+    return adopted;
   };
 });
 

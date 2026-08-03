@@ -150,16 +150,31 @@ registerHydrateHandler((value) => {
     };
     // Learn the settled template and hydrate the region's inner
     // bindings. The generator must settle without network access here
-    // (e.g. from state already restored from the page payload).
+    // (e.g. from state already restored from the page payload). If the
+    // settled content does not align with the region (e.g. the route
+    // changed since the render), replace it with a fresh render.
     void (async () => {
       const gen = (value as AsyncGenFn)();
       let result = await gen.next();
       while (!result.done) result = await gen.next();
       if (result.value instanceof Template) {
-        recurse(result.value, nodes[0] ?? null, anchor, seed.childDisposers);
+        const aligned = recurse(
+          result.value,
+          nodes[0] ?? null,
+          anchor,
+          seed.childDisposers,
+        );
+        if (!aligned) {
+          for (const f of seed.childDisposers) f();
+          seed.childDisposers.length = 0;
+          for (const n of nodes) (n as ChildNode).remove();
+          nodes.length = 0;
+          renderValue(anchor, result.value, nodes, seed.childDisposers);
+        }
       }
     })();
     bindAsyncGenerator(value as AsyncGenFn, anchor, disposers, seed);
+    return true;
   };
 });
 

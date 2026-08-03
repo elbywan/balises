@@ -190,6 +190,7 @@ registerHydrateHandler((value) => {
       for (const d of childDisposers) d();
       for (const n of nodes) (n as ChildNode).remove();
     });
+    return true;
   };
 });
 

@@ -38,7 +38,7 @@ export type HydrateFn = (
   anchor: Comment,
   disposers: (() => void)[],
   recurse: HydrateRecurse,
-) => void;
+) => boolean;
 
 /** Re-enter slot-value hydration for a value. @internal */
 export type HydrateRecurse = (
@@ -46,7 +46,7 @@ export type HydrateRecurse = (
   contentStart: Node | null,
   anchor: Comment,
   disposers: (() => void)[],
-) => void;
+) => boolean;
 
 /**
  * Registry of hydration handlers for plugin descriptor types
@@ -89,15 +89,25 @@ export function hydrateWalk(
   let aligned = true;
   const elementStack: Element[] = [];
   const recurse: HydrateRecurse = (value, contentStart, anchor, d) => {
-    hydrateSlotValue(tpl, value, contentStart, anchor, d, recurse);
+    return hydrateSlotValue(tpl, value, contentStart, anchor, d, recurse);
   };
 
   new HTMLParser().parseTemplate(strings, {
-    onText: () => {
+    onText: (text) => {
       // The SSR emits one text node per static chunk, but adjacent
       // chunks (e.g. split by template comments) merge into a single
       // DOM text node - only advance when the cursor is on a text node.
-      if (cursor && cursor.nodeType === 3) cursor = cursor.nextSibling;
+      // Static text is compared (whitespace-tolerantly) so a template
+      // that does not match the server markup - e.g. a different
+      // match() branch after a reload - is detected and re-rendered
+      // fresh instead of being half-bound onto the wrong DOM.
+      if (cursor && cursor.nodeType === 3) {
+        const chunk = text.trim();
+        if (chunk && !(cursor as Text).data.trim().startsWith(chunk)) {
+          aligned = false;
+        }
+        cursor = cursor.nextSibling;
+      }
     },
 
     onOpenTag: (tag, attrs, selfClose) => {
@@ -106,7 +116,12 @@ export function hydrateWalk(
       const el = cursor as Element | null;
       if (!el) {
         aligned = false;
-
+        return;
+      }
+      // The element must match the template's tag, or the server markup
+      // belongs to a different structure (e.g. another match branch).
+      if (el.tagName.toLowerCase() !== tag) {
+        aligned = false;
         return;
       }
 
@@ -209,7 +224,9 @@ export function hydrateWalk(
       // content from static text at parse time); runtime insertions do
       // not merge text nodes, so it can go.
       open.remove();
-      recurse(values[index]!, contentStart, anchor, disposers);
+      if (!recurse(values[index]!, contentStart, anchor, disposers)) {
+        aligned = false;
+      }
       cursor = anchor.nextSibling;
     },
   });
@@ -228,33 +245,36 @@ function hydrateSlotValue(
   anchor: Comment,
   disposers: (() => void)[],
   recurse: HydrateRecurse,
-): void {
-  if (value == null || typeof value === "boolean") return;
+): boolean {
+  if (value == null || typeof value === "boolean") return true;
   if (isSignal(value)) {
     hydrateBound(value, contentStart, anchor, disposers);
-    return;
+    return true;
   }
   if (value instanceof Template) {
-    if (contentStart) hydrateWalk(value, contentStart, disposers);
-    return;
+    if (contentStart)
+      return hydrateWalk(value, contentStart, disposers).aligned;
+    return true;
   }
   if (Array.isArray(value)) {
     // Walk each template item in lockstep with the region (the server
     // rendered them back to back); primitives and signals keep their
     // server-rendered content.
     let node = contentStart;
+    let aligned = true;
     for (const item of value.flat()) {
       if (item instanceof Template && node) {
-        node = hydrateWalk(item, node, disposers).end;
+        const result = hydrateWalk(item, node, disposers);
+        node = result.end;
+        if (!result.aligned) aligned = false;
       }
     }
-    return;
+    return aligned;
   }
   // Plugin descriptor types (each/match/memo/async) register handlers.
   const handler = getHydrateHandler(value);
   if (handler) {
-    handler(contentStart, anchor, disposers, recurse);
-    return;
+    return handler(contentStart, anchor, disposers, recurse);
   }
   if (typeof value === "function") {
     // Functions are reactive: wrap in a computed and subscribe. The
@@ -307,9 +327,10 @@ function hydrateSlotValue(
       }),
     );
     disposers.push(clearRegion);
-    return;
+    return true;
   }
   // Static primitive: the region already holds its text, nothing to bind.
+  return true;
 }
 
 /**

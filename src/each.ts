@@ -145,13 +145,15 @@ function hydrateEach<T>(
 
 registerHydrateHandler((value) => {
   if (!(value && typeof value === "object" && EACH in value)) return null;
-  return (contentStart, anchor, disposers) =>
+  return (contentStart, anchor, disposers) => {
     hydrateEach(
       value as EachDescriptor<unknown>,
       contentStart,
       anchor,
       disposers,
     );
+    return true;
+  };
 });
 
 /**
