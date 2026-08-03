@@ -56,6 +56,11 @@ interface MemoCache<TProps extends object = object> {
   component: MemoComponent<TProps>;
   lastProps: TProps;
   areEqual: (a: TProps, b: TProps) => boolean;
+  /** Nodes and disposers of the last successful render, so a deferred
+   * (detached-marker) re-render can replace content that the template's
+   * pluginCleanup cannot see. */
+  nodes: Node[];
+  childDisposers: (() => void)[];
 }
 
 /** WeakMap keyed by marker Comment nodes for per-slot memoization */
@@ -170,52 +175,98 @@ const memoPlugin: InterpolationPlugin = (value) => {
 
   return (marker, disposers) => {
     const desc = value as MemoDescriptor;
+    let disposed = false;
+    let pendingReattachCheck = false;
 
-    // Per-marker cache check: if this marker already rendered the same
-    // component with the same comparator and equal props, return false to
-    // signal template.ts to skip clearing — preserving the existing DOM
-    // and pluginCleanup. The comparator is part of the identity: two
-    // memo() instances over the same function may use different ones.
-    const cached = markerCache.get(marker);
-    if (
-      cached &&
-      cached.component === desc.component &&
-      cached.areEqual === desc.areEqual &&
-      cached.areEqual(cached.lastProps, desc.props)
-    ) {
-      return false;
-    }
+    // Render the component and take ownership of the result.
+    // The previous render's content is replaced only after the new render
+    // succeeds (a throwing component/render must leave it intact), and
+    // idempotently - the same arrays are also owned by the template's
+    // pluginCleanup disposer. Needed because a deferred render's content
+    // is invisible to pluginCleanup.
+    const render = (): void => {
+      const result = desc.component(desc.props);
+      const nodes: Node[] = [];
+      const childDisposers: (() => void)[] = [];
+      try {
+        renderValue(marker, result, nodes, childDisposers);
+      } catch (e) {
+        // Partial render: remove already-inserted nodes and run disposers
+        // so a throwing nested template can't leak DOM.
+        for (const d of childDisposers) d();
+        for (const n of nodes) (n as ChildNode).remove();
+        throw e;
+      }
 
-    const result = desc.component(desc.props);
-    const nodes: Node[] = [];
-    const childDisposers: (() => void)[] = [];
-    try {
-      renderValue(marker, result, nodes, childDisposers);
-    } catch (e) {
-      // Partial render: remove already-inserted nodes and run disposers
-      // so a throwing nested template can't leak DOM.
-      for (const d of childDisposers) d();
-      for (const n of nodes) (n as ChildNode).remove();
-      throw e;
-    }
+      const prev = markerCache.get(marker);
+      if (prev) {
+        for (const d of prev.childDisposers) d();
+        prev.childDisposers.length = 0;
+        for (const n of prev.nodes) (n as ChildNode).remove();
+        prev.nodes.length = 0;
+      }
 
-    // Set per-marker cache after successful render
-    const entry = {
-      component: desc.component,
-      lastProps: desc.props,
-      areEqual: desc.areEqual,
+      // Set per-marker cache after successful render
+      const entry = {
+        component: desc.component,
+        lastProps: desc.props,
+        areEqual: desc.areEqual,
+        nodes,
+        childDisposers,
+      };
+      markerCache.set(marker, entry);
+
+      disposers.push(() => {
+        disposed = true;
+        for (const d of childDisposers) d();
+        childDisposers.length = 0;
+        for (const n of nodes) (n as ChildNode).remove();
+        nodes.length = 0;
+        // Only delete the entry this render created: template.ts runs the
+        // previous cycle's disposer after the binder has already written a
+        // fresh entry, so an unconditional delete would kill the cache on
+        // every re-render.
+        if (markerCache.get(marker) === entry) markerCache.delete(marker);
+      });
     };
-    markerCache.set(marker, entry);
 
-    disposers.push(() => {
-      for (const d of childDisposers) d();
-      for (const n of nodes) (n as ChildNode).remove();
-      // Only delete the entry this render created: template.ts runs the
-      // previous cycle's disposer after the binder has already written a
-      // fresh entry, so an unconditional delete would kill the cache on
-      // every re-render.
-      if (markerCache.get(marker) === entry) markerCache.delete(marker);
-    });
+    // Returns false to signal template.ts to skip clearing (cache hit or
+    // deferred render) — the existing DOM must be preserved.
+    const update = (): boolean => {
+      // Per-marker cache check: if this marker already rendered the same
+      // component with the same comparator and equal props, skip. The
+      // comparator is part of the identity: two memo() instances over the
+      // same function may use different ones.
+      const cached = markerCache.get(marker);
+      if (
+        cached &&
+        cached.component === desc.component &&
+        cached.areEqual === desc.areEqual &&
+        cached.areEqual(cached.lastProps, desc.props)
+      ) {
+        return false;
+      }
+
+      if (!marker.parentNode) {
+        // Marker detached (e.g., inside a hidden cached when()/match()
+        // branch): don't crash on the missing parent - keep the previous
+        // content and retry once the marker is re-attached (typically the
+        // same tick, when the branch is re-shown).
+        if (!pendingReattachCheck) {
+          pendingReattachCheck = true;
+          queueMicrotask(() => {
+            pendingReattachCheck = false;
+            if (!disposed && marker.parentNode) update();
+          });
+        }
+        return false;
+      }
+
+      render();
+      return true;
+    };
+
+    return update() ? undefined : false;
   };
 };
 

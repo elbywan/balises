@@ -813,7 +813,7 @@ const myPlugin: InterpolationPlugin = (value) => {
 
 ### Descriptor pattern
 
-The existing plugins all follow the same pattern: a factory function creates a descriptor object branded with a `Symbol`, and the plugin detects that symbol.
+Most plugins follow the same pattern: a factory function creates a descriptor object branded with a `Symbol`, and the plugin detects that symbol. The `async` plugin is the exception — it auto-detects `async function*` values directly instead of using a descriptor.
 
 ```ts
 const MY_THING = Symbol("myThing");

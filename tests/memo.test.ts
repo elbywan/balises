@@ -3,11 +3,13 @@ import assert from "node:assert";
 import { html as baseHtml } from "../src/template.js";
 import memoPlugin, { memo } from "../src/memo.js";
 import eachPlugin, { each } from "../src/each.js";
+import matchPlugin, { when } from "../src/match.js";
 import { signal, batch, type Signal } from "../src/signals/index.js";
 import { createGCTracker } from "./gc-utils.js";
 
 const html = baseHtml.with(memoPlugin);
 const htmlWithEach = baseHtml.with(memoPlugin, eachPlugin);
+const htmlWithMatch = baseHtml.with(memoPlugin, matchPlugin);
 
 describe("memo", () => {
   beforeEach(() => {
@@ -1549,6 +1551,43 @@ describe("memo", () => {
   });
 
   describe("detached DOM", () => {
+    it("should not crash when props change while hidden in a cached when() branch", async () => {
+      const show = signal(true);
+      const count = signal(1);
+      const Counter = memo(({ n }: { n: number }) => {
+        return html`<span class="memo-hidden">${n}</span>`;
+      });
+
+      const { fragment, dispose } = htmlWithMatch`<div>${when(
+        () => show.value,
+        [() => htmlWithMatch`${() => Counter({ n: count.value })}`],
+        { cache: true },
+      )}</div>`.render();
+      document.body.appendChild(fragment);
+      assert.strictEqual(
+        document.querySelector(".memo-hidden")?.textContent,
+        "1",
+      );
+
+      // Hide the branch (the memo marker gets detached), then change props
+      // while hidden - must not throw on the missing parent.
+      show.value = false;
+      assert.strictEqual(document.querySelector(".memo-hidden"), null);
+      assert.doesNotThrow(() => {
+        count.value = 3;
+      });
+
+      // Re-show in the same tick: the deferred retry renders fresh content
+      show.value = true;
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      assert.strictEqual(
+        document.querySelector(".memo-hidden")?.textContent,
+        "3",
+      );
+
+      dispose();
+    });
+
     it("should handle dispose when parent element was removed from DOM first", () => {
       let renderCount = 0;
       const Comp = memo(({ x }: { x: number }) => {
