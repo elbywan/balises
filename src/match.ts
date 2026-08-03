@@ -160,7 +160,15 @@ registerHydrateHandler((value) => {
     const clear = () => {
       for (const d of childDisposers) d();
       childDisposers.length = 0;
-      for (const n of nodes) (n as ChildNode).remove();
+      // Re-collect the current region: concurrent renders (e.g. the async
+      // generator inside a branch) may have inserted nodes that the stale
+      // `nodes` collection does not know about.
+      let current = contentStart;
+      while (current && current !== anchor) {
+        const next = current.nextSibling;
+        (current as ChildNode).remove();
+        current = next;
+      }
       nodes.length = 0;
     };
     const renderBranch = () => {

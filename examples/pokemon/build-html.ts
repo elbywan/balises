@@ -10,6 +10,7 @@
  *   node --import tsx/esm examples/pokemon/build-html.ts
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { format } from "prettier";
@@ -57,19 +58,36 @@ if (!shell.includes(moduleScript)) {
   throw new Error("shell.html is missing the pokemon.js module script");
 }
 
+// Content-addressed cache busting: the served bundle URL changes whenever
+// the built file changes, so a browser never reuses a stale bundle after a
+// rebuild (the app's own reloads depend on it).
+const bundleHash = createHash("sha256")
+  .update(readFileSync(`${dir}pokemon.js`))
+  .digest("hex")
+  .slice(0, 10);
+
 // 1. Client-only example: the shell as-is (renders fresh on load).
-writeFileSync(clientPath, await format(shell, { parser: "html" }));
+writeFileSync(
+  clientPath,
+  await format(
+    shell.replace(
+      moduleScript,
+      `<script type="module" src="pokemon.js?v=${bundleHash}">`,
+    ),
+    { parser: "html" },
+  ),
+);
 
 // 2. SSR example: the shell with the pre-rendered markup + serialized
-// state, loading its own bundle (pokemon-ssr.js).
-// The SSR page loads the same shared app bundle (pokemon.js); its
-// bootstrap hydrates the pre-rendered markup instead of rendering fresh.
+// state, loading the same shared app bundle (pokemon.js); its bootstrap
+// hydrates the pre-rendered markup instead of rendering fresh.
+const ssrScript = `<script type="module" src="../pokemon/pokemon.js?v=${bundleHash}">`;
 const ssrPage = shell
   .replace(placeholder, `<x-pokemon-app>${markup}</x-pokemon-app>`)
-  .replace(moduleScript, '<script type="module" src="../pokemon/pokemon.js">')
+  .replace(moduleScript, ssrScript)
   .replace(
-    '<script type="module" src="../pokemon/pokemon.js">',
-    `<script id="ssr-data" type="application/json">${payload}</script>\n    <script type="module" src="../pokemon/pokemon.js">`,
+    ssrScript,
+    `<script id="ssr-data" type="application/json">${payload}</script>\n    ${ssrScript}`,
   );
 
 // Format the generated pages (CI runs `prettier --check .` on the repo).

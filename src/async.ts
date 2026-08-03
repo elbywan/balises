@@ -83,6 +83,8 @@ export type AsyncGeneratorContext<T extends object = Record<string, unknown>> =
 interface RenderedContentInternal extends RenderedContent {
   readonly nodes: Node[];
   readonly childDisposers: (() => void)[];
+  /** Node before the hydrated region; region clears walk back to it. */
+  readonly boundary: Node | null;
 }
 
 /** Async generator function type */
@@ -147,6 +149,7 @@ registerHydrateHandler((value) => {
       __brand: "RenderedContent" as const,
       nodes,
       childDisposers: [],
+      boundary: contentStart?.previousSibling ?? null,
     };
     // Learn the settled template and hydrate the region's inner
     // bindings. The generator must settle without network access here
@@ -165,9 +168,19 @@ registerHydrateHandler((value) => {
           seed.childDisposers,
         );
         if (!aligned) {
+          // The binding may have replaced the region while the walk ran
+          // (both run the generator's fetch path); the seed nodes may be
+          // stale, so remove whatever currently sits between the region
+          // boundary and the anchor (walking back from the anchor: the
+          // forward start may itself have been removed already).
           for (const f of seed.childDisposers) f();
           seed.childDisposers.length = 0;
-          for (const n of nodes) (n as ChildNode).remove();
+          let current: Node | null = anchor.previousSibling;
+          while (current && current !== seed.boundary) {
+            const prev: Node | null = current.previousSibling;
+            (current as ChildNode).remove();
+            current = prev;
+          }
           nodes.length = 0;
           renderValue(anchor, result.value, nodes, seed.childDisposers);
         }
@@ -250,9 +263,23 @@ function bindAsyncGenerator(
 
   const clearNodes = () => {
     for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
-    for (let i = 0; i < currentNodes.length; i++)
-      currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);
     childDisposers = [];
+    if (seed?.boundary) {
+      // Hydrated region: concurrent renders (the hydration walk's own
+      // fetch path) may have inserted nodes the seed collection does not
+      // know about - walk back from the marker to the region boundary,
+      // removing whatever currently sits in between (the forward start
+      // may itself have been removed already).
+      let current: Node | null = marker.previousSibling;
+      while (current && current !== seed.boundary) {
+        const prev: Node | null = current.previousSibling;
+        current.parentNode?.removeChild(current);
+        current = prev;
+      }
+    } else {
+      for (let i = 0; i < currentNodes.length; i++)
+        currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);
+    }
     currentNodes = [];
   };
 
@@ -324,6 +351,7 @@ function bindAsyncGenerator(
             __brand: "RenderedContent" as const,
             nodes: currentNodes,
             childDisposers: childDisposers,
+            boundary: seed?.boundary ?? null,
           };
         }
         return;
