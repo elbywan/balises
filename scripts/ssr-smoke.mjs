@@ -375,6 +375,58 @@ for (const id of ["4", "25", "150", "774"]) {
   );
 }
 
+// 10. Tricky cases: team-full edge + invalid URL fallbacks.
+{
+  const requests = [];
+  const dom = await boot(
+    ssrPage,
+    "http://localhost/pokemon-ssr/#battle",
+    requests,
+  );
+  const click = (sel) =>
+    dom.window.eval(`document.querySelector(${JSON.stringify(sel)})?.click()`);
+  // The roster loads before the start button appears.
+  for (let i = 0; i < 20; i++) {
+    if (dom.window.eval(`!!document.querySelector(".splash-start-btn")`)) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  click(".splash-start-btn");
+  await new Promise((r) => setTimeout(r, 400));
+  dom.window.eval(
+    `(() => { const cards = [...document.querySelectorAll(".pokemon-select-card")];
+      cards[0]?.click(); cards[1]?.click(); cards[2]?.click(); })()`,
+  );
+  const s = dom.window.eval(`(() => {
+    const cards = [...document.querySelectorAll(".pokemon-select-card")];
+    return {
+      selected: document.querySelectorAll(".pokemon-select-card.selected").length,
+      fourthDisabled: cards[3]?.className.includes("disabled") ?? false,
+    };
+  })()`);
+  check(
+    "team-full edge: 3 selected, 4th disabled",
+    s.selected === 3 && s.fourthDisabled,
+    `selected=${s.selected} fourthDisabled=${s.fourthDisabled}`,
+  );
+}
+{
+  const requests = [];
+  const dom = await boot(
+    ssrPage,
+    "http://localhost/pokemon-ssr/#garbage",
+    requests,
+  );
+  const s = dom.window.eval(`(() => ({
+    viewers: document.querySelectorAll(".pokemon-viewer").length,
+    id: document.querySelector(".pokemon-id")?.textContent.trim(),
+  }))()`);
+  check(
+    "invalid hash falls back to the pokedex",
+    s.viewers === 1 && s.id === "#0001",
+    `viewers=${s.viewers} id=${s.id}`,
+  );
+}
+
 console.log(
   `\n${results.length - FAILURES.length}/${results.length} checks passed`,
 );
