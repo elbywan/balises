@@ -32,6 +32,7 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Function Components](#function-components)
 - [Memo Components](#memo-components)
 - [Async Generators](#async-generators)
+- [Server-Side Rendering](#server-side-rendering)
 - [Web Components](#web-components)
 - [Template Syntax](#template-syntax)
 - [Reactivity API](#reactivity-api)
@@ -225,6 +226,72 @@ html`
 ```
 
 The `settled` parameter is `undefined` on first run, and contains an opaque handle to the previous render on restarts. Returning it preserves existing DOM nodes and reactive bindings.
+
+## Server-Side Rendering
+
+Server-side rendering is an opt-in plugin (`balises/ssr` + `balises/hydrate`) that keeps the base bundle untouched. `renderToString` produces HTML in a DOM-less Node environment, and `hydrate` attaches the same reactive bindings to that markup on the client without re-rendering it.
+
+```ts
+// server.ts
+import { html, signal } from "balises";
+import { renderToString } from "balises/ssr";
+
+const count = signal(0);
+const markup = renderToString(html`<p>Count: ${count}</p>`);
+// "<p>Count: <!--b-->0<!--/b--></p>"
+```
+
+```ts
+// client.ts - hydrate the server markup
+import { html, signal } from "balises";
+import { hydrate } from "balises/hydrate";
+
+const count = signal(0); // Same state as the server (e.g. from a script tag)
+const template = html`<p>Count: ${count}</p>`;
+const dispose = hydrate(template, document.querySelector("#app"));
+count.value = 5; // Updates the text in place - the server markup is reused
+```
+
+The server renderer supports every template feature: text content, attributes, nested templates and arrays, `each()`, `when()`/`match()`, `memo()`, and events/properties (which render nothing server-side and are attached at hydration). Hydration preserves the identity of DOM nodes rendered on the server - including `each()` rows, which keep their elements across list updates.
+
+### Async rendering
+
+Async generators need `renderToStringAsync`, which awaits every yield and renders the final content:
+
+```ts
+import { html as baseHtml, signal } from "balises";
+import asyncPlugin from "balises/async";
+import { renderToStringAsync } from "balises/ssr";
+
+const html = baseHtml.with(asyncPlugin);
+const userId = signal(1);
+
+const markup = await renderToStringAsync(
+  html`<div>
+    ${async function* () {
+      const id = userId.value;
+      yield html`<p>Loading...</p>`;
+      const user = await fetchUser(id);
+      return html`<p>${user.name}</p>`;
+    }}
+  </div>`,
+);
+```
+
+`renderToString` throws when it encounters an async generator - use `renderToStringAsync` instead.
+
+### How it works
+
+- Bindings are marked with `<!--b-->...<!--/b-->` comments; the closing comment is the binding anchor, matching the client's `insertBefore(anchor)` semantics.
+- `each()` rows are separated by `<!--k-->` markers so the keyed binder can reconcile them after hydration.
+- Hydration walks the template structure in lockstep with the server DOM, adopts the rendered nodes, and subscribes the reactive bindings - no re-rendering, no layout thrash.
+- `@event` and `.prop` bindings are skipped by the server (no HTML representation) and attached during hydration.
+
+### Requirements
+
+- The server and client must render the same template structure (same plugin composition via `html.with(...)`).
+- The client reads the same initial signal values the server used; serialize them into the page (e.g. a `<script type="application/json">` tag).
+- Call `dispose()` when removing the hydrated subtree to release subscriptions.
 
 ## Web Components
 

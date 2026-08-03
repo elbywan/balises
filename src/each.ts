@@ -24,8 +24,11 @@ import {
 } from "./signals/index.js";
 import { Signal } from "./signals/signal.js";
 import { Template, type InterpolationPlugin } from "./template.js";
+import { registerHydrateHandler, hydrateWalk } from "./hydrate.js";
+import { SSR_ROW } from "./ssr-shared.js";
+import { EACH } from "./descriptors.js";
 
-const EACH = Symbol("each");
+export { EACH } from "./descriptors.js";
 
 /** Each descriptor returned by each() */
 export interface EachDescriptor<T> {
@@ -74,6 +77,84 @@ const eachPlugin: InterpolationPlugin = (value) => {
 export default eachPlugin;
 
 /**
+ * Bind an each() descriptor seeded from server-rendered rows (hydration).
+ * The adopted entries must already be in the DOM between a start marker
+ * and the given marker, in list order.
+ * @internal Used by Template.hydrate.
+ */
+export function bindEachHydrated<T>(
+  desc: EachDescriptor<T>,
+  marker: Comment,
+  disposers: (() => void)[],
+  adopted: { key: unknown; entry: CacheEntry<T> }[],
+): void {
+  bindEach(desc, marker, disposers, adopted);
+}
+
+const isRowMarker = (node: Node): boolean =>
+  node.nodeType === 8 && (node as Comment).data === SSR_ROW;
+
+/**
+ * Hydrate server-rendered each() rows: the region holds the rows
+ * separated by `<!--k-->` markers, in list order. Each row's template is
+ * hydrated in place, then the entries are adopted by bindEach so
+ * subsequent list changes reconcile normally. @internal
+ */
+function hydrateEach<T>(
+  desc: EachDescriptor<T>,
+  contentStart: Node | null,
+  anchor: Comment,
+  disposers: (() => void)[],
+): void {
+  const rawList = desc.__list__;
+  const items = (
+    typeof rawList === "function" && !isSignal(rawList)
+      ? (rawList as () => T[])()
+      : isSignal(rawList)
+        ? (rawList as Reactive<T[]>).value
+        : (rawList as T[])
+  ) as T[];
+  const adopted: { key: unknown; entry: CacheEntry<T> }[] = [];
+  let node = contentStart;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    if (node && isRowMarker(node)) node = node.nextSibling;
+    const rowNodes: Node[] = [];
+    while (node && node !== anchor && !isRowMarker(node)) {
+      rowNodes.push(node);
+      node = node.nextSibling;
+    }
+    const itemSignal = signal(item);
+    const rowDisposers: (() => void)[] = [];
+    const rowTpl = desc.__renderFn__(new ReadonlySignal(itemSignal), i);
+    if (rowNodes[0]) hydrateWalk(rowTpl, rowNodes[0]!, rowDisposers);
+    const key = desc.__keyFn__(item, i);
+    adopted.push({
+      key,
+      entry: {
+        nodes: rowNodes,
+        dispose: () => {
+          for (const f of rowDisposers) f();
+        },
+        itemSignal,
+      },
+    });
+  }
+  bindEachHydrated(desc, anchor, disposers, adopted);
+}
+
+registerHydrateHandler((value) => {
+  if (!(value && typeof value === "object" && EACH in value)) return null;
+  return (contentStart, anchor, disposers) =>
+    hydrateEach(
+      value as EachDescriptor<unknown>,
+      contentStart,
+      anchor,
+      disposers,
+    );
+});
+
+/**
  * Bind an each() descriptor to a marker position in the DOM.
  *
  * Architecture:
@@ -86,16 +167,26 @@ export default eachPlugin;
  * 2. Tail-to-tail match → update in place
  * 3. Cross match (head↔tail) → move DOM nodes
  * 4. Fallback → use maps for arbitrary reorderings
+ *
+ * When `adopted` entries are provided (hydration), the cache and DOM are
+ * seeded from server-rendered rows instead of being created fresh.
  */
 function bindEach<T>(
   desc: EachDescriptor<T>,
   marker: Comment,
   disposers: (() => void)[],
+  adopted?: { key: unknown; entry: CacheEntry<T> }[],
 ): void {
   const { __list__, __keyFn__, __renderFn__ } = desc;
   const initialParent = marker.parentNode!;
   const startMarker = document.createComment("");
-  initialParent.insertBefore(startMarker, marker);
+  if (adopted && adopted.length > 0) {
+    // The adopted rows already sit between startMarker and marker: insert
+    // the start marker before the first row to match the DOM model.
+    initialParent.insertBefore(startMarker, adopted[0]!.entry.nodes[0]!);
+  } else {
+    initialParent.insertBefore(startMarker, marker);
+  }
 
   // Normalize list access
   const getList = (): T[] => {
@@ -107,6 +198,12 @@ function bindEach<T>(
   const listComputed = computed(getList);
   let oldKeys: unknown[] = [];
   const cache = new Map<unknown, CacheEntry<T>>();
+  if (adopted) {
+    for (const { key, entry } of adopted) {
+      cache.set(key, entry);
+      oldKeys.push(key);
+    }
+  }
 
   // --- Entry helpers ---
 

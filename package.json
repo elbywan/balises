@@ -72,6 +72,14 @@
     "./memo": {
       "import": "./dist/esm/memo.js",
       "types": "./dist/esm/memo.d.ts"
+    },
+    "./ssr": {
+      "import": "./dist/esm/ssr.js",
+      "types": "./dist/esm/ssr.d.ts"
+    },
+    "./hydrate": {
+      "import": "./dist/esm/hydrate.js",
+      "types": "./dist/esm/hydrate.d.ts"
     }
   },
   "scripts": {

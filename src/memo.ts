@@ -38,8 +38,10 @@
  */
 
 import { renderValue, type InterpolationPlugin } from "./template.js";
+import { registerHydrateHandler } from "./hydrate.js";
+import { MEMO } from "./descriptors.js";
 
-const MEMO = Symbol("memo");
+export { MEMO } from "./descriptors.js";
 
 /** Descriptor returned by a memoized component call */
 interface MemoDescriptor<TProps extends object = object> {
@@ -170,6 +172,27 @@ export function memo<TProps extends object = object>(
  *    `false` to signal template.ts to skip clearing — preserving the existing
  *    DOM and pluginCleanup.
  */
+// Hydration: render the component's output fresh into the slot region.
+registerHydrateHandler((value) => {
+  if (!(value && typeof value === "object" && MEMO in value)) return null;
+  return (contentStart, anchor, disposers) => {
+    const desc = value as MemoDescriptor;
+    const nodes: Node[] = [];
+    const childDisposers: (() => void)[] = [];
+    let node = contentStart;
+    while (node && node !== anchor) {
+      const next = node.nextSibling;
+      (node as ChildNode).remove();
+      node = next;
+    }
+    renderValue(anchor, desc.component(desc.props), nodes, childDisposers);
+    disposers.push(() => {
+      for (const d of childDisposers) d();
+      for (const n of nodes) (n as ChildNode).remove();
+    });
+  };
+});
+
 const memoPlugin: InterpolationPlugin = (value) => {
   if (!(value && typeof value === "object" && MEMO in value)) return null;
 

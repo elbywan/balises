@@ -30,9 +30,11 @@
  */
 
 import { computed } from "./signals/computed.js";
-import { Template, type InterpolationPlugin } from "./template.js";
+import { Template, renderValue, type InterpolationPlugin } from "./template.js";
+import { registerHydrateHandler } from "./hydrate.js";
+import { MATCH } from "./descriptors.js";
 
-const MATCH = Symbol("match");
+export { MATCH } from "./descriptors.js";
 
 /** Options for when/match behavior */
 export interface MatchOptions {
@@ -44,7 +46,8 @@ export interface MatchOptions {
   cache?: boolean;
 }
 
-interface MatchDescriptor {
+/** @internal Descriptor shape shared with the SSR plugin. */
+export interface MatchDescriptor {
   readonly [MATCH]: true;
   /** @internal */ selector: () => unknown;
   /** @internal */ cases: Record<string, () => Template>;
@@ -144,6 +147,39 @@ interface BranchEntry {
  * Plugin that handles match/when descriptors.
  * Register with: const html = baseHtml.with(matchPlugin);
  */
+// Hydration: the selector may have changed since the server render, so
+// the current branch is rendered fresh (mirroring the client binder) and
+// the branch selector is subscribed for subsequent switches.
+registerHydrateHandler((value) => {
+  if (!isMatchDescriptor(value)) return null;
+  return (contentStart, anchor, disposers) => {
+    const keyComputed = computed(() => String(value.selector()));
+    const nodes: Node[] = [];
+    const childDisposers: (() => void)[] = [];
+    const clear = () => {
+      for (const d of childDisposers) d();
+      childDisposers.length = 0;
+      for (const n of nodes) (n as ChildNode).remove();
+      nodes.length = 0;
+    };
+    const renderBranch = () => {
+      clear();
+      const factory = value.cases[keyComputed.value] ?? value.cases["_"];
+      if (factory) renderValue(anchor, factory(), nodes, childDisposers);
+    };
+    // Discard the server-rendered branch.
+    let node = contentStart;
+    while (node && node !== anchor) {
+      const next = node.nextSibling;
+      (node as ChildNode).remove();
+      node = next;
+    }
+    renderBranch();
+    disposers.push(keyComputed.subscribe(renderBranch));
+    disposers.push(clear);
+  };
+});
+
 const matchPlugin: InterpolationPlugin = (value) => {
   if (!isMatchDescriptor(value)) return null;
 

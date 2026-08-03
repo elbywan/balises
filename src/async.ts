@@ -28,6 +28,7 @@ import {
   type TrackableSource,
 } from "./signals/context.js";
 import { renderValue, type InterpolationPlugin } from "./template.js";
+import { registerHydrateHandler } from "./hydrate.js";
 import { isSignal, type Reactive } from "./signals/index.js";
 
 /** Reactive source type - TrackableSource may or may not be subscribable */
@@ -92,8 +93,9 @@ type AsyncGenFn = (
 
 /**
  * Check if a value is an async generator function.
+ * @internal Exported for the SSR plugin.
  */
-function isAsyncGeneratorFunction(
+export function isAsyncGeneratorFunction(
   value: unknown,
 ): value is AsyncGeneratorFunction {
   if (typeof value !== "function") return false;
@@ -118,6 +120,32 @@ const asyncPlugin: InterpolationPlugin = (value) => {
     bindAsyncGenerator(value as AsyncGenFn, marker, disposers);
   };
 };
+
+/**
+ * Hydrate server-rendered async content: the region holds the settled
+ * content rendered by renderToStringAsync; it is adopted and passed to
+ * the generator as the `settled` handle so restarts can preserve it.
+ * @internal
+ */
+registerHydrateHandler((value) => {
+  if (typeof value !== "function" || !isAsyncGeneratorFunction(value)) {
+    return null;
+  }
+  return (contentStart, anchor, disposers) => {
+    const nodes: Node[] = [];
+    let node = contentStart;
+    while (node && node !== anchor) {
+      nodes.push(node);
+      node = node.nextSibling;
+    }
+    const seed: RenderedContentInternal = {
+      __brand: "RenderedContent" as const,
+      nodes,
+      childDisposers: [],
+    };
+    bindAsyncGenerator(value as AsyncGenFn, anchor, disposers, seed);
+  };
+});
 
 export default asyncPlugin;
 
@@ -178,14 +206,15 @@ function bindAsyncGenerator(
   genFn: AsyncGenFn,
   marker: Comment,
   disposers: (() => void)[],
+  seed?: RenderedContentInternal,
 ): void {
   let generator: AsyncGenerator<unknown> | null = null;
-  let currentNodes: Node[] = [];
+  let currentNodes: Node[] = seed ? [...seed.nodes] : [];
   let childDisposers: (() => void)[] = [];
   let disposed = false;
   let iterationId = 0;
   let depUnsubscribers: (() => void)[] = [];
-  let lastSettled: RenderedContentInternal | null = null;
+  let lastSettled: RenderedContentInternal | null = seed ?? null;
   const context: AsyncGeneratorContext = {};
 
   const clearNodes = () => {
