@@ -308,7 +308,8 @@ const dispose = hydrate(template, document.querySelector("#app"));
 count.value = 5; // Updates the text in place - the server markup is reused
 ```
 
-### Fetching data
+<details>
+<summary>Fetching data</summary>
 
 Your normal data-loading code runs on the server: `renderToStringAsync` executes each async generator to completion in Node (real fetches happen there) and renders the generator's final content into the HTML. The loading yields are discarded - the shipped page contains the settled result.
 
@@ -324,7 +325,10 @@ async function* loadUser(settled) {
 }
 ```
 
-### Sharing state between the server and the client
+</details>
+
+<details>
+<summary>Sharing state between the server and the client</summary>
 
 The client must recreate the state the server rendered with, or the markup and the bindings disagree. Serialize what the client cannot derive into the page, and restore it before hydrating:
 
@@ -348,7 +352,10 @@ Rules of thumb:
 - **Client-only state stays on the client.** Anything in localStorage (preferences, drafts, persisted data): the server renders the defaults and the client restores its own values _before_ hydrating - the bindings pick them up in place (they apply the current value when it differs from the markup).
 - **The template must be identical on both sides** - same structure and same plugins (`html.with(...)`). Build both from a shared factory so the markup and the bindings can never drift.
 
-### Static generation (no server)
+</details>
+
+<details>
+<summary>Static generation (no server)</summary>
 
 You don't need a running server - generate the HTML at build time and ship it. `examples/pokemon/` is the client-only app; `examples/pokemon-ssr/` is the exact same code pre-rendered at build time (`yarn examples:build` runs `examples/pokemon/build-html.ts`, which calls `renderToStringAsync` in Node and writes the page). The client entry hydrates when markup is present and renders fresh otherwise:
 
@@ -359,7 +366,10 @@ if (target.firstChild)
 else target.appendChild(template.render().fragment); // Client-only page
 ```
 
-### Async rendering
+</details>
+
+<details>
+<summary>Async rendering</summary>
 
 Async generators are supported server-side via `renderToStringAsync`, which runs each generator to completion and renders its final content (the loading yields are discarded):
 
@@ -385,7 +395,10 @@ const markup = await renderToStringAsync(
 
 On the client the same generator hydrates its settled content without refetching: the adopted DOM is passed to the generator as the `settled` handle - return it to preserve it across restarts (the [DOM Preservation pattern](#dom-preservation-on-restart)).
 
-### Writing SSR-compatible components
+</details>
+
+<details>
+<summary>Writing SSR-compatible components</summary>
 
 Components are pure `(state, props) -> template` functions; the server executes the same functions in Node, so the rules follow from that.
 
@@ -481,6 +494,8 @@ class MyApp extends HTMLElement {
   }
 }
 ```
+
+</details>
 
 ### What works
 
