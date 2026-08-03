@@ -1,7 +1,13 @@
 // Root application component - renders the entire docs site using Balises
 // Demonstrates data-driven template composition
 
-import { html, computed } from "./examples/balises.esm.js";
+// All imports must come from the same build of the library: the bundled
+// balises.esm.js and the modular balises-esm/ tree are separate copies of
+// the reactivity core (each with its own module-private context
+// singleton). Mixing them silently breaks signal tracking - the store's
+// signals never register with computeds from the other copy, so
+// fetch-populated code blocks (quickstart, webcomponent) stayed empty.
+import { html, computed } from "./examples/balises-esm/index.js";
 import { store } from "./examples/balises-esm/signals/store.js";
 
 // ============================================================================
