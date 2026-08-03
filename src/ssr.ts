@@ -29,6 +29,8 @@ import { isAsyncGeneratorFunction } from "./async.js";
 import { SSR_OPEN, SSR_CLOSE, SSR_ROW } from "./ssr-shared.js";
 import { serializeState } from "./ssr-state.js";
 
+export { serializeState } from "./ssr-state.js";
+
 /** Escape text content for HTML. */
 function escapeText(value: string): string {
   return value

@@ -27,6 +27,8 @@ import {
 import { isSignal, type Reactive } from "./signals/index.js";
 import { SSR_OPEN, SSR_CLOSE, ssrTemplateData } from "./ssr-shared.js";
 import { deserializeState } from "./ssr-state.js";
+
+export { deserializeState } from "./ssr-state.js";
 import { MEMO, MATCH } from "./descriptors.js";
 
 /**

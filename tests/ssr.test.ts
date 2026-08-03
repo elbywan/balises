@@ -4,9 +4,27 @@ import { html, signal, computed } from "../src/index.js";
 import { each } from "../src/each.js";
 import { when, match } from "../src/match.js";
 import { memo } from "../src/memo.js";
-import { renderToString, renderToStringAsync } from "../src/ssr.js";
+import {
+  renderToString,
+  renderToStringAsync,
+  serializeState,
+} from "../src/ssr.js";
+import { deserializeState } from "../src/hydrate.js";
 
 describe("renderToString", () => {
+  it("should export the state serialization helpers", () => {
+    assert.strictEqual(typeof serializeState, "function");
+    assert.strictEqual(serializeState({ a: 1 }), '{"a":1}');
+    // "<" is escaped so a hostile string cannot break out of a script tag.
+    assert.ok(serializeState({ x: "</script>" }).includes("\\u003c"));
+    const el = document.createElement("script");
+    el.textContent = serializeState({ a: 1 });
+    assert.deepStrictEqual(deserializeState(el), { a: 1 });
+    assert.strictEqual(deserializeState(null), null);
+    el.textContent = "{broken";
+    assert.strictEqual(deserializeState(el), null);
+  });
+
   it("should render static content", () => {
     assert.strictEqual(
       renderToString(html`<div>Hello</div>`),
