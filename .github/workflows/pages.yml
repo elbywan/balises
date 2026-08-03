@@ -49,6 +49,7 @@ jobs:
           cp assets/logo-icon.svg _site/assets/
           cp -r examples _site/examples
           cp dist/balises.esm.js _site/examples/
+          cp -r dist/esm _site/examples/balises-esm
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

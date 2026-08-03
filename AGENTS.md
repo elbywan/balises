@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-**Balises** is a minimal reactive HTML templating library (~3.2KB gzipped) for building websites and web components. It provides:
+**Balises** is a minimal reactive HTML templating library (~3.3KB gzipped) for building websites and web components. It provides:
 
 - **Reactive signals system** - standalone reactivity (can be used without DOM)
 - **HTML templating** - tagged template literals with reactive bindings
@@ -465,7 +465,8 @@ async function* loadUser() {
 When a signal changes, the generator restarts. To preserve existing DOM instead of re-rendering, use the `settled` parameter:
 
 ```typescript
-import { html as baseHtml, signal, store } from "balises";
+import { html as baseHtml, signal } from "balises";
+import { store } from "balises/signals/store";
 import asyncPlugin, { type RenderedContent } from "balises/async";
 
 const html = baseHtml.with(asyncPlugin);
@@ -714,7 +715,7 @@ html`<svg><circle r="10" /></svg>`;
 
 ### Bundle Size
 
-- Full library: ~3.2KB gzipped
+- Full library: ~3.3KB gzipped
 - Signals only: ~1.5KB gzipped
 - CI warns if IIFE bundle exceeds 3500 bytes gzipped
 
