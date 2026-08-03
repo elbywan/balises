@@ -101,8 +101,10 @@ const { fragment, dispose } = html`
 document.body.appendChild(fragment);
 ```
 
+## Memo Components
+
 <details>
-<summary><b>Memo Components</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
@@ -154,8 +156,10 @@ const Counter = memo(
 
 </details>
 
+## Async Generators
+
 <details>
-<summary><b>Async Generators</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
@@ -527,8 +531,10 @@ class MyApp extends HTMLElement {
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
+## Template Syntax
+
 <details>
-<summary><b>Template Syntax</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
@@ -691,8 +697,10 @@ Reactive bindings inside branches continue to work normally regardless of cachin
 
 </details>
 
+## Reactivity API
+
 <details>
-<summary><b>Reactivity API</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
@@ -1005,8 +1013,10 @@ import memoPlugin, { memo } from "balises/memo";
 const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin, memoPlugin);
 ```
 
+## Writing Plugins
+
 <details>
-<summary><b>Writing Plugins</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
@@ -1149,8 +1159,10 @@ users.value = [{ name: "Alice" }, { name: "Bob" }];
 // Logs: "Total users: 2"
 ```
 
+## Full Example
+
 <details>
-<summary><b>Full Example</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
@@ -1225,8 +1237,10 @@ class Counter extends HTMLElement {
 
 </details>
 
+## Benchmarks
+
 <details>
-<summary><b>Benchmarks</b></summary>
+<summary><b>Click to expand</b></summary>
 
 <br/>
 
