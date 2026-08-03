@@ -1,0 +1,38 @@
+{
+  "name": "balises-dom-benchmarks",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "DOM rendering benchmarks for balises and other frameworks",
+  "private": true,
+  "scripts": {
+    "build": "rolldown -c rolldown.config.ts",
+    "serve": "yarn build && npx serve .",
+    "start": "yarn serve",
+    "bench": "yarn build && node --import tsx/esm src/playwright-runner.ts",
+    "bench:quick": "yarn build && node --import tsx/esm src/playwright-runner.ts --quick"
+  },
+  "dependencies": {
+    "balises": "workspace:*",
+    "lit-html": "^3.3.0",
+    "preact": "^10.26.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "solid-js": "^1.9.7",
+    "svelte": "^5.25.0",
+    "vue": "^3.5.17"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.27.4",
+    "@babel/preset-react": "^7.27.1",
+    "@babel/preset-typescript": "^7.27.1",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "babel-preset-solid": "^1.9.5",
+    "playwright": "latest",
+    "rolldown": "1.2.1",
+    "tsx": "^4.20.3",
+    "typescript": "6.0.3"
+  }
+}

@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Balises DOM Benchmarks</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+
+      h1 {
+        color: #333;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        color: #666;
+        margin-bottom: 30px;
+      }
+
+      .controls {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+
+      .controls h3 {
+        margin-top: 0;
+      }
+
+      .framework-select {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+      }
+
+      .framework-select label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+      }
+
+      .config-row {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .config-row label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .config-row input[type="number"] {
+        width: 60px;
+        padding: 5px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        border-radius: 4px;
+        transition: background 0.2s;
+      }
+
+      button.primary {
+        background: #4caf50;
+        color: white;
+      }
+
+      button.primary:hover:not(:disabled) {
+        background: #45a049;
+      }
+
+      button.primary:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .progress {
+        margin-top: 15px;
+        padding: 10px;
+        background: #e8f5e9;
+        border-radius: 4px;
+        display: none;
+      }
+
+      .progress.active {
+        display: block;
+      }
+
+      .progress-bar {
+        height: 20px;
+        background: #ddd;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-top: 10px;
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        background: #4caf50;
+        transition: width 0.3s;
+      }
+
+      .results {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+
+      .results h3 {
+        margin-top: 0;
+      }
+
+      table.results-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      table.results-table th,
+      table.results-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+
+      table.results-table th {
+        background: #f5f5f5;
+        font-weight: 600;
+      }
+
+      table.results-table tr:hover {
+        background: #f9f9f9;
+      }
+
+      .fastest {
+        color: #2e7d32;
+        font-weight: 600;
+      }
+
+      .slowest {
+        color: #c62828;
+      }
+
+      .ratio {
+        font-size: 0.85em;
+        color: #666;
+        margin-left: 4px;
+      }
+
+      .correctness-pass {
+        color: #2e7d32;
+      }
+
+      .correctness-fail {
+        color: #c62828;
+      }
+
+      .correctness-icon {
+        margin-left: 4px;
+        cursor: help;
+      }
+
+      .summary-section {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        display: none;
+      }
+
+      .summary-section.visible {
+        display: block;
+      }
+
+      .summary-section h3 {
+        margin-top: 0;
+      }
+
+      .summary-cards {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+
+      .summary-card {
+        flex: 1;
+        min-width: 200px;
+        padding: 15px;
+        border-radius: 8px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+      }
+
+      .summary-card h4 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: #666;
+        text-transform: uppercase;
+      }
+
+      .summary-card .value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .summary-card .detail {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+      }
+
+      .winner {
+        background: #e8f5e9;
+        border-color: #c8e6c9;
+      }
+
+      .winner .value {
+        color: #2e7d32;
+      }
+
+      .comparison-bar {
+        display: flex;
+        align-items: center;
+        margin: 8px 0;
+      }
+
+      .comparison-bar-label {
+        width: 80px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .comparison-bar-track {
+        flex: 1;
+        height: 20px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .comparison-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: white;
+        min-width: 50px;
+      }
+
+      .comparison-bar-fill.bar-fastest {
+        background: #4caf50;
+      }
+
+      .comparison-bar-fill.bar-normal {
+        background: #2196f3;
+      }
+
+      .comparison-bar-fill.bar-slow {
+        background: #ff9800;
+      }
+
+      .benchmark-container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        min-height: 200px;
+      }
+
+      .benchmark-container h3 {
+        margin-top: 0;
+        color: #666;
+      }
+
+      /* Bootstrap-like styles for the benchmark table */
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table td {
+        padding: 8px;
+        border-top: 1px solid #ddd;
+      }
+
+      .table-hover tbody tr:hover {
+        background-color: #f5f5f5;
+      }
+
+      .table-striped tbody tr:nth-of-type(odd) {
+        background-color: #f9f9f9;
+      }
+
+      .danger {
+        background-color: #f2dede !important;
+      }
+
+      .col-md-1 {
+        width: 8%;
+      }
+      .col-md-4 {
+        width: 33%;
+      }
+      .col-md-6 {
+        width: 50%;
+      }
+
+      .glyphicon-remove:before {
+        content: "X";
+        color: #c00;
+      }
+
+      a {
+        cursor: pointer;
+        color: #337ab7;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Balises DOM Benchmarks</h1>
+    <p class="subtitle">
+      Compare DOM rendering performance across different implementations
+    </p>
+
+    <div class="controls">
+      <h3>Configuration</h3>
+
+      <div class="framework-select">
+        <label>
+          <input type="checkbox" id="fw-vanilla" checked />
+          Vanilla JS
+        </label>
+        <label>
+          <input type="checkbox" id="fw-balises" checked />
+          Balises
+        </label>
+        <label>
+          <input type="checkbox" id="fw-lit" checked />
+          lit-html
+        </label>
+        <label>
+          <input type="checkbox" id="fw-react" checked />
+          React
+        </label>
+        <label>
+          <input type="checkbox" id="fw-vue" checked />
+          Vue
+        </label>
+        <label>
+          <input type="checkbox" id="fw-solid" checked />
+          Solid
+        </label>
+      </div>
+
+      <div class="config-row">
+        <label>
+          Benchmark mode:
+          <select id="benchmark-mode">
+            <option value="standard">
+              Standard (js-framework-benchmark style)
+            </option>
+            <option value="advanced">
+              Advanced (nested updates, filtering)
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <div class="config-row">
+        <label>
+          Warmup runs:
+          <input type="number" id="warmup-runs" value="3" min="0" max="10" />
+        </label>
+        <label>
+          Measurement runs:
+          <input
+            type="number"
+            id="measurement-runs"
+            value="5"
+            min="1"
+            max="20"
+          />
+        </label>
+        <label>
+          <input type="checkbox" id="verify-correctness" checked />
+          Verify correctness
+        </label>
+        <label>
+          <input type="checkbox" id="debug-mode" />
+          Debug (console logs)
+        </label>
+      </div>
+
+      <button id="run-btn" class="primary">Run Benchmarks</button>
+
+      <div class="progress" id="progress">
+        <div id="progress-text">Running...</div>
+        <div class="progress-bar">
+          <div
+            class="progress-bar-fill"
+            id="progress-fill"
+            style="width: 0%"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-section" id="summary-section">
+      <h3>Summary</h3>
+      <div class="summary-cards" id="summary-cards"></div>
+      <h4>Performance by Benchmark</h4>
+      <div id="comparison-bars"></div>
+    </div>
+
+    <div class="results" id="results-section">
+      <h3>Detailed Results</h3>
+      <table class="results-table" id="results-table">
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+          </tr>
+        </thead>
+        <tbody id="results-body">
+          <tr>
+            <td colspan="10" style="text-align: center; color: #999">
+              Click "Run Benchmarks" to start
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="benchmark-container">
+      <h3>Benchmark Area</h3>
+      <div id="container"></div>
+    </div>
+
+    <script type="module">
+      import {
+        runFrameworkBenchmarks,
+        runAdvancedBenchmarks,
+        getBenchmarks,
+        getAdvancedBenchmarks,
+        setDebugMode,
+      } from "./dist/runner.js";
+      import { vanillaSuite } from "./dist/vanilla.js";
+      import { balisesSuite } from "./dist/balises.js";
+      import { litSuite } from "./dist/lit.js";
+      import { reactSuite } from "./dist/react.js";
+      import { vueSuite } from "./dist/vue.js";
+      import { solidSuite } from "./dist/solid.js";
+      import { preactSuite } from "./dist/preact.js";
+      import { svelteSuite } from "./dist/svelte.js";
+
+      // Advanced suites (only vanilla and balises for now)
+      import { vanillaAdvancedSuite } from "./dist/vanilla-advanced.js";
+      import { balisesAdvancedSuite } from "./dist/balises-advanced.js";
+
+      const frameworks = {
+        vanilla: vanillaSuite,
+        balises: balisesSuite,
+        lit: litSuite,
+        react: reactSuite,
+        vue: vueSuite,
+        solid: solidSuite,
+        preact: preactSuite,
+        svelte: svelteSuite,
+      };
+
+      const advancedFrameworks = {
+        vanilla: vanillaAdvancedSuite,
+        balises: balisesAdvancedSuite,
+        // Other frameworks can be added later
+      };
+
+      const runBtn = document.getElementById("run-btn");
+      const progressEl = document.getElementById("progress");
+      const progressText = document.getElementById("progress-text");
+      const progressFill = document.getElementById("progress-fill");
+      const resultsBody = document.getElementById("results-body");
+      const resultsTable = document.getElementById("results-table");
+      const container = document.getElementById("container");
+      const summarySection = document.getElementById("summary-section");
+      const summaryCards = document.getElementById("summary-cards");
+      const comparisonBars = document.getElementById("comparison-bars");
+      const benchmarkMode = document.getElementById("benchmark-mode");
+
+      let isRunning = false;
+
+      function getSelectedFrameworks() {
+        const mode = benchmarkMode.value;
+        const availableFrameworks =
+          mode === "advanced" ? advancedFrameworks : frameworks;
+        const selected = [];
+        if (
+          document.getElementById("fw-vanilla").checked &&
+          availableFrameworks.vanilla
+        )
+          selected.push("vanilla");
+        if (
+          document.getElementById("fw-balises").checked &&
+          availableFrameworks.balises
+        )
+          selected.push("balises");
+        if (
+          document.getElementById("fw-lit").checked &&
+          availableFrameworks.lit
+        )
+          selected.push("lit");
+        if (
+          document.getElementById("fw-react").checked &&
+          availableFrameworks.react
+        )
+          selected.push("react");
+        if (
+          document.getElementById("fw-vue").checked &&
+          availableFrameworks.vue
+        )
+          selected.push("vue");
+        if (
+          document.getElementById("fw-solid").checked &&
+          availableFrameworks.solid
+        )
+          selected.push("solid");
+        return selected;
+      }
+
+      function getConfig() {
+        return {
+          warmupRuns: parseInt(
+            document.getElementById("warmup-runs").value,
+            10,
+          ),
+          measurementRuns: parseInt(
+            document.getElementById("measurement-runs").value,
+            10,
+          ),
+          verifyCorrectness:
+            document.getElementById("verify-correctness").checked,
+        };
+      }
+
+      /**
+       * Calculate geometric mean of normalized scores.
+       * This gives equal weight to each benchmark regardless of absolute time.
+       * Uses js-framework-benchmark methodology.
+       */
+      function calculateGeometricMean(allResults, benchmarks) {
+        // For each benchmark, find the minimum time (fastest)
+        const benchmarkMins = {};
+        for (const benchmark of benchmarks) {
+          let minTime = Infinity;
+          for (const result of allResults) {
+            const benchResult = result.results.find(
+              (r) => r.benchmark === benchmark.name,
+            );
+            if (benchResult && benchResult.mean < minTime) {
+              minTime = benchResult.mean;
+            }
+          }
+          benchmarkMins[benchmark.name] = minTime;
+        }
+
+        // For each framework, calculate normalized scores and geometric mean
+        const scores = [];
+        for (const result of allResults) {
+          const normalizedScores = [];
+          for (const benchmark of benchmarks) {
+            const benchResult = result.results.find(
+              (r) => r.benchmark === benchmark.name,
+            );
+            const minTime = benchmarkMins[benchmark.name];
+            if (benchResult && minTime > 0) {
+              // Normalized score: 1.0 = fastest, higher = slower
+              normalizedScores.push(benchResult.mean / minTime);
+            }
+          }
+
+          // Geometric mean = (product of all values) ^ (1/n)
+          // To avoid overflow, use: exp(mean(log(values)))
+          const logSum = normalizedScores.reduce(
+            (sum, score) => sum + Math.log(score),
+            0,
+          );
+          const geometricMean = Math.exp(logSum / normalizedScores.length);
+
+          scores.push({
+            framework: result.framework,
+            geometricMean,
+            normalizedScores,
+          });
+        }
+
+        return scores;
+      }
+
+      function updateResultsTable(allResults) {
+        const mode = benchmarkMode.value;
+        const benchmarks =
+          mode === "advanced" ? getAdvancedBenchmarks() : getBenchmarks();
+
+        // Build header
+        const headerRow = resultsTable.querySelector("thead tr");
+        headerRow.innerHTML = "<th>Benchmark</th>";
+        for (const result of allResults) {
+          headerRow.innerHTML += `<th>${result.framework}</th>`;
+        }
+
+        // Build body
+        resultsBody.innerHTML = "";
+        for (const benchmark of benchmarks) {
+          const tr = document.createElement("tr");
+
+          // Benchmark name
+          const tdName = document.createElement("td");
+          tdName.textContent = benchmark.name;
+          tr.appendChild(tdName);
+
+          // Find fastest for this benchmark
+          let minTime = Infinity;
+          let maxTime = 0;
+          const times = [];
+
+          for (const result of allResults) {
+            const benchResult = result.results.find(
+              (r) => r.benchmark === benchmark.name,
+            );
+            if (benchResult) {
+              times.push({
+                framework: result.framework,
+                mean: benchResult.mean,
+                stdDev: benchResult.stdDev,
+              });
+              minTime = Math.min(minTime, benchResult.mean);
+              maxTime = Math.max(maxTime, benchResult.mean);
+            }
+          }
+
+          // Add cells for each framework
+          for (const result of allResults) {
+            const benchResult = result.results.find(
+              (r) => r.benchmark === benchmark.name,
+            );
+            const td = document.createElement("td");
+
+            if (benchResult) {
+              let content = `${benchResult.mean.toFixed(2)} ms`;
+
+              // Add correctness indicator
+              if (benchResult.correctness) {
+                if (benchResult.correctness.valid) {
+                  content +=
+                    ' <span class="correctness-icon correctness-pass" title="Correctness verified">&#10003;</span>';
+                } else {
+                  const errors = benchResult.correctness.errors.join("\n");
+                  content += ` <span class="correctness-icon correctness-fail" title="${errors}">&#10007;</span>`;
+                }
+              }
+
+              td.innerHTML = content;
+
+              if (times.length > 1) {
+                if (benchResult.mean === minTime) {
+                  td.classList.add("fastest");
+                } else if (
+                  benchResult.mean === maxTime &&
+                  maxTime > minTime * 1.5
+                ) {
+                  td.classList.add("slowest");
+                }
+              }
+            } else {
+              td.textContent = "N/A";
+            }
+
+            tr.appendChild(td);
+          }
+
+          resultsBody.appendChild(tr);
+        }
+
+        // Calculate geometric mean scores
+        const geoScores = calculateGeometricMean(allResults, benchmarks);
+        const minGeo = Math.min(...geoScores.map((s) => s.geometricMean));
+        const maxGeo = Math.max(...geoScores.map((s) => s.geometricMean));
+
+        // Add geometric mean row (normalized score, lower is better)
+        const geoRow = document.createElement("tr");
+        geoRow.style.fontWeight = "bold";
+        geoRow.style.borderTop = "2px solid #333";
+
+        const geoLabel = document.createElement("td");
+        geoLabel.innerHTML =
+          'Geometric Mean <span style="font-weight: normal; font-size: 0.85em; color: #666">(lower is better)</span>';
+        geoRow.appendChild(geoLabel);
+
+        for (const score of geoScores) {
+          const td = document.createElement("td");
+          td.textContent = score.geometricMean.toFixed(2);
+
+          if (geoScores.length > 1) {
+            if (score.geometricMean === minGeo) {
+              td.className = "fastest";
+            } else if (
+              score.geometricMean === maxGeo &&
+              maxGeo > minGeo * 1.2
+            ) {
+              td.className = "slowest";
+            }
+          }
+
+          geoRow.appendChild(td);
+        }
+
+        resultsBody.appendChild(geoRow);
+      }
+
+      function updateSummary(allResults) {
+        const mode = benchmarkMode.value;
+        const benchmarks =
+          mode === "advanced" ? getAdvancedBenchmarks() : getBenchmarks();
+
+        // Calculate geometric mean scores (normalized, lower is better)
+        const geoScores = calculateGeometricMean(allResults, benchmarks);
+
+        // Find the best framework (lowest geometric mean)
+        const fastest = geoScores.reduce((a, b) =>
+          a.geometricMean < b.geometricMean ? a : b,
+        );
+
+        // Count benchmark wins for each framework
+        const winsMap = {};
+        for (const result of allResults) {
+          winsMap[result.framework] = 0;
+        }
+        for (const benchmark of benchmarks) {
+          const times = allResults.map((r) => ({
+            framework: r.framework,
+            time:
+              r.results.find((x) => x.benchmark === benchmark.name)?.mean ??
+              Infinity,
+          }));
+          const minTime = Math.min(...times.map((t) => t.time));
+          for (const t of times) {
+            if (t.time === minTime) {
+              winsMap[t.framework]++;
+            }
+          }
+        }
+
+        // Sort by geometric mean (best first)
+        const sortedScores = [...geoScores].sort(
+          (a, b) => a.geometricMean - b.geometricMean,
+        );
+
+        // Build summary cards
+        summaryCards.innerHTML = "";
+        for (const score of sortedScores) {
+          const isWinner = score === fastest;
+          const winsCount = winsMap[score.framework] ?? 0;
+
+          const card = document.createElement("div");
+          card.className = `summary-card ${isWinner ? "winner" : ""}`;
+          card.innerHTML = `
+            <h4>${score.framework}</h4>
+            <div class="value">${score.geometricMean.toFixed(2)}</div>
+            <div class="detail">
+              Geometric mean (1.00 = fastest)<br>
+              ${isWinner ? "Best overall performance" : `${score.geometricMean.toFixed(2)}x slower on average`}<br>
+              Wins: ${winsCount}/${benchmarks.length} benchmarks
+            </div>
+          `;
+          summaryCards.appendChild(card);
+        }
+
+        // Build comparison bars for each benchmark
+        comparisonBars.innerHTML = "";
+        for (const benchmark of benchmarks) {
+          const times = allResults.map((r) => ({
+            framework: r.framework,
+            time:
+              r.results.find((x) => x.benchmark === benchmark.name)?.mean ?? 0,
+          }));
+          const minTime = Math.min(...times.map((t) => t.time));
+          const maxTime = Math.max(...times.map((t) => t.time));
+
+          const benchContainer = document.createElement("div");
+          benchContainer.style.marginBottom = "15px";
+
+          const title = document.createElement("div");
+          title.style.fontWeight = "500";
+          title.style.marginBottom = "5px";
+          title.textContent = benchmark.name;
+          benchContainer.appendChild(title);
+
+          for (const { framework, time } of times) {
+            const ratio = time / minTime;
+            const percentage = (time / maxTime) * 100;
+            const isFastest = time === minTime;
+
+            const bar = document.createElement("div");
+            bar.className = "comparison-bar";
+
+            const barClass = isFastest
+              ? "bar-fastest"
+              : ratio < 1.5
+                ? "bar-normal"
+                : "bar-slow";
+
+            bar.innerHTML = `
+              <div class="comparison-bar-label">${framework}</div>
+              <div class="comparison-bar-track">
+                <div class="comparison-bar-fill ${barClass}" style="width: ${percentage}%">
+                  ${time.toFixed(2)} ms ${!isFastest ? `(${ratio.toFixed(2)}x)` : ""}
+                </div>
+              </div>
+            `;
+            benchContainer.appendChild(bar);
+          }
+
+          comparisonBars.appendChild(benchContainer);
+        }
+
+        summarySection.classList.add("visible");
+      }
+
+      async function runBenchmarks() {
+        if (isRunning) return;
+
+        const mode = benchmarkMode.value;
+        const selectedFrameworks = getSelectedFrameworks();
+        if (selectedFrameworks.length === 0) {
+          alert(
+            mode === "advanced"
+              ? "Please select at least one framework. Note: Advanced mode currently only supports Vanilla and Balises."
+              : "Please select at least one framework",
+          );
+          return;
+        }
+
+        isRunning = true;
+        runBtn.disabled = true;
+        progressEl.classList.add("active");
+
+        const config = getConfig();
+        const allResults = [];
+        const totalFrameworks = selectedFrameworks.length;
+        const currentFrameworks =
+          mode === "advanced" ? advancedFrameworks : frameworks;
+        const runnerFn =
+          mode === "advanced" ? runAdvancedBenchmarks : runFrameworkBenchmarks;
+
+        // Enable debug mode if checked
+        const debugEnabled = document.getElementById("debug-mode").checked;
+        setDebugMode(debugEnabled);
+
+        try {
+          for (
+            let fwIndex = 0;
+            fwIndex < selectedFrameworks.length;
+            fwIndex++
+          ) {
+            const fwName = selectedFrameworks[fwIndex];
+            const suite = currentFrameworks[fwName];
+
+            if (!suite) continue;
+
+            const results = await runnerFn(
+              suite,
+              container,
+              config,
+              (current, total, name) => {
+                const overallProgress =
+                  ((fwIndex * total + current) / (totalFrameworks * total)) *
+                  100;
+                progressText.textContent = `${fwName}: ${name} (${current}/${total})`;
+                progressFill.style.width = `${overallProgress}%`;
+              },
+            );
+
+            allResults.push(results);
+          }
+
+          updateResultsTable(allResults);
+          updateSummary(allResults);
+          progressText.textContent = "Complete!";
+          progressFill.style.width = "100%";
+        } catch (error) {
+          console.error("Benchmark error:", error);
+          progressText.textContent = `Error: ${error.message}`;
+        } finally {
+          isRunning = false;
+          runBtn.disabled = false;
+
+          setTimeout(() => {
+            progressEl.classList.remove("active");
+          }, 2000);
+        }
+      }
+
+      runBtn.addEventListener("click", runBenchmarks);
+    </script>
+  </body>
+</html>
