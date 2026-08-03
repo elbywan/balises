@@ -2610,6 +2610,38 @@ describe("Template.render()", () => {
         assert.deepStrictEqual(finallyCalledFor, [1, 2]);
       });
     });
+
+    it("should not render stale values after the binding is replaced mid-await", async () => {
+      const mode = signal(true);
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+
+      const genA = async function* () {
+        await gate; // mid-await when the switch happens
+        yield html`<span class="stale-a">A2</span>`;
+      };
+      const genB = async function* () {
+        yield html`<span class="fresh-b">B1</span>`;
+      };
+
+      const { fragment, dispose } = html`<div>
+        ${() => (mode.value ? genA : genB)}
+      </div>`.render();
+      document.body.appendChild(fragment);
+
+      // Switch to B while A is awaiting
+      mode.value = false;
+      await tick();
+      // A's await resolves after the switch
+      release();
+      await tick();
+
+      // A's late yield must not appear in the DOM
+      assert.strictEqual(document.querySelectorAll(".stale-a").length, 0);
+      assert.strictEqual(document.querySelector(".fresh-b")?.textContent, "B1");
+
+      dispose();
+    });
   });
 
   describe("template caching", () => {
