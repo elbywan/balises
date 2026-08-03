@@ -387,14 +387,100 @@ On the client the same generator hydrates its settled content without refetching
 
 ### Writing SSR-compatible components
 
-Components are pure `(state, props) -> template` functions; the server executes the same functions in Node, so:
+Components are pure `(state, props) -> template` functions; the server executes the same functions in Node, so the rules follow from that.
 
-- **No browser globals in component bodies** - `window`, `document`, `localStorage`, `navigator` (and `new Audio()`, `setTimeout` side effects) crash the build or leak in the build process. Events only fire client-side, so referencing the browser from `@click` handlers is fine.
-- **The template structure must be identical on both sides** - same tags, static text and plugins (`html.with(...)`). Never branch the structure on the environment (`typeof window === "undefined" ? ... : ...`); conditional content goes through `match()`/`when()`.
-- **Data loading lives in async generators** (see above), not in `effect()` or `connectedCallback` - those run in Node at build time with no server path.
-- **Client-only values never shape the template** - the server renders defaults; restore localStorage/auth state before hydrating and the bindings converge in place.
-- **Use valid HTML nesting** - the browser parser restructures invalid nesting (button-in-button), the walk detects the mismatch and re-renders the subtree (correct, but the server markup is not reused).
-- **Keep custom elements thin** - they are browser-only shells: restore state, then `hydrate(template, this)` or render fresh, with the template coming from a shared factory both sides import.
+**1. No browser globals in component bodies.** `window`, `document`, `localStorage`, `navigator`, `new Audio()`, `setTimeout` side effects crash the build or leak in the build process. Events only fire client-side, so referencing the browser from `@click` handlers is fine:
+
+```ts
+// SSR-safe: pure function of state -> template
+function UserCard({ user, onSelect }) {
+  return html`<article @click=${onSelect}>
+    <h3>${() => user.name}</h3>
+    <p>${() => user.bio}</p>
+  </article>`;
+}
+
+// Browser-only: crashes server-side
+function UserCard({ user }) {
+  const el = document.createElement("div"); // ReferenceError in Node
+  return html`<div>${user.name}</div>`;
+}
+```
+
+**2. The template structure must be identical on both sides.** Same tags, static text and plugins (`html.with(...)`). Never branch the structure on the environment; conditional _content_ goes through `match()`/`when()`:
+
+```ts
+// Wrong: server sees <p>, client sees <span> - the walk bails and the
+// whole subtree re-renders instead of being reused.
+return typeof window === "undefined"
+  ? html`<p>${user.name}</p>`
+  : html`<span>${user.name}</span>`;
+
+// Right: one structure, conditional content through match()/when().
+return html`<div>${user.name}</div>`;
+```
+
+**3. Data loading lives in async generators** (see "Fetching data" above), not in `effect()` or `connectedCallback` - those run in Node at build time with no server path, so the SSR page would show the empty/loading state:
+
+```ts
+// Right: the generator is the only loading shape with a server path.
+return html`<div>
+  ${async function* (settled) {
+    const id = userId.value;
+    if (settled) return settled;
+    if (user.value?.id === id) return UserCard(user.value);
+    yield html`<p>Loading...</p>`;
+    const u = await fetchUser(id);
+    user.value = u;
+    return UserCard(u);
+  }}
+</div>`;
+
+// Wrong: this effect runs in Node at build time and never affects the
+// server-rendered markup.
+effect(() => {
+  fetchUser(userId.value).then((u) => (user.value = u));
+});
+return html`<div>${UserCard(user)}</div>`;
+```
+
+**4. Client-only values never shape the template.** The server renders defaults; restore localStorage/auth state _before_ hydrating and the bindings converge in place:
+
+```ts
+// Wrong: reads the browser at component-build time (and the structure
+// would differ between server and client).
+function Header() {
+  const lang = localStorage.getItem("lang") ?? "en";
+  return html`<p>${lang === "en" ? "Hello" : "Bonjour"}</p>`;
+}
+
+// Right: the value is reactive state restored before hydrating.
+function Header({ lang }) {
+  return html`<p>${() => (lang.value === "en" ? "Hello" : "Bonjour")}</p>`;
+}
+```
+
+**5. Use valid HTML nesting.** The browser parser restructures invalid nesting (a `<button>` inside a `<button>`, a `<div>` inside a `<table>`), the walk detects the mismatch and re-renders the subtree - correct, but the server markup is not reused. Valid nesting keeps the reuse.
+
+**6. Keep custom elements thin.** They are browser-only shells: restore state, then `hydrate(template, this)` or render fresh, with the template coming from a shared factory both sides import:
+
+```ts
+// app.ts - imported by Node AND the browser
+export function createApp(stores) {
+  return html`<div>${/* ... */}</div>`;
+}
+```
+
+```ts
+// element.ts - browser only
+class MyApp extends HTMLElement {
+  connectedCallback() {
+    const template = createApp(this.#stores);
+    if (this.firstChild) hydrate(template, this);
+    else this.appendChild(template.render().fragment);
+  }
+}
+```
 
 ### What works
 
