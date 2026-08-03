@@ -312,6 +312,19 @@ function hydrateBound(
   if (typeof v === "function") v = wrapFn(v as () => unknown, disposers);
   if (isSignal(v)) {
     disposers.push(v.subscribe(() => update((v as Reactive<unknown>).value)));
+    // Client-only state may have changed before hydration attached this
+    // binding (e.g. favorites restored from localStorage). Apply the
+    // current primitive value when it differs from the adopted markup;
+    // complex values (templates, arrays) keep the server content.
+    const current = (v as Reactive<unknown>).value;
+    if (
+      (typeof current === "string" ||
+        typeof current === "number" ||
+        typeof current === "bigint") &&
+      String(current) !== currentNodes.map((n) => n.textContent ?? "").join("")
+    ) {
+      update(current);
+    }
   }
   disposers.push(clear);
 }

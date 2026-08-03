@@ -230,4 +230,28 @@ describe("hydrate with renderToStringAsync", () => {
 
     dispose();
   });
+
+  it("should hydrate reactive bindings inside the settled async content", async () => {
+    const count = signal(1);
+    const template = html`<div>
+      ${async function* (settled?: unknown) {
+        if (settled) return settled;
+        return html`<p class="card">Count: ${count}</p>`;
+      }}
+    </div>`;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = await renderToStringAsync(template);
+    const p = container.querySelector("p")!;
+    const dispose = hydrate(template, container);
+    // The settled content's binding is live: same node, updated text.
+    // Bindings attach in the hydration microtask - wait for it.
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.strictEqual(p.textContent, "Count: 1");
+    count.value = 7;
+    assert.strictEqual(p.textContent, "Count: 7");
+    assert.strictEqual(container.querySelector("p"), p);
+    dispose();
+  });
 });

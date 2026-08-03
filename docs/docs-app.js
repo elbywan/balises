@@ -120,6 +120,11 @@ const EXAMPLES = [
     desc: "Pokédex browser and turn-based battle game",
   },
   {
+    href: "./examples/ssr/",
+    name: "SSR Pokédex",
+    desc: "Server-rendered at build time, hydrated on the client",
+  },
+  {
     href: "./examples/performance/",
     name: "Performance Demo",
     desc: "Surgical reactivity at high speed",

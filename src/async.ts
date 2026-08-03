@@ -27,8 +27,8 @@ import {
   type Subscriber,
   type TrackableSource,
 } from "./signals/context.js";
-import { renderValue, type InterpolationPlugin } from "./template.js";
-import { registerHydrateHandler } from "./hydrate.js";
+import { renderValue, Template, type InterpolationPlugin } from "./template.js";
+import { registerHydrateHandler, type HydrateRecurse } from "./hydrate.js";
 import { isSignal, type Reactive } from "./signals/index.js";
 
 /** Reactive source type - TrackableSource may or may not be subscribable */
@@ -125,13 +125,18 @@ const asyncPlugin: InterpolationPlugin = (value) => {
  * Hydrate server-rendered async content: the region holds the settled
  * content rendered by renderToStringAsync; it is adopted and passed to
  * the generator as the `settled` handle so restarts can preserve it.
+ * The settled content's own bindings are hydrated in place: the
+ * generator is run once without the seed (it must produce its settled
+ * template from already-available state) and the region is walked with
+ * it. Inner disposers go into the seed's childDisposers so a restart
+ * or dispose cleans them up.
  * @internal
  */
 registerHydrateHandler((value) => {
   if (typeof value !== "function" || !isAsyncGeneratorFunction(value)) {
     return null;
   }
-  return (contentStart, anchor, disposers) => {
+  return (contentStart, anchor, disposers, recurse: HydrateRecurse) => {
     const nodes: Node[] = [];
     let node = contentStart;
     while (node && node !== anchor) {
@@ -143,6 +148,17 @@ registerHydrateHandler((value) => {
       nodes,
       childDisposers: [],
     };
+    // Learn the settled template and hydrate the region's inner
+    // bindings. The generator must settle without network access here
+    // (e.g. from state already restored from the page payload).
+    void (async () => {
+      const gen = (value as AsyncGenFn)();
+      let result = await gen.next();
+      while (!result.done) result = await gen.next();
+      if (result.value instanceof Template) {
+        recurse(result.value, nodes[0] ?? null, anchor, seed.childDisposers);
+      }
+    })();
     bindAsyncGenerator(value as AsyncGenFn, anchor, disposers, seed);
   };
 });

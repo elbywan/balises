@@ -92,7 +92,7 @@
     "check": "yarn format && yarn lint:fix && yarn typecheck",
     "pretty": "prettier --write .",
     "examples": "rolldown -c examples/rolldown.config.ts && yarn dlx serve examples",
-    "examples:build": "rolldown -c examples/rolldown.config.ts && cp docs/base.css examples/ && cp docs/example.css examples/",
+    "examples:build": "rolldown -c examples/rolldown.config.ts && cp docs/base.css examples/ && cp docs/example.css examples/ && node --import tsx/esm examples/ssr/build-html.ts",
     "bench": "yarn workspace balises-benchmarks start --isolate",
     "bench:update-readme": "yarn workspace balises-benchmarks update-readme",
     "bench:self": "yarn workspace balises-benchmarks start:self --isolate",
