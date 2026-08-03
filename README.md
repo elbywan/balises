@@ -32,8 +32,8 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Function Components](#function-components)
 - [Memo Components](#memo-components)
 - [Async Generators](#async-generators)
-- [Server-Side Rendering](#server-side-rendering)
 - [Web Components](#web-components)
+- [Server-Side Rendering](#server-side-rendering)
 - [Template Syntax](#template-syntax)
 - [Reactivity API](#reactivity-api)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
@@ -227,6 +227,54 @@ html`
 
 The `settled` parameter is `undefined` on first run, and contains an opaque handle to the previous render on restarts. Returning it preserves existing DOM nodes and reactive bindings.
 
+## Web Components
+
+For reusable widgets that need encapsulation or browser-native lifecycle, balises works naturally with the Web Components API:
+
+```ts
+import { html, signal, effect } from "balises";
+
+class Counter extends HTMLElement {
+  #count = signal(0);
+  #dispose?: () => void;
+
+  connectedCallback() {
+    // Auto-sync to localStorage
+    const syncEffect = effect(() => {
+      localStorage.setItem("counter", String(this.#count.value));
+    });
+
+    const { fragment, dispose } = html`
+      <div>
+        <p>Count: ${this.#count}</p>
+        <button @click=${() => this.#count.update((n) => n - 1)}>-</button>
+        <button @click=${() => this.#count.update((n) => n + 1)}>+</button>
+      </div>
+    `.render();
+
+    this.appendChild(fragment);
+    this.#dispose = () => {
+      syncEffect();
+      dispose();
+    };
+  }
+
+  disconnectedCallback() {
+    this.#dispose?.();
+  }
+}
+
+customElements.define("x-counter", Counter);
+```
+
+Use it in your HTML:
+
+```html
+<x-counter></x-counter>
+```
+
+You can build entire apps this way, or just add interactive widgets to existing pages. No build step required if you use it from a CDN.
+
 ## Server-Side Rendering
 
 SSR is opt-in (`balises/ssr` + `balises/hydrate`) and never touches the base bundle: `renderToString` produces the HTML for a template in a DOM-less Node environment, and `hydrate` attaches the same reactive bindings to that HTML on the client - reusing the server markup instead of re-rendering it.
@@ -335,54 +383,6 @@ On the client the same generator hydrates its settled content without refetching
 - `renderToString` throws on async generators - use `renderToStringAsync`.
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
-
-## Web Components
-
-For reusable widgets that need encapsulation or browser-native lifecycle, balises works naturally with the Web Components API:
-
-```ts
-import { html, signal, effect } from "balises";
-
-class Counter extends HTMLElement {
-  #count = signal(0);
-  #dispose?: () => void;
-
-  connectedCallback() {
-    // Auto-sync to localStorage
-    const syncEffect = effect(() => {
-      localStorage.setItem("counter", String(this.#count.value));
-    });
-
-    const { fragment, dispose } = html`
-      <div>
-        <p>Count: ${this.#count}</p>
-        <button @click=${() => this.#count.update((n) => n - 1)}>-</button>
-        <button @click=${() => this.#count.update((n) => n + 1)}>+</button>
-      </div>
-    `.render();
-
-    this.appendChild(fragment);
-    this.#dispose = () => {
-      syncEffect();
-      dispose();
-    };
-  }
-
-  disconnectedCallback() {
-    this.#dispose?.();
-  }
-}
-
-customElements.define("x-counter", Counter);
-```
-
-Use it in your HTML:
-
-```html
-<x-counter></x-counter>
-```
-
-You can build entire apps this way, or just add interactive widgets to existing pages. No build step required if you use it from a CDN.
 
 ## Template Syntax
 
