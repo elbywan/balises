@@ -1015,8 +1015,20 @@ Performance comparison of Balises against other popular reactive libraries. Benc
 │ hyperactiv@0.11.3 │ #8            │ #8          │ #8             │ #8                 │ #8          │ #8           │ 8.0      │
 ├───────────────────┼───────────────┼─────────────┼────────────────┼────────────────────┼─────────────┼──────────────┼──────────┤
 │ mobx@7.0.0        │ #9            │ #9          │ #9             │ #9                 │ #9          │ #9           │ 9.0      │
-└───────────────────┴───────────────┴─────────────┴────────────────┴────────────────────┴─────────────┴──────────────┴──────────┘
+└───────────────────┴───────────────┴─────────────┴────────────────┼────────────────────┼─────────────┼──────────────┼──────────┘
 ```
+
+### DOM Benchmarks
+
+Browser-based DOM rendering benchmarks (js-framework-benchmark methodology) live in [`bench-dom/`](bench-dom/README.md): a Playwright + CDP-tracing harness measuring click→commit script duration across 8 scenarios (create/append/update/select/swap/remove/clear) against Vue 3, React, Solid, Preact, Svelte, lit-html, and vanilla.
+
+```bash
+yarn bench-dom:run      # Full suite (all frameworks, 10 runs each)
+yarn bench-dom:quick    # Quick subset
+yarn bench-dom:check    # Full suite + success-criteria gate (exit 0 = all pass)
+```
+
+Current standing: balises is a strong #2–3 overall (geomean ~1.1–1.2× behind the leader), winning swap/remove and near-parity on selection/update scenarios. Creation scenarios trail Solid (compiled templates vs runtime tagged-template instantiation), and clear trails coarse-grained frameworks by construction — see [bench-dom/README.md](bench-dom/README.md) for the measured breakdown.
 
 **Scenarios:**
 
