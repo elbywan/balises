@@ -399,7 +399,12 @@ function hydrateBound(
     // current primitive value when it differs from the adopted markup;
     // complex values (templates, arrays) keep the server content.
     const current = (v as Reactive<unknown>).value;
-    if (
+    if (current instanceof Template && contentStart) {
+      // A signal holding a template: hydrate the template's own
+      // bindings in place; the region's inner markers are consumed and
+      // the disposers are owned by this binding's clear.
+      hydrateWalk(current, contentStart, childDisposers);
+    } else if (
       (typeof current === "string" ||
         typeof current === "number" ||
         typeof current === "bigint") &&
@@ -430,6 +435,11 @@ function hydrateBound(
  * ```
  */
 export function hydrate(template: Template, target: ParentNode): () => void {
+  if (!target.firstChild) {
+    throw new Error(
+      "[balises/hydrate] The target is empty - there is no server-rendered markup to hydrate. Render the template instead, or call hydrate on the element that received the markup.",
+    );
+  }
   const disposers: (() => void)[] = [];
   hydrateWalk(template, target.firstChild, disposers);
   return () => {

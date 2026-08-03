@@ -457,12 +457,17 @@ export class PokemonAppElement extends ElementBase {
       if (savedLanguage && savedLanguage !== payload.language) {
         sharedState.language = savedLanguage;
         void (async () => {
-          const names = await this.#pokemonService.fetchLocalizedNames(
-            payload.pokemon!,
-            savedLanguage,
-          );
-          pokedexState.pokemonName = names.pokemonName;
-          pokedexState.typeNames = names.typeNames;
+          try {
+            const names = await this.#pokemonService.fetchLocalizedNames(
+              payload.pokemon!,
+              savedLanguage,
+            );
+            pokedexState.pokemonName = names.pokemonName;
+            pokedexState.typeNames = names.typeNames;
+          } catch {
+            // Network failure: keep the server-rendered names; the next
+            // language change retries.
+          }
         })();
       }
     }

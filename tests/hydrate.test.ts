@@ -44,6 +44,35 @@ describe("hydrate", () => {
     dispose();
   });
 
+  it("should throw when hydrating an empty target", () => {
+    const template = html`<p>${signal(1)}</p>`;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    assert.throws(
+      () => hydrate(template, container),
+      /no server-rendered markup/,
+    );
+    container.remove();
+  });
+
+  it("should hydrate a signal holding a template", () => {
+    const inner = signal("x");
+    const holder = signal(html`<span>${inner}</span>`);
+    const template = html`<div>${holder}</div>`;
+    const { container, dispose } = setup(template);
+    const span = container.querySelector("span")!;
+    assert.strictEqual(span.textContent, "x");
+    // The inner binding is live without touching the outer signal.
+    inner.value = "y";
+    assert.strictEqual(span.textContent, "y");
+    assert.strictEqual(container.querySelector("span"), span);
+    // Replacing the whole template re-renders.
+    holder.value = html`<b>z</b>`;
+    assert.strictEqual(container.querySelector("b")?.textContent, "z");
+    assert.strictEqual(container.querySelector("span"), null);
+    dispose();
+  });
+
   it("should hydrate reactive attributes and update them", () => {
     const cls = signal("active");
     const template = html`<div class="box ${cls}"></div>`;
