@@ -31,7 +31,7 @@
 
 import { computed } from "./signals/computed.js";
 import { Template, renderValue, type InterpolationPlugin } from "./template.js";
-import { registerHydrateHandler } from "./hydrate.js";
+import { hydrateWalk, registerHydrateHandler } from "./hydrate.js";
 import { MATCH } from "./descriptors.js";
 
 export { MATCH } from "./descriptors.js";
@@ -147,9 +147,10 @@ interface BranchEntry {
  * Plugin that handles match/when descriptors.
  * Register with: const html = baseHtml.with(matchPlugin);
  */
-// Hydration: the selector may have changed since the server render, so
-// the current branch is rendered fresh (mirroring the client binder) and
-// the branch selector is subscribed for subsequent switches.
+// Hydration: adopt the server-rendered branch when the current branch's
+// markup aligns with it (the selector did not change since the render);
+// otherwise the selector changed and the current branch is rendered
+// fresh. The branch selector is subscribed for subsequent switches.
 registerHydrateHandler((value) => {
   if (!isMatchDescriptor(value)) return null;
   return (contentStart, anchor, disposers) => {
@@ -167,14 +168,26 @@ registerHydrateHandler((value) => {
       const factory = value.cases[keyComputed.value] ?? value.cases["_"];
       if (factory) renderValue(anchor, factory(), nodes, childDisposers);
     };
-    // Discard the server-rendered branch.
-    let node = contentStart;
-    while (node && node !== anchor) {
-      const next = node.nextSibling;
-      (node as ChildNode).remove();
-      node = next;
+    // Collect the server-rendered region so switches can clear it.
+    let regionNode = contentStart;
+    while (regionNode && regionNode !== anchor) {
+      nodes.push(regionNode);
+      regionNode = regionNode.nextSibling;
     }
-    renderBranch();
+    let adopted = false;
+    if (contentStart) {
+      const factory = value.cases[keyComputed.value] ?? value.cases["_"];
+      if (factory) {
+        const walkDisposers: (() => void)[] = [];
+        adopted = hydrateWalk(factory(), contentStart, walkDisposers).aligned;
+        if (adopted) {
+          for (const f of walkDisposers) disposers.push(f);
+        } else {
+          for (const f of walkDisposers) f();
+        }
+      }
+    }
+    if (!adopted) renderBranch();
     disposers.push(keyComputed.subscribe(renderBranch));
     disposers.push(clear);
   };

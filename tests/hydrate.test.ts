@@ -158,10 +158,17 @@ describe("hydrate", () => {
         b: () => html`<span class="mb">B</span>`,
       })}
     </div>`;
-    const c2 = setup(tmpl2).container;
+    const c2 = document.createElement("div");
+    document.body.appendChild(c2);
+    c2.innerHTML = renderToString(tmpl2);
+    const maBefore = c2.querySelector(".ma")!;
+    const dispose2 = hydrate(tmpl2, c2);
+    assert.strictEqual(c2.querySelector(".ma"), maBefore, "branch adopted");
     assert.strictEqual(c2.querySelector(".ma")?.textContent, "A");
     mode.value = "b";
     assert.strictEqual(c2.querySelector(".mb")?.textContent, "B");
+    assert.strictEqual(c2.querySelector(".ma"), null);
+    dispose2();
     c2.remove();
   });
 
@@ -228,6 +235,35 @@ describe("hydrate with renderToStringAsync", () => {
       "preserved (settled) content",
     );
 
+    dispose();
+  });
+
+  it("should hydrate reactive bindings inside array items", () => {
+    const lang = signal("en");
+    const options = ["en", "fr"].map(
+      (code) =>
+        html`<option value=${code} .selected=${() => lang.value === code}>
+          ${code === "en" ? "English" : "Français"}
+        </option>`,
+    );
+    const template = html`<select>
+      ${options}
+    </select>`;
+    const { container, dispose } = setup(template);
+    const select = container.querySelector("select") as HTMLSelectElement;
+    assert.strictEqual(
+      select.querySelector<HTMLOptionElement>('option[value="en"]')?.selected,
+      true,
+    );
+    lang.value = "fr";
+    assert.strictEqual(
+      select.querySelector<HTMLOptionElement>('option[value="fr"]')?.selected,
+      true,
+    );
+    assert.strictEqual(
+      select.querySelector<HTMLOptionElement>('option[value="en"]')?.selected,
+      false,
+    );
     dispose();
   });
 

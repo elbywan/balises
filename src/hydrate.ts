@@ -72,13 +72,21 @@ function getHydrateHandler(value: unknown): HydrateFn | null {
 
 /** Walk server-rendered DOM in lockstep with a template's structure.
  *  @internal Exported for plugin hydration (e.g. each rows). */
+/** Result of a hydration walk: whether the template aligned with the
+ *  server markup, and the node the walk ended on (for chained walks). */
+export interface HydrateWalkResult {
+  aligned: boolean;
+  end: Node | null;
+}
+
 export function hydrateWalk(
   tpl: Template,
   startNode: Node | null,
   disposers: (() => void)[],
-): void {
+): HydrateWalkResult {
   const [strings, values] = ssrTemplateData.get(tpl)!;
   let cursor = startNode;
+  let aligned = true;
   const elementStack: Element[] = [];
   const recurse: HydrateRecurse = (value, contentStart, anchor, d) => {
     hydrateSlotValue(tpl, value, contentStart, anchor, d, recurse);
@@ -86,16 +94,21 @@ export function hydrateWalk(
 
   new HTMLParser().parseTemplate(strings, {
     onText: () => {
-      // The SSR emits exactly one text node per static text chunk
-      // (adjacent dynamic content is separated by marker comments).
-      cursor = cursor ? cursor.nextSibling : null;
+      // The SSR emits one text node per static chunk, but adjacent
+      // chunks (e.g. split by template comments) merge into a single
+      // DOM text node - only advance when the cursor is on a text node.
+      if (cursor && cursor.nodeType === 3) cursor = cursor.nextSibling;
     },
 
     onOpenTag: (tag, attrs, selfClose) => {
       // Advance to the next element.
       while (cursor && cursor.nodeType !== 1) cursor = cursor.nextSibling;
       const el = cursor as Element | null;
-      if (!el) return;
+      if (!el) {
+        aligned = false;
+
+        return;
+      }
 
       for (const [name, statics, slots] of attrs) {
         if (!slots.length) continue;
@@ -166,7 +179,11 @@ export function hydrateWalk(
         cursor = cursor.nextSibling;
       }
       const open = cursor as Comment | null;
-      if (!open) return; // Malformed SSR markup - nothing to bind.
+      if (!open) {
+        aligned = false; // Malformed SSR markup - nothing to bind.
+
+        return;
+      }
       // Walk to the matching close (anchor) comment, tracking nesting.
       let depth = 1;
       let node = open.nextSibling;
@@ -183,7 +200,11 @@ export function hydrateWalk(
         node = node.nextSibling;
       }
       const anchor = node as Comment | null;
-      if (!anchor) return;
+      if (!anchor) {
+        aligned = false;
+
+        return;
+      }
       // The open marker has served its purpose (separating the dynamic
       // content from static text at parse time); runtime insertions do
       // not merge text nodes, so it can go.
@@ -192,6 +213,8 @@ export function hydrateWalk(
       cursor = anchor.nextSibling;
     },
   });
+
+  return { aligned, end: cursor };
 }
 
 /**
@@ -216,7 +239,15 @@ function hydrateSlotValue(
     return;
   }
   if (Array.isArray(value)) {
-    hydrateBound(value, contentStart, anchor, disposers);
+    // Walk each template item in lockstep with the region (the server
+    // rendered them back to back); primitives and signals keep their
+    // server-rendered content.
+    let node = contentStart;
+    for (const item of value.flat()) {
+      if (item instanceof Template && node) {
+        node = hydrateWalk(item, node, disposers).end;
+      }
+    }
     return;
   }
   // Plugin descriptor types (each/match/memo/async) register handlers.
