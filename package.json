@@ -72,6 +72,14 @@
     "./memo": {
       "import": "./dist/esm/memo.js",
       "types": "./dist/esm/memo.d.ts"
+    },
+    "./ssr": {
+      "import": "./dist/esm/ssr.js",
+      "types": "./dist/esm/ssr.d.ts"
+    },
+    "./hydrate": {
+      "import": "./dist/esm/hydrate.js",
+      "types": "./dist/esm/hydrate.d.ts"
     }
   },
   "scripts": {
@@ -83,8 +91,8 @@
     "format": "prettier --write .",
     "check": "yarn format && yarn lint:fix && yarn typecheck",
     "pretty": "prettier --write .",
-    "examples": "rolldown -c examples/rolldown.config.ts && yarn dlx serve examples",
-    "examples:build": "rolldown -c examples/rolldown.config.ts && cp docs/base.css examples/ && cp docs/example.css examples/",
+    "examples": "yarn examples:build && yarn dlx serve examples",
+    "examples:build": "rolldown -c examples/rolldown.config.ts && cp docs/base.css examples/ && cp docs/example.css examples/ && node --import tsx/esm examples/pokemon/build-html.ts",
     "bench": "yarn workspace balises-benchmarks start --isolate",
     "bench:update-readme": "yarn workspace balises-benchmarks update-readme",
     "bench:self": "yarn workspace balises-benchmarks start:self --isolate",
@@ -100,7 +108,8 @@
     "bench-dom:quick": "yarn workspace balises-dom-benchmarks build && node --import tsx/esm bench-dom/src/playwright-runner.ts --quick",
     "bench-dom:check": "yarn bench-dom:run && node --import tsx/esm bench-dom/src/check-standings.ts",
     "docs": "yarn docs:build && yarn dlx serve _site",
-    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/*.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/ && cp -r dist/esm _site/examples/balises-esm"
+    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/*.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/ && cp -r dist/esm _site/examples/balises-esm",
+    "ssr:smoke": "yarn examples:build && node --import tsx/esm scripts/ssr-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

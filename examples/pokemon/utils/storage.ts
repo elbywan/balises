@@ -51,7 +51,11 @@ function isValidFavorite(item: unknown): item is FavoritePokemon {
 /** Load favorites from localStorage with validation */
 export function loadFavorites(): FavoritePokemon[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.FAVORITES);
+    // Server-side (SSR build): no localStorage, start empty.
+    const saved =
+      typeof localStorage === "undefined"
+        ? null
+        : localStorage.getItem(STORAGE_KEYS.FAVORITES);
     if (saved) {
       const parsed: unknown = JSON.parse(saved);
       if (Array.isArray(parsed)) {
@@ -71,7 +75,10 @@ export function loadFavorites(): FavoritePokemon[] {
 /** Load roster from localStorage with validation, returns default roster if invalid */
 export function loadRoster(): number[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.ROSTER);
+    const saved =
+      typeof localStorage === "undefined"
+        ? null
+        : localStorage.getItem(STORAGE_KEYS.ROSTER);
     if (saved) {
       const parsed: unknown = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {

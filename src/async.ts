@@ -27,7 +27,12 @@ import {
   type Subscriber,
   type TrackableSource,
 } from "./signals/context.js";
-import { renderValue, type InterpolationPlugin } from "./template.js";
+import { renderValue, Template, type InterpolationPlugin } from "./template.js";
+import {
+  clearRegion,
+  registerHydrateHandler,
+  type HydrateRecurse,
+} from "./hydrate.js";
 import { isSignal, type Reactive } from "./signals/index.js";
 
 /** Reactive source type - TrackableSource may or may not be subscribable */
@@ -82,6 +87,8 @@ export type AsyncGeneratorContext<T extends object = Record<string, unknown>> =
 interface RenderedContentInternal extends RenderedContent {
   readonly nodes: Node[];
   readonly childDisposers: (() => void)[];
+  /** Node before the hydrated region; region clears walk back to it. */
+  readonly boundary: Node | null;
 }
 
 /** Async generator function type */
@@ -92,8 +99,9 @@ type AsyncGenFn = (
 
 /**
  * Check if a value is an async generator function.
+ * @internal Exported for the SSR plugin.
  */
-function isAsyncGeneratorFunction(
+export function isAsyncGeneratorFunction(
   value: unknown,
 ): value is AsyncGeneratorFunction {
   if (typeof value !== "function") return false;
@@ -118,6 +126,76 @@ const asyncPlugin: InterpolationPlugin = (value) => {
     bindAsyncGenerator(value as AsyncGenFn, marker, disposers);
   };
 };
+
+/**
+ * Hydrate server-rendered async content: the region holds the settled
+ * content rendered by renderToStringAsync; it is adopted and passed to
+ * the generator as the `settled` handle so restarts can preserve it.
+ * The settled content's own bindings are hydrated in place: the
+ * generator is run once without the seed (it must produce its settled
+ * template from already-available state) and the region is walked with
+ * it. Inner disposers go into the seed's childDisposers so a restart
+ * or dispose cleans them up.
+ * @internal
+ */
+registerHydrateHandler((value) => {
+  if (typeof value !== "function" || !isAsyncGeneratorFunction(value)) {
+    return null;
+  }
+  return (contentStart, anchor, disposers, recurse: HydrateRecurse) => {
+    const nodes: Node[] = [];
+    let node = contentStart;
+    while (node && node !== anchor) {
+      nodes.push(node);
+      node = node.nextSibling;
+    }
+    const seed: RenderedContentInternal = {
+      __brand: "RenderedContent" as const,
+      nodes,
+      childDisposers: [],
+      boundary: contentStart?.previousSibling ?? null,
+    };
+    // Learn the settled template and hydrate the region's inner
+    // bindings. The generator must settle without network access here
+    // (e.g. from state already restored from the page payload). If the
+    // settled content does not align with the region (e.g. the route
+    // changed since the render), replace it with a fresh render.
+    void (async () => {
+      // The generator may throw (e.g. a fetch error it does not catch).
+      // The bound generator owns the error path; this walk-instance only
+      // learns the settled template, so errors are ignored here.
+      let result: IteratorResult<unknown>;
+      try {
+        const gen = (value as AsyncGenFn)();
+        result = await gen.next();
+        while (!result.done) result = await gen.next();
+      } catch {
+        return;
+      }
+      if (result.value instanceof Template) {
+        const aligned = recurse(
+          result.value,
+          nodes[0] ?? null,
+          anchor,
+          seed.childDisposers,
+        );
+        if (!aligned) {
+          // The binding may have replaced the region while the walk ran
+          // (both run the generator's fetch path): clear whatever
+          // currently sits between the region boundary and the anchor,
+          // then render the settled content fresh.
+          for (const f of seed.childDisposers) f();
+          seed.childDisposers.length = 0;
+          clearRegion(seed.boundary ?? null, anchor);
+          nodes.length = 0;
+          renderValue(anchor, result.value, nodes, seed.childDisposers);
+        }
+      }
+    })();
+    bindAsyncGenerator(value as AsyncGenFn, anchor, disposers, seed);
+    return true;
+  };
+});
 
 export default asyncPlugin;
 
@@ -178,21 +256,30 @@ function bindAsyncGenerator(
   genFn: AsyncGenFn,
   marker: Comment,
   disposers: (() => void)[],
+  seed?: RenderedContentInternal,
 ): void {
   let generator: AsyncGenerator<unknown> | null = null;
-  let currentNodes: Node[] = [];
+  let currentNodes: Node[] = seed ? [...seed.nodes] : [];
   let childDisposers: (() => void)[] = [];
   let disposed = false;
   let iterationId = 0;
   let depUnsubscribers: (() => void)[] = [];
-  let lastSettled: RenderedContentInternal | null = null;
+  let lastSettled: RenderedContentInternal | null = seed ?? null;
   const context: AsyncGeneratorContext = {};
 
   const clearNodes = () => {
     for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
-    for (let i = 0; i < currentNodes.length; i++)
-      currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);
     childDisposers = [];
+    if (seed) {
+      // Hydrated region: concurrent renders (the hydration walk's own
+      // fetch path) may have inserted nodes the seed collection does not
+      // know about - remove whatever currently sits between the region
+      // boundary and the marker.
+      clearRegion(seed.boundary ?? null, marker);
+    } else {
+      for (let i = 0; i < currentNodes.length; i++)
+        currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);
+    }
     currentNodes = [];
   };
 
@@ -215,6 +302,7 @@ function bindAsyncGenerator(
   };
 
   const render = (value: unknown) => {
+    if (!marker.parentNode) return; // Binding removed (e.g. hidden branch).
     clearNodes();
     renderValue(marker, value, currentNodes, childDisposers);
   };
@@ -264,6 +352,7 @@ function bindAsyncGenerator(
             __brand: "RenderedContent" as const,
             nodes: currentNodes,
             childDisposers: childDisposers,
+            boundary: seed?.boundary ?? null,
           };
         }
         return;

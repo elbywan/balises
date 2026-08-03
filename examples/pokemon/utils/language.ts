@@ -22,6 +22,8 @@ export const LANGUAGES: Language[] = [
  * Get default language from browser, falling back to English
  */
 export function getDefaultLanguage(): string {
+  // Server-side (SSR build): no browser, default to English.
+  if (typeof localStorage === "undefined") return "en";
   const saved = localStorage.getItem("pokemon-language");
   if (saved) return saved;
 

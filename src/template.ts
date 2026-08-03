@@ -17,14 +17,16 @@
 
 import { computed, isSignal, scope, type Reactive } from "./signals/index.js";
 import { HTMLParser } from "./parser.js";
+import { ssrTemplateData } from "./ssr-shared.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /**
  * HTML void elements - never have children or closing tags.
  * Treated as self-closing even when written without "/>".
+ * @internal Exported for the SSR plugin.
  */
-const VOID_ELEMENTS = new Set([
+export const VOID_ELEMENTS = new Set([
   "area",
   "base",
   "br",
@@ -124,8 +126,9 @@ const cache = new WeakMap<TemplateStringsArray, Cached>();
  * Wrap a function in a scoped computed.
  * Nested computeds/effects are automatically disposed on re-run.
  * Registers disposal of both the computed and nested reactives.
+ * @internal Exported for the hydration module.
  */
-function wrapFn(fn: () => unknown, d: (() => void)[]) {
+export function wrapFn(fn: () => unknown, d: (() => void)[]) {
   let cleanup: (() => void) | undefined;
   const c = computed(() => {
     cleanup?.();
@@ -142,8 +145,13 @@ function wrapFn(fn: () => unknown, d: (() => void)[]) {
  * Functions are wrapped in computed() for automatic reactivity.
  * Nested computeds/effects created inside functions are automatically
  * disposed when the function re-runs or the binding is disposed.
+ * @internal Exported for the hydration module.
  */
-function bind(v: unknown, update: (v: unknown) => void, d: (() => void)[]) {
+export function bind(
+  v: unknown,
+  update: (v: unknown) => void,
+  d: (() => void)[],
+) {
   if (typeof v === "function") v = wrapFn(v as () => unknown, d);
   if (isSignal(v)) {
     update(v.value);
@@ -195,6 +203,8 @@ export class Template {
     this.#strings = strings;
     this.#values = values;
     this.#plugins = plugins;
+    // Registered for the SSR renderer and hydration module.
+    ssrTemplateData.set(this, [strings, values]);
   }
 
   /**

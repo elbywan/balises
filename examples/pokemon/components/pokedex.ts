@@ -3,7 +3,10 @@
  * Refactored from PokemonViewerElement to be a function component
  */
 
-import { html, computed, effect } from "../../../src/index.js";
+import { html as baseHtml, computed, effect } from "../../../src/index.js";
+import asyncPlugin from "../../../src/async.js";
+
+const html = baseHtml.with(asyncPlugin);
 import type {
   Pokemon,
   FavoritePokemon,
@@ -67,35 +70,78 @@ export function Pokedex(props: PokedexProps) {
 
   const t = () => getTranslations();
 
-  // Fetch Pokemon data with loader delay handling
-  const fetchPokemon = async () => {
+  // The card region (wrapper + PokemonCard) rendered by the generator.
+  const cardTemplate = () => html`
+    <div
+      class="pokemon-card-wrapper"
+      style=${() => (state.error ? "display: none" : "")}
+    >
+      ${PokemonCard({
+        state,
+        sharedState,
+        getIsFavorite: () => isFavorite.value,
+        onToggleShiny: toggleShiny,
+        onPlayCry: playCry,
+        onToggleFavorite: toggleFavorite,
+        onToggleCompare: toggleCompare,
+        onShuffleCompare: setComparePokemon,
+        rosterActions,
+        getTranslations,
+      })}
+    </div>
+  `;
+
+  // Load the current Pokemon - an async generator so the same code path
+  // runs server-side (renderToStringAsync fetches and settles on the
+  // card) and client-side (restarts on pokemonId/language changes, with
+  // the settled content preserved across identical re-renders).
+  async function* loadCard(
+    settled?: unknown,
+    ctx?: { lastId?: number; lastLang?: string },
+  ) {
+    const id = state.pokemonId;
+    const lang = sharedState.language;
+    const lastId = ctx?.lastId;
+    const lastLang = ctx?.lastLang;
+    if (ctx) {
+      ctx.lastId = id;
+      ctx.lastLang = lang;
+    }
+    if (settled && lastId === id && lastLang === lang) return settled;
+    if (state.pokemon?.id === id) {
+      // Data already fetched (SSR payload or a previous load); only the
+      // localized names may need refreshing after a language change.
+      if (lastLang !== undefined && lastLang !== lang) {
+        await fetchLocalizedNames(state.pokemon, false);
+      }
+      return cardTemplate();
+    }
     state.loading = true;
     state.error = null;
-
+    state.showLoader = false;
+    yield cardTemplate();
     // Set up loader delay - show spinner only if loading takes a while
     const loaderTimeout = setTimeout(() => {
       if (state.loading) {
         state.showLoader = true;
       }
     }, LOADER_DELAY_MS);
-
     try {
-      const pokemon = await pokemonService.fetchPokemon(state.pokemonId);
+      const pokemon = await pokemonService.fetchPokemon(id);
       if (!pokemon) {
-        throw new Error(`Pokemon #${state.pokemonId} not found`);
+        throw new Error(`Pokemon #${id} not found`);
       }
       state.pokemon = pokemon;
-      fetchLocalizedNames(pokemon, false);
+      await fetchLocalizedNames(pokemon, false);
     } catch (e) {
       state.error = e instanceof Error ? e.message : "Failed to fetch";
     } finally {
-      if (loaderTimeout) {
-        clearTimeout(loaderTimeout);
-      }
+      clearTimeout(loaderTimeout);
       state.loading = false;
       state.showLoader = false;
     }
-  };
+    return cardTemplate();
+  }
 
   const fetchLocalizedNames = async (pokemon: Pokemon, isCompare: boolean) => {
     const lang = sharedState.language;
@@ -120,20 +166,17 @@ export function Pokedex(props: PokedexProps) {
     if (state.pokemonId > 1) {
       state.pokemonId--;
       onPokemonChange(state.pokemonId);
-      fetchPokemon();
     }
   };
 
   const next = () => {
     state.pokemonId++;
     onPokemonChange(state.pokemonId);
-    fetchPokemon();
   };
 
   const random = () => {
     state.pokemonId = Math.floor(Math.random() * POKEMON_LIMIT) + 1;
     onPokemonChange(state.pokemonId);
-    fetchPokemon();
   };
 
   const toggleShiny = () => {
@@ -178,7 +221,6 @@ export function Pokedex(props: PokedexProps) {
   const selectFavorite = (fav: FavoritePokemon) => {
     state.pokemonId = fav.id;
     onPokemonChange(state.pokemonId);
-    fetchPokemon();
   };
 
   const removeFavorite = (fav: FavoritePokemon, e: Event) => {
@@ -222,14 +264,12 @@ export function Pokedex(props: PokedexProps) {
     const input = root?.querySelector<HTMLInputElement>(".search-box input");
     if (input) input.value = "";
     onPokemonChange(state.pokemonId);
-    fetchPokemon();
   };
 
   const handleLanguageChange = (e: Event) => {
     const lang = (e.target as HTMLSelectElement).value;
+    // The generator tracks the language and refreshes localized names.
     onLanguageChange(lang);
-    // Refetch to get localized names
-    fetchPokemon();
     if (state.comparePokemon) {
       fetchLocalizedNames(state.comparePokemon, true);
     }
@@ -258,9 +298,6 @@ export function Pokedex(props: PokedexProps) {
   const isFavorite = computed(() =>
     sharedState.favorites.some((f) => f.id === state.pokemon?.id),
   );
-
-  // Initial fetch
-  setTimeout(() => fetchPokemon(), 0);
 
   return html`
     <div class="pokemon-viewer">
@@ -301,24 +338,8 @@ export function Pokedex(props: PokedexProps) {
       ${() =>
         state.error ? html`<div class="error">${state.error}</div>` : null}
 
-      <!-- Pokemon Card with Compare Panel -->
-      <div
-        class="pokemon-card-wrapper"
-        style=${() => (state.error ? "display: none" : "")}
-      >
-        ${PokemonCard({
-          state,
-          sharedState,
-          getIsFavorite: () => isFavorite.value,
-          onToggleShiny: toggleShiny,
-          onPlayCry: playCry,
-          onToggleFavorite: toggleFavorite,
-          onToggleCompare: toggleCompare,
-          onShuffleCompare: setComparePokemon,
-          rosterActions,
-          getTranslations,
-        })}
-      </div>
+      <!-- Pokemon Card with Compare Panel (async generator slot) -->
+      ${loadCard}
 
       <!-- Favorites Section -->
       ${FavoritesList({

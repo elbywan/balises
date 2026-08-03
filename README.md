@@ -33,6 +33,7 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Memo Components](#memo-components)
 - [Async Generators](#async-generators)
 - [Web Components](#web-components)
+- [Server-Side Rendering](#server-side-rendering)
 - [Template Syntax](#template-syntax)
 - [Reactivity API](#reactivity-api)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
@@ -102,6 +103,11 @@ document.body.appendChild(fragment);
 
 ## Memo Components
 
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
+
 The `memo()` utility prevents unnecessary DOM re-renders of functional components by memoizing their output per call site: when the same component is called with equal props again (shallow equality by default), it returns the previous result unchanged and the template skips the DOM work entirely.
 
 **Note:** Memo is opt-in via `balises/memo` and requires plugin registration with `html.with(memoPlugin)`.
@@ -148,7 +154,14 @@ const Counter = memo(
 - Component is used statically — it already runs only once
 - Props always change, or the component is trivial — memo adds overhead without benefit
 
+</details>
+
 ## Async Generators
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
 
 Async generator functions handle loading states and async data flows. The generator automatically restarts when any tracked signal changes.
 
@@ -226,6 +239,8 @@ html`
 
 The `settled` parameter is `undefined` on first run, and contains an opaque handle to the previous render on restarts. Returning it preserves existing DOM nodes and reactive bindings.
 
+</details>
+
 ## Web Components
 
 For reusable widgets that need encapsulation or browser-native lifecycle, balises works naturally with the Web Components API:
@@ -274,7 +289,308 @@ Use it in your HTML:
 
 You can build entire apps this way, or just add interactive widgets to existing pages. No build step required if you use it from a CDN.
 
+## Server-Side Rendering
+
+SSR is opt-in (`balises/ssr` + `balises/hydrate`) and never touches the base bundle: `renderToString` produces the HTML for a template in a DOM-less Node environment, and `hydrate` attaches the same reactive bindings to that HTML on the client - reusing the server markup instead of re-rendering it.
+
+### The workflow
+
+**1. Render** - on the server (or at build time), render the template to a string:
+
+```ts
+// server.ts (Node - no DOM needed)
+import { html, signal } from "balises";
+import { renderToString } from "balises/ssr";
+
+const count = signal(0);
+const markup = renderToString(html`<p>Count: ${count}</p>`);
+// "<p>Count: <!--b-->0<!--/b--></p>"
+```
+
+**2. Ship** - embed the markup and the initial state in the page.
+
+**3. Hydrate** - on the client, build the _same_ template with the _same_ state and call `hydrate`:
+
+```ts
+// client.ts
+import { html, signal } from "balises";
+import { hydrate } from "balises/hydrate";
+
+const count = signal(0); // Restore the state the server rendered with
+const template = html`<p>Count: ${count}</p>`; // Same structure as the server
+const dispose = hydrate(template, document.querySelector("#app"));
+count.value = 5; // Updates the text in place - the server markup is reused
+```
+
+<details>
+<summary><b>Fetching data</b></summary>
+
+<br/>
+Your normal data-loading code runs on the server: `renderToStringAsync` executes each async generator to completion in Node (real fetches happen there) and renders the generator's final content into the HTML. The loading yields are discarded - the shipped page contains the settled result.
+
+On the client, the same generator hydrates that content **without refetching**: the adopted DOM is passed to the generator as its `settled` handle, and returning it preserves the markup. When a tracked signal changes, the generator restarts and fetches fresh - the exact same code path a client-only render takes:
+
+```ts
+async function* loadUser(settled) {
+  const id = userId.value; // Tracked: a change restarts the generator.
+  if (settled) return settled; // Hydration: keep the server-rendered DOM.
+  yield html`<p>Loading...</p>`;
+  const user = await fetchUser(id); // Runs in Node at build time, in the browser afterwards.
+  return html`<p>${user.name}</p>`;
+}
+```
+
+A complete recipe - the `state` option serializes the listed signals on the server and restores them before hydrating, so no manual JSON plumbing is needed:
+
+```ts
+// app.ts - the piece both the server and the browser run
+const userId = signal(1);
+const user = signal<User | null>(null); // fetched data, restored from the payload
+
+function App() {
+  return html`
+    <div>
+      ${async function* (settled?: unknown) {
+        const id = userId.value; // Tracked: changes restart the generator.
+        if (settled) return settled; // Hydration: keep the server DOM.
+        if (user.value?.id === id) {
+          // Data restored from the payload: render it, no fetch.
+          return UserCard(user.value);
+        }
+        yield html`<p>Loading user ${id}...</p>`;
+        const u = await fetchUser(id); // Node at build time, browser afterwards.
+        user.value = u; // Stored so the payload can carry it.
+        return UserCard(u);
+      }}
+    </div>
+  `;
+}
+```
+
+```ts
+// build time (Node) - pass the state to serialize
+import { renderToStringAsync } from "balises/ssr";
+
+const { html, payload } = await renderToStringAsync(App(), {
+  state: { userId, user }, // anything with a .value: signals, computeds...
+});
+// ship `html` + <script id="ssr-data" type="application/json">${payload}</script>
+```
+
+```ts
+// client bootstrap - the state option restores before hydrating
+import { hydrate } from "balises/hydrate";
+
+hydrate(App(), document.querySelector("#app"), { state: { userId, user } });
+```
+
+Fetching happens in three phases with the same code: the server runs the generators (real fetches in Node); hydration restores the payload state and the generators render from it without refetching; and a tracked-signal change restarts a generator, fetching fresh in the browser. Data the initial render needs goes in the payload; navigation-driven data is refetched by the generator itself; auth/user-specific data stays client-only (fetch after hydration).
+
+For custom restore logic (URLs, localStorage, validation), `serializeState`/`deserializeState` are exported from `balises/ssr` and `balises/hydrate` as the manual building blocks.
+
+</details>
+
+<details>
+<summary><b>Sharing state between the server and the client</b></summary>
+
+<br/>
+The client must recreate the state the server rendered with, or the markup and the bindings disagree. The `state` option of `renderToString(Async)` / `hydrate` does this automatically for any signal or computed (see "Fetching data" above). The manual equivalent - for custom restore logic around URLs, localStorage or validation:
+
+```ts
+// server.ts
+import { serializeState } from "balises/ssr";
+
+const markup = renderToString(template);
+const page = `<div id="app">${markup}</div>
+  <script id="ssr-data" type="application/json">${serializeState({ count: count.value })}</script>`;
+```
+
+```ts
+// client.ts
+import { deserializeState } from "balises/hydrate";
+
+const state = deserializeState<{ count: number }>(
+  document.getElementById("ssr-data"),
+);
+const count = signal(state?.count ?? 0);
+hydrate(html`<p>Count: ${count}</p>`, document.querySelector("#app"));
+```
+
+Rules of thumb:
+
+- **The route comes from the URL, not the payload.** If the app is addressable (`#/users/42`), the URL hash is the source of truth - the server cannot know it at build time. Reloading such a URL on a page pre-rendered with a different id must show the requested resource (the data loader refetches).
+- **Client-only state stays on the client.** Anything in localStorage (preferences, drafts, persisted data): the server renders the defaults and the client restores its own values _before_ hydrating - the bindings pick them up in place (they apply the current value when it differs from the markup).
+- **The template must be identical on both sides** - same structure and same plugins (`html.with(...)`). Build both from a shared factory so the markup and the bindings can never drift.
+
+</details>
+
+<details>
+<summary><b>Static generation (no server)</b></summary>
+
+<br/>
+You don't need a running server - generate the HTML at build time and ship it. `examples/pokemon/` is the client-only app; `examples/pokemon-ssr/` is the exact same code pre-rendered at build time (`yarn examples:build` runs `examples/pokemon/build-html.ts`, which calls `renderToStringAsync` in Node and writes the page). The client entry hydrates when markup is present and renders fresh otherwise:
+
+```ts
+const template = buildAppTemplate(stores, service, api);
+if (target.firstChild)
+  hydrate(template, target); // Pre-rendered page
+else target.appendChild(template.render().fragment); // Client-only page
+```
+
+</details>
+
+<details>
+<summary><b>Async rendering</b></summary>
+
+<br/>
+Async generators are supported server-side via `renderToStringAsync`, which runs each generator to completion and renders its final content (the loading yields are discarded):
+
+```ts
+import { html as baseHtml, signal } from "balises";
+import asyncPlugin from "balises/async";
+import { renderToStringAsync } from "balises/ssr";
+
+const html = baseHtml.with(asyncPlugin);
+const userId = signal(1);
+
+const markup = await renderToStringAsync(
+  html`<div>
+    ${async function* () {
+      const id = userId.value;
+      yield html`<p>Loading...</p>`;
+      const user = await fetchUser(id);
+      return html`<p>${user.name}</p>`;
+    }}
+  </div>`,
+);
+```
+
+On the client the same generator hydrates its settled content without refetching: the adopted DOM is passed to the generator as the `settled` handle - return it to preserve it across restarts (the [DOM Preservation pattern](#dom-preservation-on-restart)).
+
+</details>
+
+<details>
+<summary><b>Writing SSR-compatible components</b></summary>
+
+<br/>
+Components are pure `(state, props) -> template` functions; the server executes the same functions in Node, so the rules follow from that.
+
+**1. No browser globals in component bodies.** `window`, `document`, `localStorage`, `navigator`, `new Audio()`, `setTimeout` side effects crash the build or leak in the build process. Events only fire client-side, so referencing the browser from `@click` handlers is fine:
+
+```ts
+// SSR-safe: pure function of state -> template
+function UserCard({ user, onSelect }) {
+  return html`<article @click=${onSelect}>
+    <h3>${() => user.name}</h3>
+    <p>${() => user.bio}</p>
+  </article>`;
+}
+
+// Browser-only: crashes server-side
+function UserCard({ user }) {
+  const el = document.createElement("div"); // ReferenceError in Node
+  return html`<div>${user.name}</div>`;
+}
+```
+
+**2. The template structure must be identical on both sides.** Same tags, static text and plugins (`html.with(...)`). Never branch the structure on the environment; conditional _content_ goes through `match()`/`when()`:
+
+```ts
+// Wrong: server sees <p>, client sees <span> - the walk bails and the
+// whole subtree re-renders instead of being reused.
+return typeof window === "undefined"
+  ? html`<p>${user.name}</p>`
+  : html`<span>${user.name}</span>`;
+
+// Right: one structure, conditional content through match()/when().
+return html`<div>${user.name}</div>`;
+```
+
+**3. Data loading lives in async generators** (see "Fetching data" above), not in `effect()` or `connectedCallback` - those run in Node at build time with no server path, so the SSR page would show the empty/loading state:
+
+```ts
+// Right: the generator is the only loading shape with a server path.
+return html`<div>
+  ${async function* (settled) {
+    const id = userId.value;
+    if (settled) return settled;
+    if (user.value?.id === id) return UserCard(user.value);
+    yield html`<p>Loading...</p>`;
+    const u = await fetchUser(id);
+    user.value = u;
+    return UserCard(u);
+  }}
+</div>`;
+
+// Wrong: this effect runs in Node at build time and never affects the
+// server-rendered markup.
+effect(() => {
+  fetchUser(userId.value).then((u) => (user.value = u));
+});
+return html`<div>${UserCard(user)}</div>`;
+```
+
+**4. Client-only values never shape the template.** The server renders defaults; restore localStorage/auth state _before_ hydrating and the bindings converge in place:
+
+```ts
+// Wrong: reads the browser at component-build time (and the structure
+// would differ between server and client).
+function Header() {
+  const lang = localStorage.getItem("lang") ?? "en";
+  return html`<p>${lang === "en" ? "Hello" : "Bonjour"}</p>`;
+}
+
+// Right: the value is reactive state restored before hydrating.
+function Header({ lang }) {
+  return html`<p>${() => (lang.value === "en" ? "Hello" : "Bonjour")}</p>`;
+}
+```
+
+**5. Use valid HTML nesting.** The browser parser restructures invalid nesting (a `<button>` inside a `<button>`, a `<div>` inside a `<table>`), the walk detects the mismatch and re-renders the subtree - correct, but the server markup is not reused. Valid nesting keeps the reuse.
+
+**6. Keep custom elements thin.** They are browser-only shells: restore state, then `hydrate(template, this)` or render fresh, with the template coming from a shared factory both sides import:
+
+```ts
+// app.ts - imported by Node AND the browser
+export function createApp(stores) {
+  return html`<div>${/* ... */}</div>`;
+}
+```
+
+```ts
+// element.ts - browser only
+class MyApp extends HTMLElement {
+  connectedCallback() {
+    const template = createApp(this.#stores);
+    if (this.firstChild) hydrate(template, this);
+    else this.appendChild(template.render().fragment);
+  }
+}
+```
+
+</details>
+
+### What works
+
+- Text, reactive attributes, `.prop` properties and `@event` listeners (the last two render nothing server-side and are attached during hydration)
+- Nested templates and arrays
+- `each()` keyed lists - rows hydrate in place and keep their identity across list updates
+- `when()`/`match()` branches and `memo()` components - the server renders the active branch
+- Async generators with `renderToStringAsync`
+
+### Notes
+
+- The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them. If the markup does not match the template (markers stripped, structure changed since the build), `hydrate()` falls back to a fresh render of the subtree - the client always wins, exactly like a client-only render.
+- `renderToString` throws on async generators - use `renderToStringAsync`.
+- Call `dispose()` when removing a hydrated subtree to release all subscriptions.
+- Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
+
 ## Template Syntax
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
 
 The `html` tagged template creates reactive DOM fragments. When you interpolate a signal, that specific part of the DOM updates automatically when the signal changes.
 
@@ -433,7 +749,14 @@ state.activeTab = "settings"; // Reuses cached Settings (same DOM!)
 
 Reactive bindings inside branches continue to work normally regardless of caching.
 
+</details>
+
 ## Reactivity API
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
 
 ### `signal<T>(value)`
 
@@ -686,6 +1009,8 @@ doubled.dispose(); // Stops tracking, frees memory
 
 After dispose, reading `.value` returns the last computed value, but the computed is no longer part of the reactive graph — it never updates, never notifies, and cannot be tracked as a new dependency.
 
+</details>
+
 ## Tree-Shaking / Modular Imports
 
 You can import just what you need to keep bundle size down:
@@ -703,6 +1028,10 @@ import { computed } from "balises/signals/computed";
 import { effect } from "balises/signals/effect";
 import { store } from "balises/signals/store";
 import { batch, scope } from "balises/signals/context";
+
+// Server-side rendering (opt-in - never part of the main bundle)
+import { renderToString, renderToStringAsync } from "balises/ssr";
+import { hydrate } from "balises/hydrate";
 ```
 
 ### Template Plugins
@@ -739,6 +1068,11 @@ const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin, memoPlugin);
 ```
 
 ## Writing Plugins
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
 
 A plugin teaches the template system how to handle a new type of interpolated value. The built-in `each`, `async`, `memo`, and `match` features are all plugins - there's nothing special about them.
 
@@ -858,6 +1192,8 @@ This keeps the detection cheap (symbol lookup) and lets you carry structured dat
 - **Internal reactivity is your job.** If your plugin needs to react to signal changes, set up your own `computed`/`subscribe` calls inside the binder. The template system won't wrap your plugin's output in a computed.
 - **`html.with()` returns a new tag.** You must assign the result: `const html = baseHtml.with(myPlugin)`. Calling `html.with(myPlugin)` without capturing the return value has no effect.
 
+</details>
+
 ## Using as a Standalone Signals Library
 
 The reactivity system is completely independent of the HTML templating. You can use just the signals in Node.js, Electron, or any JavaScript environment:
@@ -878,6 +1214,11 @@ users.value = [{ name: "Alice" }, { name: "Bob" }];
 ```
 
 ## Full Example
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
 
 ```ts
 import { html, computed } from "balises";
@@ -948,7 +1289,14 @@ class Counter extends HTMLElement {
 
 <!-- BENCHMARK_RESULTS_START -->
 
+</details>
+
 ## Benchmarks
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+<br/>
 
 Performance comparison of Balises against other popular reactive libraries. Benchmarks run in isolated processes to prevent V8 JIT contamination.
 
@@ -1048,6 +1396,8 @@ Current standing: balises is a strong #2–3 overall (geomean ~1.1–1.2× behin
 _Last updated: 2026-08-03_
 
 <!-- BENCHMARK_RESULTS_END -->
+
+</details>
 
 ## Scripts
 

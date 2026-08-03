@@ -30,9 +30,11 @@
  */
 
 import { computed } from "./signals/computed.js";
-import { Template, type InterpolationPlugin } from "./template.js";
+import { Template, renderValue, type InterpolationPlugin } from "./template.js";
+import { clearRegion, hydrateWalk, registerHydrateHandler } from "./hydrate.js";
+import { MATCH } from "./descriptors.js";
 
-const MATCH = Symbol("match");
+export { MATCH } from "./descriptors.js";
 
 /** Options for when/match behavior */
 export interface MatchOptions {
@@ -44,7 +46,8 @@ export interface MatchOptions {
   cache?: boolean;
 }
 
-interface MatchDescriptor {
+/** @internal Descriptor shape shared with the SSR plugin. */
+export interface MatchDescriptor {
   readonly [MATCH]: true;
   /** @internal */ selector: () => unknown;
   /** @internal */ cases: Record<string, () => Template>;
@@ -144,6 +147,67 @@ interface BranchEntry {
  * Plugin that handles match/when descriptors.
  * Register with: const html = baseHtml.with(matchPlugin);
  */
+// Hydration: adopt the server-rendered branch when the current branch's
+// markup aligns with it (the selector did not change since the render);
+// otherwise the selector changed and the current branch is rendered
+// fresh. The branch selector is subscribed for subsequent switches.
+registerHydrateHandler((value) => {
+  if (!isMatchDescriptor(value)) return null;
+  return (contentStart, anchor, disposers) => {
+    const keyComputed = computed(() => String(value.selector()));
+    const nodes: Node[] = [];
+    const childDisposers: (() => void)[] = [];
+    // Node before the region; clears walk back to it. Walking forward from
+    // contentStart would break after the first clear removes that node.
+    const boundary = contentStart?.previousSibling ?? null;
+    const clear = () => {
+      for (const d of childDisposers) d();
+      childDisposers.length = 0;
+      clearRegion(boundary, anchor);
+      nodes.length = 0;
+    };
+    // Only own keys match - inherited Object.prototype keys like
+    // "toString"/"constructor" must never be treated as cases.
+    const getFactory = () => {
+      const cases = value.cases;
+      const key = keyComputed.value;
+      return Object.hasOwn(cases, key)
+        ? cases[key]
+        : Object.hasOwn(cases, "_")
+          ? cases["_"]
+          : undefined;
+    };
+    const renderBranch = () => {
+      clear();
+      const factory = getFactory();
+      if (factory) renderValue(anchor, factory(), nodes, childDisposers);
+    };
+    // Collect the server-rendered region so switches can clear it.
+    let regionNode = contentStart;
+    while (regionNode && regionNode !== anchor) {
+      nodes.push(regionNode);
+      regionNode = regionNode.nextSibling;
+    }
+    let adopted = false;
+    if (contentStart) {
+      const factory = getFactory();
+      if (factory) {
+        const walkDisposers: (() => void)[] = [];
+        adopted = hydrateWalk(factory(), contentStart, walkDisposers).aligned;
+        if (adopted) {
+          for (const f of walkDisposers) disposers.push(f);
+        } else {
+          for (const f of walkDisposers) f();
+        }
+      }
+    }
+    if (!adopted) renderBranch();
+    disposers.push(keyComputed.subscribe(renderBranch));
+    disposers.push(clear);
+    return adopted;
+  };
+});
+
 const matchPlugin: InterpolationPlugin = (value) => {
   if (!isMatchDescriptor(value)) return null;
 

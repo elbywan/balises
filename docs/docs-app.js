@@ -82,6 +82,21 @@ const API_ITEMS = [
     desc: "Async generators for progressive loading. Import from <code>balises/async</code> and use <code>html.with(asyncPlugin)</code>. Auto-restarts when tracked signals change.",
   },
   {
+    title: "renderToString(template)",
+    code: "ssr-render",
+    desc: "Renders a template to an HTML string in a DOM-less Node environment. With <code>{ state }</code> it also returns a serialized payload for the client. Import from <code>balises/ssr</code>.",
+  },
+  {
+    title: "renderToStringAsync(template)",
+    code: "ssr-async",
+    desc: "Like renderToString, but awaits async generators and renders their final content. Import from <code>balises/ssr</code>.",
+  },
+  {
+    title: "hydrate(template, target)",
+    code: "ssr-hydrate",
+    desc: "Attaches the reactive bindings to server-rendered markup without re-rendering it. With <code>{ state }</code> it restores the server's signal values from the page payload first. Returns a dispose function. Import from <code>balises/hydrate</code>.",
+  },
+  {
     title: "batch(fn)",
     code: "batch",
     desc: "Batches multiple signal updates into a single notification pass.",
@@ -117,7 +132,12 @@ const EXAMPLES = [
   {
     href: "./examples/pokemon/",
     name: "Pokemon",
-    desc: "Pokédex browser and turn-based battle game",
+    desc: "Pokédex and battle game - client-side only",
+  },
+  {
+    href: "./examples/pokemon-ssr/",
+    name: "Pokemon (SSR)",
+    desc: "The same app, server-rendered at build time and hydrated",
   },
   {
     href: "./examples/performance/",
@@ -143,6 +163,39 @@ const CODE_EXAMPLES = {
     "\n" +
     'users.value = [{ name: "Alice" }, { name: "Bob" }];\n' +
     '// Logs: "Total users: 2"',
+
+  "ssr-render":
+    'import { renderToString } from "balises/ssr";\n' +
+    "\n" +
+    "const markup = renderToString(html`<p>Count: ${count}</p>`);\n" +
+    '// "<p>Count: <!--b-->0<!--/b--></p>"\n' +
+    "\n" +
+    "// With { state }, the same call also serializes the signals\n" +
+    "// for the client to restore before hydrating:\n" +
+    "const { html, payload } = renderToString(template, {\n" +
+    "  state: { count },\n" +
+    "});",
+
+  "ssr-async":
+    'import { renderToStringAsync } from "balises/ssr";\n' +
+    "\n" +
+    "const markup = await renderToStringAsync(\n" +
+    "  html`<div>${async function* () {\n" +
+    "    yield html`<p>Loading...</p>`;\n" +
+    "    const user = await fetchUser(id);\n" +
+    "    return html`<p>${user.name}</p>`;\n" +
+    "  }}</div>`,\n" +
+    ");\n" +
+    "// The loading yield is discarded; the final content is rendered.",
+
+  "ssr-hydrate":
+    'import { hydrate } from "balises/hydrate";\n' +
+    "\n" +
+    "// Same template and state as the server - the markup is reused:\n" +
+    'hydrate(template, document.querySelector("#app"), { state: { count } });\n' +
+    "// { state } restores the server's signal values from the page\n" +
+    "// payload before the bindings attach.\n" +
+    "count.value = 5; // Updates the text in place",
 
   signal:
     "const count = signal(0);\n" +
