@@ -13,8 +13,8 @@
  *    Comment nodes. When multiple slots share the same memo component and
  *    trigger signal, the closure cache gets invalidated by whichever slot
  *    evaluates last. The per-marker cache catches this: if props for *this
- *    specific slot* haven't changed, the binder returns early without pushing
- *    disposers, so template.ts preserves the existing DOM.
+ *    specific slot* and *this component* haven't changed, the binder returns
+ *    early without pushing disposers, so template.ts preserves the existing DOM.
  *
  * Requires plugin registration: `html.with(memoPlugin)`
  *
@@ -53,6 +53,7 @@ interface MemoDescriptor<TProps extends object = object> {
 
 /** Per-marker cache entry for slot-level memoization */
 interface MemoCache<TProps extends object = object> {
+  component: MemoComponent<TProps>;
   lastProps: TProps;
   areEqual: (a: TProps, b: TProps) => boolean;
 }
@@ -170,11 +171,15 @@ const memoPlugin: InterpolationPlugin = (value) => {
   return (marker, disposers) => {
     const desc = value as MemoDescriptor;
 
-    // Per-marker cache check: if this marker already rendered with equal
-    // props, return false to signal template.ts to skip clearing — preserving
-    // the existing DOM and pluginCleanup.
+    // Per-marker cache check: if this marker already rendered the same
+    // component with equal props, return false to signal template.ts to
+    // skip clearing — preserving the existing DOM and pluginCleanup.
     const cached = markerCache.get(marker);
-    if (cached && cached.areEqual(cached.lastProps, desc.props)) {
+    if (
+      cached &&
+      cached.component === desc.component &&
+      cached.areEqual(cached.lastProps, desc.props)
+    ) {
       return false;
     }
 
@@ -184,7 +189,11 @@ const memoPlugin: InterpolationPlugin = (value) => {
     renderValue(marker, result, nodes, childDisposers);
 
     // Set per-marker cache after successful render
-    markerCache.set(marker, { lastProps: desc.props, areEqual: desc.areEqual });
+    markerCache.set(marker, {
+      component: desc.component,
+      lastProps: desc.props,
+      areEqual: desc.areEqual,
+    });
 
     disposers.push(() => {
       for (const d of childDisposers) d();

@@ -776,6 +776,47 @@ describe("memo", () => {
       dispose();
     });
 
+    it("should re-render when switching between different memoized components at the same slot", () => {
+      let aRenders = 0;
+      let bRenders = 0;
+      const A = memo(({ name }: { name: string }) => {
+        aRenders++;
+        return html`<b>A:${name}</b>`;
+      });
+      const B = memo(({ name }: { name: string }) => {
+        bRenders++;
+        return html`<i>B:${name}</i>`;
+      });
+
+      const showA = signal(true);
+
+      const { fragment, dispose } = html`
+        <div>${() => (showA.value ? A({ name: "x" }) : B({ name: "x" }))}</div>
+      `.render();
+      document.body.appendChild(fragment);
+
+      assert.strictEqual(aRenders, 1);
+      assert.strictEqual(bRenders, 0);
+      assert.strictEqual(document.querySelector("b")?.textContent, "A:x");
+
+      // Switch to a DIFFERENT component with equal props - must re-render,
+      // even though the per-marker cache holds A's props/A's comparator.
+      showA.value = false;
+      assert.strictEqual(bRenders, 1);
+      assert.strictEqual(document.querySelector("i")?.textContent, "B:x");
+      assert.strictEqual(document.querySelector("b"), null);
+
+      // Switch back to A - A's own props are still "x", so A's closure
+      // cache returns the same descriptor, but the marker cache was
+      // overwritten by B, so A re-renders.
+      showA.value = true;
+      assert.strictEqual(aRenders, 2);
+      assert.strictEqual(document.querySelector("b")?.textContent, "A:x");
+      assert.strictEqual(document.querySelector("i"), null);
+
+      dispose();
+    });
+
     it("should re-render when callback props change identity", () => {
       let renderCount = 0;
       const Button = memo(({ onClick }: { onClick: () => void }) => {
