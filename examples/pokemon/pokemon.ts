@@ -365,20 +365,15 @@ export function buildAppTemplate(
 // ============================================================================
 
 export interface SsrPayload {
-  route: { tab: AppTab; pokemonId: number };
   language: string;
   pokemon: Pokemon | null;
   pokemonName: string;
   typeNames: PokedexState["typeNames"];
 }
 
-/** Read the state embedded in the page (absent on client-only pages). */
+/** The state embedded in the page (absent on client-only pages). */
 export function serializeSsrState(stores: PokemonAppStores): SsrPayload {
   return {
-    route: {
-      tab: stores.appState.activeTab,
-      pokemonId: stores.pokedexState.pokemonId,
-    },
     language: stores.sharedState.language,
     pokemon: stores.pokedexState.pokemon,
     pokemonName: stores.pokedexState.pokemonName,
@@ -386,14 +381,16 @@ export function serializeSsrState(stores: PokemonAppStores): SsrPayload {
   };
 }
 
-/** Restore the server state before hydrating so markup and data agree. */
+/**
+ * Restore the server state before hydrating so markup and data agree.
+ * Only data the client cannot derive itself is applied: the route always
+ * comes from the URL hash, and favorites/roster from localStorage.
+ */
 export function applySsrPayload(
   stores: PokemonAppStores,
   payload: SsrPayload | null,
 ): void {
   if (!payload) return;
-  stores.appState.activeTab = payload.route.tab;
-  stores.pokedexState.pokemonId = payload.route.pokemonId;
   stores.sharedState.language = payload.language;
   stores.pokedexState.pokemon = payload.pokemon;
   stores.pokedexState.pokemonName = payload.pokemonName;
@@ -448,8 +445,27 @@ export class PokemonAppElement extends ElementBase {
     sharedState.rosterIds = loadRoster();
 
     // If the page was pre-rendered server-side, restore the serialized
-    // state (route, language, fetched pokémon) before hydrating.
-    applySsrPayload(this.#stores, parseSsrPayload());
+    // state (language, fetched pokémon) before hydrating. The route
+    // always comes from the URL hash (createAppStores already parsed it).
+    const payload = parseSsrPayload();
+    applySsrPayload(this.#stores, payload);
+
+    // A saved language preference wins over the server's default: refresh
+    // the localized names for it once the page is up.
+    if (payload?.pokemon) {
+      const savedLanguage = localStorage.getItem("pokemon-language");
+      if (savedLanguage && savedLanguage !== payload.language) {
+        sharedState.language = savedLanguage;
+        void (async () => {
+          const names = await this.#pokemonService.fetchLocalizedNames(
+            payload.pokemon!,
+            savedLanguage,
+          );
+          pokedexState.pokemonName = names.pokemonName;
+          pokedexState.typeNames = names.typeNames;
+        })();
+      }
+    }
 
     // Set up router - listen for back/forward navigation
     window.addEventListener("popstate", this.#handlePopState);

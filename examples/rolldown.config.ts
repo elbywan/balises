@@ -4,6 +4,7 @@ const examples = [
   "counter",
   "timer",
   "pokemon",
+  "pokemon-ssr",
   "todo-list",
   "performance",
   "async-data",

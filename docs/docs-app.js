@@ -117,7 +117,12 @@ const EXAMPLES = [
   {
     href: "./examples/pokemon/",
     name: "Pokemon",
-    desc: "Pokédex and battle game - server-rendered at build time, hydrated on the client",
+    desc: "Pokédex and battle game - client-side only",
+  },
+  {
+    href: "./examples/pokemon-ssr/",
+    name: "Pokemon (SSR)",
+    desc: "The same app, server-rendered at build time and hydrated",
   },
   {
     href: "./examples/performance/",
