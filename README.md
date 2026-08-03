@@ -309,7 +309,7 @@ count.value = 5; // Updates the text in place - the server markup is reused
 ```
 
 <details>
-<summary>Fetching data
+<summary>Fetching data<br/>
 
 </summary>
 
@@ -330,7 +330,7 @@ async function* loadUser(settled) {
 </details>
 
 <details>
-<summary>Sharing state between the server and the client
+<summary>Sharing state between the server and the client<br/>
 
 </summary>
 
@@ -359,7 +359,7 @@ Rules of thumb:
 </details>
 
 <details>
-<summary>Static generation (no server)
+<summary>Static generation (no server)<br/>
 
 </summary>
 
@@ -375,7 +375,7 @@ else target.appendChild(template.render().fragment); // Client-only page
 </details>
 
 <details>
-<summary>Async rendering
+<summary>Async rendering<br/>
 
 </summary>
 
@@ -406,7 +406,7 @@ On the client the same generator hydrates its settled content without refetching
 </details>
 
 <details>
-<summary>Writing SSR-compatible components
+<summary>Writing SSR-compatible components<br/>
 
 </summary>
 
