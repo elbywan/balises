@@ -165,16 +165,26 @@ registerHydrateHandler((value) => {
       // The bound generator owns the error path; this walk-instance only
       // learns the settled template, so errors are ignored here.
       let result: IteratorResult<unknown>;
+      let lastYield: unknown = null;
       try {
         const gen = (value as AsyncGenFn)();
         result = await gen.next();
-        while (!result.done) result = await gen.next();
+        lastYield = result.value;
+        while (!result.done) {
+          result = await gen.next();
+          if (!result.done) lastYield = result.value;
+        }
       } catch {
         return;
       }
-      if (result.value instanceof Template) {
+      // Same "settled content" semantics as the server renderer: the
+      // return value, or the last yield when the generator returns
+      // undefined.
+      const settledContent =
+        result.value !== undefined ? result.value : lastYield;
+      if (settledContent instanceof Template) {
         const aligned = recurse(
-          result.value,
+          settledContent,
           nodes[0] ?? null,
           anchor,
           seed.childDisposers,
@@ -188,7 +198,7 @@ registerHydrateHandler((value) => {
           seed.childDisposers.length = 0;
           clearRegion(seed.boundary ?? null, anchor);
           nodes.length = 0;
-          renderValue(anchor, result.value, nodes, seed.childDisposers);
+          renderValue(anchor, settledContent, nodes, seed.childDisposers);
         }
       }
     })();

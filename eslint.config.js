@@ -12,6 +12,7 @@ export default tseslint.config(
       ".pnp.*",
       "bench/**",
       "bench-dom/dist/**",
+      "scripts/**",
       "_site/**",
       "docs/**",
     ],

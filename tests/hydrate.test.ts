@@ -462,7 +462,7 @@ describe("hydrate with renderToStringAsync", () => {
     const template = html`<div>
       ${async function* (settled?: unknown) {
         if (settled) return settled;
-        return html`<p class="card">Count: ${count}</p>`;
+        yield html`<p class="card">Count: ${count}</p>`;
       }}
     </div>`;
 
