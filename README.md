@@ -229,10 +229,14 @@ The `settled` parameter is `undefined` on first run, and contains an opaque hand
 
 ## Server-Side Rendering
 
-Server-side rendering is an opt-in plugin (`balises/ssr` + `balises/hydrate`) that keeps the base bundle untouched. `renderToString` produces HTML in a DOM-less Node environment, and `hydrate` attaches the same reactive bindings to that markup on the client without re-rendering it.
+SSR is opt-in (`balises/ssr` + `balises/hydrate`) and never touches the base bundle: `renderToString` produces the HTML for a template in a DOM-less Node environment, and `hydrate` attaches the same reactive bindings to that HTML on the client - reusing the server markup instead of re-rendering it.
+
+### The workflow
+
+**1. Render** - on the server (or at build time), render the template to a string:
 
 ```ts
-// server.ts
+// server.ts (Node - no DOM needed)
 import { html, signal } from "balises";
 import { renderToString } from "balises/ssr";
 
@@ -241,22 +245,59 @@ const markup = renderToString(html`<p>Count: ${count}</p>`);
 // "<p>Count: <!--b-->0<!--/b--></p>"
 ```
 
+**2. Ship** - embed the markup and the initial state in the page.
+
+**3. Hydrate** - on the client, build the _same_ template with the _same_ state and call `hydrate`:
+
 ```ts
-// client.ts - hydrate the server markup
+// client.ts
 import { html, signal } from "balises";
 import { hydrate } from "balises/hydrate";
 
-const count = signal(0); // Same state as the server (e.g. from a script tag)
-const template = html`<p>Count: ${count}</p>`;
+const count = signal(0); // Restore the state the server rendered with
+const template = html`<p>Count: ${count}</p>`; // Same structure as the server
 const dispose = hydrate(template, document.querySelector("#app"));
 count.value = 5; // Updates the text in place - the server markup is reused
 ```
 
-The server renderer supports every template feature: text content, attributes, nested templates and arrays, `each()`, `when()`/`match()`, `memo()`, and events/properties (which render nothing server-side and are attached at hydration). Hydration preserves the identity of DOM nodes rendered on the server - including `each()` rows, which keep their elements across list updates.
+### Sharing state between the server and the client
+
+The client must recreate the state the server rendered with, or the markup and the bindings disagree. Serialize the state into the page and restore it before hydrating:
+
+```ts
+// server.ts
+const markup = renderToString(template);
+const page = `<div id="app">${markup}</div>
+  <script id="ssr-data" type="application/json">${JSON.stringify({ count: count.value }).replace(/</g, "\\u003c")}</script>`;
+```
+
+```ts
+// client.ts
+const state = JSON.parse(document.getElementById("ssr-data")!.textContent!);
+const count = signal(state.count);
+hydrate(html`<p>Count: ${count}</p>`, document.querySelector("#app"));
+```
+
+Rules of thumb:
+
+- **The route comes from the URL, not the payload.** If the app is addressable (`#pokedex/4`), the URL hash is the source of truth - the server cannot know it at build time. Reloading `#pokedex/4` on a page pre-rendered with pokemon #1 must show pokemon #4 (the data loader refetches).
+- **Client-only state stays on the client.** Favorites, preferences, anything in localStorage: the server renders the defaults and the client restores its own values _before_ hydrating - the bindings pick them up in place (they apply the current value when it differs from the markup).
+- **The template must be identical on both sides** - same structure and same plugins (`html.with(...)`). Build both from a shared factory: the pokemon example exports `createAppStores()` + `buildAppTemplate()` and runs them in Node and the browser alike.
+
+### Static generation (no server)
+
+You don't need a running server - generate the HTML at build time and ship it. `examples/pokemon/` is the client-only app; `examples/pokemon-ssr/` is the exact same code pre-rendered at build time (`yarn examples:build` runs `examples/pokemon/build-html.ts`, which calls `renderToStringAsync` in Node and writes the page). The client entry hydrates when markup is present and renders fresh otherwise:
+
+```ts
+const template = buildAppTemplate(stores, service, api);
+if (target.firstChild)
+  hydrate(template, target); // Pre-rendered page
+else target.appendChild(template.render().fragment); // Client-only page
+```
 
 ### Async rendering
 
-Async generators need `renderToStringAsync`, which awaits every yield and renders the final content:
+Async generators are supported server-side via `renderToStringAsync`, which runs each generator to completion and renders its final content (the loading yields are discarded):
 
 ```ts
 import { html as baseHtml, signal } from "balises";
@@ -278,20 +319,22 @@ const markup = await renderToStringAsync(
 );
 ```
 
-`renderToString` throws when it encounters an async generator - use `renderToStringAsync` instead.
+On the client the same generator hydrates its settled content without refetching: the adopted DOM is passed to the generator as the `settled` handle - return it to preserve it across restarts (the [DOM Preservation pattern](#dom-preservation-on-restart)).
 
-### How it works
+### What works
 
-- Bindings are marked with `<!--b-->...<!--/b-->` comments; the closing comment is the binding anchor, matching the client's `insertBefore(anchor)` semantics.
-- `each()` rows are separated by `<!--k-->` markers so the keyed binder can reconcile them after hydration.
-- Hydration walks the template structure in lockstep with the server DOM, adopts the rendered nodes, and subscribes the reactive bindings - no re-rendering, no layout thrash.
-- `@event` and `.prop` bindings are skipped by the server (no HTML representation) and attached during hydration.
+- Text, reactive attributes, `.prop` properties and `@event` listeners (the last two render nothing server-side and are attached during hydration)
+- Nested templates and arrays
+- `each()` keyed lists - rows hydrate in place and keep their identity across list updates
+- `when()`/`match()` branches and `memo()` components - the server renders the active branch
+- Async generators with `renderToStringAsync`
 
-### Requirements
+### Notes
 
-- The server and client must render the same template structure (same plugin composition via `html.with(...)`).
-- The client reads the same initial signal values the server used; serialize them into the page (e.g. a `<script type="application/json">` tag).
-- Call `dispose()` when removing the hydrated subtree to release subscriptions.
+- The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them.
+- `renderToString` throws on async generators - use `renderToStringAsync`.
+- Call `dispose()` when removing a hydrated subtree to release all subscriptions.
+- Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
 ## Web Components
 
@@ -770,6 +813,10 @@ import { computed } from "balises/signals/computed";
 import { effect } from "balises/signals/effect";
 import { store } from "balises/signals/store";
 import { batch, scope } from "balises/signals/context";
+
+// Server-side rendering (opt-in - never part of the main bundle)
+import { renderToString, renderToStringAsync } from "balises/ssr";
+import { hydrate } from "balises/hydrate";
 ```
 
 ### Template Plugins
