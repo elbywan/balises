@@ -385,6 +385,17 @@ const markup = await renderToStringAsync(
 
 On the client the same generator hydrates its settled content without refetching: the adopted DOM is passed to the generator as the `settled` handle - return it to preserve it across restarts (the [DOM Preservation pattern](#dom-preservation-on-restart)).
 
+### Writing SSR-compatible components
+
+Components are pure `(state, props) -> template` functions; the server executes the same functions in Node, so:
+
+- **No browser globals in component bodies** - `window`, `document`, `localStorage`, `navigator` (and `new Audio()`, `setTimeout` side effects) crash the build or leak in the build process. Events only fire client-side, so referencing the browser from `@click` handlers is fine.
+- **The template structure must be identical on both sides** - same tags, static text and plugins (`html.with(...)`). Never branch the structure on the environment (`typeof window === "undefined" ? ... : ...`); conditional content goes through `match()`/`when()`.
+- **Data loading lives in async generators** (see above), not in `effect()` or `connectedCallback` - those run in Node at build time with no server path.
+- **Client-only values never shape the template** - the server renders defaults; restore localStorage/auth state before hydrating and the bindings converge in place.
+- **Use valid HTML nesting** - the browser parser restructures invalid nesting (button-in-button), the walk detects the mismatch and re-renders the subtree (correct, but the server markup is not reused).
+- **Keep custom elements thin** - they are browser-only shells: restore state, then `hydrate(template, this)` or render fresh, with the template coming from a shared factory both sides import.
+
 ### What works
 
 - Text, reactive attributes, `.prop` properties and `@event` listeners (the last two render nothing server-side and are attached during hydration)
