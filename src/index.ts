@@ -4,14 +4,7 @@ export {
   type InterpolationPlugin,
   type Template,
 } from "./template.js";
-export {
-  signal,
-  computed,
-  effect,
-  store,
-  batch,
-  scope,
-} from "./signals/index.js";
+export { signal, computed, effect, batch, scope } from "./signals/index.js";
 export type {
   Signal,
   Computed,

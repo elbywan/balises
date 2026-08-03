@@ -3,6 +3,7 @@
   "compilerOptions": {
     // Override output settings for typecheck-only
     "noEmit": true,
+    "rootDir": ".",
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,

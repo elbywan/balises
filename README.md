@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library for building websites and web components. ~3.2KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~3.3KB gzipped.
 
 Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
 
@@ -72,7 +72,8 @@ document.body.appendChild(fragment);
 The recommended way to build UIs with balises is using function components - plain functions that receive props and return templates. This pattern is simpler than web components and better for composition.
 
 ```ts
-import { html, store } from "balises";
+import { html } from "balises";
+import { store } from "balises/signals/store";
 
 // Define a reusable component as a function
 function Counter({ state, onIncrement }) {
@@ -187,7 +188,8 @@ Generators receive a mutable context object as their second argument. This objec
 When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM and enable surgical updates via reactive bindings, return the `settled` parameter:
 
 ```ts
-import { html as baseHtml, signal, store } from "balises";
+import { html as baseHtml, signal } from "balises";
+import { store } from "balises/signals/store";
 import asyncPlugin, { type RenderedContent } from "balises/async";
 
 const html = baseHtml.with(asyncPlugin);
@@ -366,7 +368,8 @@ When conditionally rendering content, a naive approach re-creates templates on e
 **Note:** Import from `balises/match` and use `html.with(matchPlugin)` to enable.
 
 ```ts
-import { html as baseHtml, store } from "balises";
+import { html as baseHtml } from "balises";
+import { store } from "balises/signals/store";
 import matchPlugin, { when } from "balises/match";
 
 const html = baseHtml.with(matchPlugin);
@@ -546,6 +549,12 @@ favorites.value = [...favorites.value, "new item"];
 
 A proxy-based alternative to signals. Nested plain objects become reactive automatically.
 
+**Note:** `store` is a separate module to keep the core bundle minimal — import it from `balises/signals/store`:
+
+```ts
+import { store } from "balises/signals/store";
+```
+
 ```ts
 const state = store({ count: 0, user: { name: "Alice" } });
 state.count++; // Reactive
@@ -682,7 +691,7 @@ After dispose, reading `.value` returns the last computed value, but the compute
 You can import just what you need to keep bundle size down:
 
 ```ts
-// Full library (~3.2KB gzipped)
+// Full library (~3.3KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
 // Signals only (no HTML templating - use in any JS project)
@@ -871,7 +880,8 @@ users.value = [{ name: "Alice" }, { name: "Bob" }];
 ## Full Example
 
 ```ts
-import { html, store, computed } from "balises";
+import { html, computed } from "balises";
+import { store } from "balises/signals/store";
 
 class Counter extends HTMLElement {
   private dispose?: () => void;

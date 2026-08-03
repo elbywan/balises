@@ -8,7 +8,8 @@
  * - Progressive data loading (fetch user, then fetch posts)
  */
 
-import { html as baseHtml, signal, store } from "../../src/index.js";
+import { html as baseHtml, signal } from "../../src/index.js";
+import { store } from "../../src/signals/store.js";
 import asyncPlugin, { type RenderedContent } from "../../src/async.js";
 import matchPlugin, { when } from "../../src/match.js";
 

@@ -8,7 +8,8 @@
  * - Cross-tab bridges: "Add to Team" from Pokedex, "View in Pokedex" from Battle
  */
 
-import { html as baseHtml, store, effect, scope } from "../../src/index.js";
+import { html as baseHtml, effect, scope } from "../../src/index.js";
+import { store } from "../../src/signals/store.js";
 import matchPlugin, { match } from "../../src/match.js";
 
 const html = baseHtml.with(matchPlugin);

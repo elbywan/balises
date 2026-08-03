@@ -1,7 +1,8 @@
 // Root application component - renders the entire docs site using Balises
 // Demonstrates data-driven template composition
 
-import { html, computed, store } from "./examples/balises.esm.js";
+import { html, computed } from "./examples/balises.esm.js";
+import { store } from "./examples/balises-esm/signals/store.js";
 
 // ============================================================================
 // Data Structures
