@@ -84,7 +84,7 @@ const API_ITEMS = [
   {
     title: "renderToString(template)",
     code: "ssr-render",
-    desc: "Renders a template to an HTML string in a DOM-less Node environment. Import from <code>balises/ssr</code>.",
+    desc: "Renders a template to an HTML string in a DOM-less Node environment. With <code>{ state }</code> it also returns a serialized payload for the client. Import from <code>balises/ssr</code>.",
   },
   {
     title: "renderToStringAsync(template)",
@@ -94,7 +94,7 @@ const API_ITEMS = [
   {
     title: "hydrate(template, target)",
     code: "ssr-hydrate",
-    desc: "Attaches the reactive bindings to server-rendered markup without re-rendering it. Returns a dispose function. Import from <code>balises/hydrate</code>.",
+    desc: "Attaches the reactive bindings to server-rendered markup without re-rendering it. With <code>{ state }</code> it restores the server's signal values from the page payload first. Returns a dispose function. Import from <code>balises/hydrate</code>.",
   },
   {
     title: "batch(fn)",
@@ -170,8 +170,11 @@ const CODE_EXAMPLES = {
     "const markup = renderToString(html`<p>Count: ${count}</p>`);\n" +
     '// "<p>Count: <!--b-->0<!--/b--></p>"\n' +
     "\n" +
-    "// Async generators need renderToStringAsync (renders the final content):\n" +
-    "const asyncMarkup = await renderToStringAsync(html`${loadUser}`);",
+    "// With { state }, the same call also serializes the signals\n" +
+    "// for the client to restore before hydrating:\n" +
+    "const { html, payload } = renderToString(template, {\n" +
+    "  state: { count },\n" +
+    "});",
 
   "ssr-async":
     'import { renderToStringAsync } from "balises/ssr";\n' +
@@ -189,9 +192,10 @@ const CODE_EXAMPLES = {
     'import { hydrate } from "balises/hydrate";\n' +
     "\n" +
     "// Same template and state as the server - the markup is reused:\n" +
-    'const dispose = hydrate(template, document.querySelector("#app"));\n' +
-    "count.value = 5; // Updates the text in place\n" +
-    "// dispose() releases all subscriptions when removing the subtree",
+    'hydrate(template, document.querySelector("#app"), { state: { count } });\n' +
+    "// { state } restores the server's signal values from the page\n" +
+    "// payload before the bindings attach.\n" +
+    "count.value = 5; // Updates the text in place",
 
   signal:
     "const count = signal(0);\n" +
