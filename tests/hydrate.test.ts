@@ -172,6 +172,55 @@ describe("hydrate", () => {
     c2.remove();
   });
 
+  it("should not crash when a signal slot inside a switched branch updates", () => {
+    // The signal binding's anchor is removed when its branch is switched
+    // away; a later update must be skipped, not crash renderValue.
+    const n = signal(1);
+    const template = html`<div>
+      ${when(
+        () => n.value > 0,
+        [
+          () => html`<span class="alive">${n}</span>`,
+          () => html`<span class="empty">none</span>`,
+        ],
+        { cache: true },
+      )}
+    </div>`;
+    const { container, dispose } = setup(template);
+    assert.strictEqual(container.querySelector(".alive")?.textContent, "1");
+    // Switch away (removes the binding's anchor), then back.
+    n.value = 0;
+    assert.strictEqual(container.querySelector(".empty")?.textContent, "none");
+    n.value = 2;
+    assert.strictEqual(container.querySelector(".alive")?.textContent, "2");
+    assert.strictEqual(container.querySelectorAll(".alive").length, 1);
+    dispose();
+  });
+
+  it("should clear a match region at the very start of the target", () => {
+    // The region has no node before its open marker (boundary is null);
+    // switching branches must still clear it fully.
+    const show = signal(true);
+    const template = html`${when(
+      () => show.value,
+      [
+        () => html`<span class="on">on</span>`,
+        () => html`<span class="off">off</span>`,
+      ],
+    )}`;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(template);
+    const dispose = hydrate(template, container);
+    assert.strictEqual(container.querySelector(".on")?.textContent, "on");
+    show.value = false;
+    assert.strictEqual(container.querySelector(".off")?.textContent, "off");
+    assert.strictEqual(container.querySelector(".on"), null);
+    assert.strictEqual(container.querySelectorAll("span").length, 1);
+    dispose();
+    container.remove();
+  });
+
   it("should render the current match branch fresh when the selector changed since the render", async () => {
     // The SSR rendered branch "a"; at hydration the selector is "b" - the
     // mismatched markup must be replaced, not half-bound.

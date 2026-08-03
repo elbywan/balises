@@ -38,7 +38,7 @@
  */
 
 import { renderValue, type InterpolationPlugin } from "./template.js";
-import { registerHydrateHandler } from "./hydrate.js";
+import { clearRegion, registerHydrateHandler } from "./hydrate.js";
 import { MEMO } from "./descriptors.js";
 
 export { MEMO } from "./descriptors.js";
@@ -179,12 +179,7 @@ registerHydrateHandler((value) => {
     const desc = value as MemoDescriptor;
     const nodes: Node[] = [];
     const childDisposers: (() => void)[] = [];
-    let node = contentStart;
-    while (node && node !== anchor) {
-      const next = node.nextSibling;
-      (node as ChildNode).remove();
-      node = next;
-    }
+    clearRegion(contentStart?.previousSibling ?? null, anchor);
     renderValue(anchor, desc.component(desc.props), nodes, childDisposers);
     disposers.push(() => {
       for (const d of childDisposers) d();

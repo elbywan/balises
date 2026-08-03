@@ -161,9 +161,17 @@ registerHydrateHandler((value) => {
     // settled content does not align with the region (e.g. the route
     // changed since the render), replace it with a fresh render.
     void (async () => {
-      const gen = (value as AsyncGenFn)();
-      let result = await gen.next();
-      while (!result.done) result = await gen.next();
+      // The generator may throw (e.g. a fetch error it does not catch).
+      // The bound generator owns the error path; this walk-instance only
+      // learns the settled template, so errors are ignored here.
+      let result: IteratorResult<unknown>;
+      try {
+        const gen = (value as AsyncGenFn)();
+        result = await gen.next();
+        while (!result.done) result = await gen.next();
+      } catch {
+        return;
+      }
       if (result.value instanceof Template) {
         const aligned = recurse(
           result.value,
@@ -178,10 +186,7 @@ registerHydrateHandler((value) => {
           // then render the settled content fresh.
           for (const f of seed.childDisposers) f();
           seed.childDisposers.length = 0;
-          clearRegion(
-            seed.boundary ?? anchor.parentNode?.firstChild ?? null,
-            anchor,
-          );
+          clearRegion(seed.boundary ?? null, anchor);
           nodes.length = 0;
           renderValue(anchor, result.value, nodes, seed.childDisposers);
         }
@@ -270,10 +275,7 @@ function bindAsyncGenerator(
       // fetch path) may have inserted nodes the seed collection does not
       // know about - remove whatever currently sits between the region
       // boundary and the marker.
-      clearRegion(
-        seed.boundary ?? marker.parentNode?.firstChild ?? null,
-        marker,
-      );
+      clearRegion(seed.boundary ?? null, marker);
     } else {
       for (let i = 0; i < currentNodes.length; i++)
         currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);

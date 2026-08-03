@@ -126,8 +126,8 @@ const cache = new WeakMap<TemplateStringsArray, Cached>();
  * Wrap a function in a scoped computed.
  * Nested computeds/effects are automatically disposed on re-run.
  * Registers disposal of both the computed and nested reactives.
+ * @internal Exported for the hydration module.
  */
-/** @internal Exported for the hydration module. */
 export function wrapFn(fn: () => unknown, d: (() => void)[]) {
   let cleanup: (() => void) | undefined;
   const c = computed(() => {
@@ -145,8 +145,8 @@ export function wrapFn(fn: () => unknown, d: (() => void)[]) {
  * Functions are wrapped in computed() for automatic reactivity.
  * Nested computeds/effects created inside functions are automatically
  * disposed when the function re-runs or the binding is disposed.
+ * @internal Exported for the hydration module.
  */
-/** @internal Exported for the hydration module. */
 export function bind(
   v: unknown,
   update: (v: unknown) => void,

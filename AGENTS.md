@@ -36,6 +36,15 @@ side project — limited maintenance guarantees.
 disposers)`; a binder returning `false` means "skip clearing, preserve
   DOM". Memo's per-marker cache and the detached-marker retries are the
   subtlest parts — change with care.
+- **SSR** (`src/ssr.ts`, `src/hydrate.ts`, `balises/ssr`, `balises/hydrate`)
+  — opt-in, tree-shaken, zero deps. `renderToString(Async)` emit slot
+  markers `<!--b-->…<!--/b-->` (close = anchor) and `<!--k-->` row
+  separators; `hydrate()` walks the SSR DOM in lockstep with the template
+  parse. State protocol: URL/localStorage are authoritative, only
+  non-derivable data is serialized. Region clears MUST walk backward from
+  the anchor to the region boundary (`clearRegion`) — forward walks break
+  when a concurrent render detaches the start node. Run `yarn ssr:smoke`
+  (22 jsdom e2e checks) after touching any of this.
 - `package.json` `exports` mirrors the module layout; `store` is not part of
   the main entry.
 
