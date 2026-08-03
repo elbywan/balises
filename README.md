@@ -102,7 +102,7 @@ document.body.appendChild(fragment);
 ```
 
 <details>
-<summary><b>emo Components</b></summary>
+<summary><b>Memo Components</b></summary>
 
 <br/>
 
@@ -155,7 +155,7 @@ const Counter = memo(
 </details>
 
 <details>
-<summary><b>sync Generators</b></summary>
+<summary><b>Async Generators</b></summary>
 
 <br/>
 
@@ -528,7 +528,7 @@ class MyApp extends HTMLElement {
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
 <details>
-<summary><b>emplate Syntax</b></summary>
+<summary><b>Template Syntax</b></summary>
 
 <br/>
 
@@ -692,7 +692,7 @@ Reactive bindings inside branches continue to work normally regardless of cachin
 </details>
 
 <details>
-<summary><b>eactivity API</b></summary>
+<summary><b>Reactivity API</b></summary>
 
 <br/>
 
@@ -1006,7 +1006,7 @@ const html = baseHtml.with(eachPlugin, matchPlugin, asyncPlugin, memoPlugin);
 ```
 
 <details>
-<summary><b>riting Plugins</b></summary>
+<summary><b>Writing Plugins</b></summary>
 
 <br/>
 
@@ -1150,7 +1150,7 @@ users.value = [{ name: "Alice" }, { name: "Bob" }];
 ```
 
 <details>
-<summary><b>ull Example</b></summary>
+<summary><b>Full Example</b></summary>
 
 <br/>
 
@@ -1226,7 +1226,7 @@ class Counter extends HTMLElement {
 </details>
 
 <details>
-<summary><b>enchmarks</b></summary>
+<summary><b>Benchmarks</b></summary>
 
 <br/>
 
