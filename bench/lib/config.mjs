@@ -9,3 +9,4 @@ export const DIAMOND_TIERS = [5, 10, 20, 50, 100];
 export const CONDITIONAL_TIERS = [10, 50, 100, 500, 1000, 2500];
 export const LIST_TIERS = [10, 50, 100, 500, 1000, 2500];
 export const BATCHING_TIERS = [10, 50, 100, 500, 1000];
+export const CREATE_TIERS = [100, 500, 1000, 5000, 10000];

@@ -63,8 +63,8 @@ export class IsSlot<T> implements TrackableSource {
  */
 export class Signal<T> {
   #value: T;
-  #subs: Subscriber[] = [];
-  #targets: Computed<unknown>[] = [];
+  #subs: Subscriber[] | undefined;
+  #targets: Computed<unknown>[] | undefined;
   #isSlots: Map<T, IsSlot<T>> | undefined;
 
   constructor(value: T) {
@@ -87,8 +87,10 @@ export class Signal<T> {
 
     // Fast path: no .is() slots, just notify regular targets
     if (!isSlots) {
-      for (let i = 0; i < targets.length; i++) {
-        targets[i]!.markDirty();
+      if (targets) {
+        for (let i = 0; i < targets.length; i++) {
+          targets[i]!.markDirty();
+        }
       }
     } else {
       // When .is() slots exist, batch all notifications so markDirty()
@@ -98,27 +100,31 @@ export class Signal<T> {
       batch(() => {
         isSlots.get(prev)?.notify();
         isSlots.get(v)?.notify();
-        for (let i = 0; i < targets.length; i++) {
-          targets[i]!.markDirty();
+        if (targets) {
+          for (let i = 0; i < targets.length; i++) {
+            targets[i]!.markDirty();
+          }
         }
       });
     }
 
     // Notify subscribers
-    if (this.#subs.length) {
+    const subs = this.#subs;
+    if (subs && subs.length) {
       if (isBatching()) {
-        enqueueBatchAll(this.#subs);
+        enqueueBatchAll(subs);
       } else {
         // Copy array to avoid issues if subscribers modify the array during iteration
-        const subs = this.#subs.slice();
-        for (let i = 0; i < subs.length; i++) subs[i]!();
+        const copy = subs.slice();
+        for (let i = 0; i < copy.length; i++) copy[i]!();
       }
     }
   }
 
   subscribe(fn: Subscriber): () => void {
-    this.#subs.push(fn);
-    return () => removeFromArray(this.#subs, fn);
+    const subs = (this.#subs ??= []);
+    subs.push(fn);
+    return () => removeFromArray(subs, fn);
   }
 
   /**
@@ -173,12 +179,12 @@ export class Signal<T> {
 
   /** @internal */
   get targets(): Computed<unknown>[] {
-    return this.#targets;
+    return (this.#targets ??= []);
   }
 
   /** @internal */
   deleteTarget(target: Computed<unknown>): void {
-    removeFromArray(this.#targets, target);
+    if (this.#targets) removeFromArray(this.#targets, target);
   }
 }
 

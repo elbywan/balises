@@ -9,6 +9,10 @@
     "reactive",
     "template"
   ],
+  "workspaces": [
+    "bench",
+    "bench-dom"
+  ],
   "files": [
     "dist"
   ],
@@ -81,15 +85,20 @@
     "pretty": "prettier --write .",
     "examples": "rolldown -c examples/rolldown.config.ts && yarn dlx serve examples",
     "examples:build": "rolldown -c examples/rolldown.config.ts && cp docs/base.css examples/ && cp docs/example.css examples/",
-    "bench": "cd bench && yarn && yarn start --isolate",
-    "bench:update-readme": "cd bench && yarn && node update-readme.mjs",
-    "bench:self": "cd bench && yarn && yarn start:self --isolate",
-    "bench:layers": "cd bench && yarn && yarn start:layers --isolate",
-    "bench:wide": "cd bench && yarn && yarn start:wide --isolate",
-    "bench:diamond": "cd bench && yarn && yarn start:diamond --isolate",
-    "bench:create": "cd bench && yarn && yarn start:create --isolate",
-    "bench:conditional": "cd bench && yarn && yarn start:conditional --isolate",
-    "bench:list": "cd bench && yarn && yarn start:list --isolate",
+    "bench": "yarn workspace balises-benchmarks start --isolate",
+    "bench:update-readme": "yarn workspace balises-benchmarks update-readme",
+    "bench:self": "yarn workspace balises-benchmarks start:self --isolate",
+    "bench:layers": "yarn workspace balises-benchmarks start:layers --isolate",
+    "bench:wide": "yarn workspace balises-benchmarks start:wide --isolate",
+    "bench:diamond": "yarn workspace balises-benchmarks start:diamond --isolate",
+    "bench:create": "yarn workspace balises-benchmarks start:create --isolate",
+    "bench:conditional": "yarn workspace balises-benchmarks start:conditional --isolate",
+    "bench:list": "yarn workspace balises-benchmarks start:list --isolate",
+    "bench-dom": "yarn build && yarn workspace balises-dom-benchmarks start",
+    "bench-dom:build": "yarn build && yarn workspace balises-dom-benchmarks build",
+    "bench-dom:run": "yarn workspace balises-dom-benchmarks build && node --import tsx/esm bench-dom/src/playwright-runner.ts",
+    "bench-dom:quick": "yarn workspace balises-dom-benchmarks build && node --import tsx/esm bench-dom/src/playwright-runner.ts --quick",
+    "bench-dom:check": "yarn bench-dom:run && node --import tsx/esm bench-dom/src/check-standings.ts",
     "docs": "yarn docs:build && yarn dlx serve _site",
     "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/*.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/ && cp -r dist/esm _site/examples/balises-esm"
   },

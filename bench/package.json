@@ -1,5 +1,5 @@
 {
-  "name": "benchmarks",
+  "name": "balises-benchmarks",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,8 @@
     "start:diamond": "node index.mjs --scenario=diamond",
     "start:create": "node index.mjs --scenario=create",
     "start:conditional": "node index.mjs --scenario=conditional",
-    "start:list": "node index.mjs --scenario=list"
+    "start:list": "node index.mjs --scenario=list",
+    "update-readme": "node update-readme.mjs"
   },
   "dependencies": {
     "@angular/core": "^22.1.0",

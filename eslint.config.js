@@ -11,6 +11,7 @@ export default tseslint.config(
       ".yarn/**",
       ".pnp.*",
       "bench/**",
+      "bench-dom/dist/**",
       "_site/**",
       "docs/**",
     ],

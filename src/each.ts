@@ -116,6 +116,7 @@ function bindEach<T>(
     key: unknown,
     index: number,
     ref: Node,
+    container?: DocumentFragment,
   ): CacheEntry<T> => {
     const itemSignal = signal(item);
     const { fragment, dispose } = __renderFn__(
@@ -123,10 +124,12 @@ function bindEach<T>(
       index,
     ).render();
     const nodes = [...fragment.childNodes];
-    parent.insertBefore(fragment, ref);
+    if (container) container.appendChild(fragment);
+    else parent.insertBefore(fragment, ref);
     if (!nodes.length) {
       const placeholder = document.createComment("");
-      parent.insertBefore(placeholder, ref);
+      if (container) container.appendChild(placeholder);
+      else parent.insertBefore(placeholder, ref);
       nodes.push(placeholder);
     }
     const entry: CacheEntry<T> = { nodes, dispose, itemSignal };
@@ -137,8 +140,10 @@ function bindEach<T>(
   const removeEntry = (key: unknown): void => {
     const entry = cache.get(key);
     if (!entry) return;
-    entry.dispose();
+    // Remove from the DOM first: disposers can then skip work that is
+    // unnecessary for disconnected nodes (e.g. removeEventListener).
     for (const node of entry.nodes) (node as ChildNode).remove();
+    entry.dispose();
     cache.delete(key);
   };
 
@@ -180,7 +185,29 @@ function bindEach<T>(
     // Fast path: empty list
     if (newLen === 0) {
       if (oldLen > 0) {
-        for (const key of [...cache.keys()]) removeEntry(key);
+        // Remove all the DOM between the markers first (single bulk pass),
+        // then dispose every entry's subscriptions - removed nodes let
+        // binding disposers skip work like removeEventListener.
+        const parent = startMarker.parentNode!;
+        if (parent.firstChild === startMarker && parent.lastChild === marker) {
+          // The region spans the whole parent: replace all children in a
+          // single native call, then restore the two markers.
+          parent.replaceChildren(startMarker, marker);
+        } else {
+          // Remove the region's direct children one by one.
+          let node = startMarker.nextSibling;
+          while (node && node !== marker) {
+            const next = node.nextSibling;
+            parent.removeChild(node);
+            node = next;
+          }
+        }
+        const keys = [...cache.keys()];
+        for (let i = 0; i < keys.length; i++) {
+          const entry = cache.get(keys[i]!)!;
+          entry.dispose();
+          cache.delete(keys[i]!);
+        }
         oldKeys = [];
       }
       return;
@@ -191,6 +218,9 @@ function bindEach<T>(
       const newKeys: unknown[] = [];
       const seen = new Set<unknown>();
       let warnedDupe = false;
+      // Batch all rows into a detached fragment and insert once - much
+      // cheaper than 1000 individual live insertBefore calls.
+      const container = document.createDocumentFragment();
       for (let i = 0; i < newLen; i++) {
         const item = items[i]!;
         const key = __keyFn__(item, i);
@@ -202,9 +232,10 @@ function bindEach<T>(
           continue;
         }
         seen.add(key);
-        createEntry(parent, item, key, i, marker);
+        createEntry(parent, item, key, i, marker, container);
         newKeys.push(key);
       }
+      parent.insertBefore(container, marker);
       oldKeys = newKeys;
       return;
     }
@@ -225,6 +256,30 @@ function bindEach<T>(
       } else {
         seen.add(key);
         newKeys[i] = key;
+      }
+    }
+
+    // Fast path: pure append (the old list is a prefix of the new list).
+    // Avoids the two-pointer reconciliation + map building entirely.
+    if (newLen > oldLen && !hasDupes) {
+      let append = true;
+      for (let i = 0; i < oldLen; i++) {
+        if (newKeys[i] !== oldKeys[i]) {
+          append = false;
+          break;
+        }
+        // Keep matched entries' item signals in sync (items may be new
+        // objects with the same keys).
+        cache.get(oldKeys[i]!)!.itemSignal.value = items[i]!;
+      }
+      if (append) {
+        const container = document.createDocumentFragment();
+        for (let i = oldLen; i < newLen; i++) {
+          createEntry(parent, items[i]!, newKeys[i]!, i, marker, container);
+        }
+        parent.insertBefore(container, marker);
+        oldKeys = [...seen];
+        return;
       }
     }
 
@@ -379,7 +434,25 @@ function bindEach<T>(
     unsub();
     listComputed.dispose();
     if (cache.size > 0) {
-      for (const key of [...cache.keys()]) removeEntry(key);
+      // Bulk-remove the region's DOM first, then dispose entries.
+      const parent = startMarker.parentNode;
+      if (parent) {
+        if (parent.firstChild === startMarker && parent.lastChild === marker) {
+          parent.replaceChildren(startMarker, marker);
+        } else {
+          let node = startMarker.nextSibling;
+          while (node && node !== marker) {
+            const next = node.nextSibling;
+            parent.removeChild(node);
+            node = next;
+          }
+        }
+      }
+      for (const key of [...cache.keys()]) {
+        const entry = cache.get(key)!;
+        entry.dispose();
+        cache.delete(key);
+      }
     }
     startMarker.remove();
   });

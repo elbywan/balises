@@ -336,7 +336,14 @@ export class Template {
         const [, , name, slot] = b;
         const handler = values[slot] as EventListener;
         node.addEventListener(name, handler);
-        disposers.push(() => node.removeEventListener(name, handler));
+        disposers.push(() => {
+          // Nodes removed from the DOM are garbage-collected with their
+          // listeners - skip the removal (nodes in a detached fragment
+          // keep their parentNode, so this only skips truly removed nodes).
+          if (node.parentNode !== null) {
+            node.removeEventListener(name, handler);
+          }
+        });
       }
     }
 
@@ -415,7 +422,7 @@ export class Template {
         !childDisposers.length &&
         currentNodes[0] instanceof Text
       ) {
-        currentNodes[0].textContent = String(v);
+        (currentNodes[0] as Text).nodeValue = String(v);
         return;
       }
       clear();

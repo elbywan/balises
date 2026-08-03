@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Benchmark Runner</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 20px;
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table td {
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+      }
+      .table tr.danger {
+        background: #f2dede;
+      }
+      .col-md-1 {
+        width: 8%;
+      }
+      .col-md-4 {
+        width: 33%;
+      }
+      .col-md-6 {
+        width: 50%;
+      }
+      #status {
+        margin-bottom: 10px;
+        padding: 10px;
+        background: #f0f0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading...</div>
+    <div id="bench-buttons" style="display: none">
+      <button data-benchmark="create1000">create1000</button>
+      <button data-benchmark="create10000">create10000</button>
+      <button data-benchmark="append1000">append1000</button>
+      <button data-benchmark="updateEvery10th">updateEvery10th</button>
+      <button data-benchmark="selectRow">selectRow</button>
+      <button data-benchmark="swapRows">swapRows</button>
+      <button data-benchmark="removeRow">removeRow</button>
+      <button data-benchmark="clear">clear</button>
+    </div>
+    <div id="container"></div>
+
+    <script type="module">
+      // Get framework from URL
+      const params = new URLSearchParams(window.location.search);
+      const framework = params.get("framework") || "vanilla";
+
+      const statusEl = document.getElementById("status");
+      const container = document.getElementById("container");
+
+      // Dynamic import based on framework
+      async function loadFramework() {
+        let suite;
+        try {
+          switch (framework) {
+            case "vanilla":
+              const vanilla = await import("./dist/vanilla.js");
+              suite = vanilla.vanillaSuite || vanilla.default;
+              break;
+            case "balises":
+              const balises = await import("./dist/balises.js");
+              suite = balises.balisesSuite || balises.default;
+              break;
+            case "balises-compiled":
+              const compiled = await import("./dist/balises-compiled.js");
+              suite = compiled.balisesCompiledSuite || compiled.default;
+              break;
+            case "solid":
+              const solid = await import("./dist/solid.js");
+              suite = solid.solidSuite || solid.default;
+              break;
+            case "vue":
+              const vue = await import("./dist/vue.js");
+              suite = vue.vueSuite || vue.default;
+              break;
+            case "lit":
+              const lit = await import("./dist/lit.js");
+              suite = lit.litSuite || lit.default;
+              break;
+            case "react":
+              const react = await import("./dist/react.js");
+              suite = react.reactSuite || react.default;
+              break;
+            case "preact":
+              const preact = await import("./dist/preact.js");
+              suite = preact.preactSuite || preact.default;
+              break;
+            case "svelte":
+              const svelte = await import("./dist/svelte.js");
+              suite = svelte.svelteSuite || svelte.default;
+              break;
+            default:
+              throw new Error(`Unknown framework: ${framework}`);
+          }
+        } catch (error) {
+          statusEl.textContent = `Failed to load ${framework}: ${error.message}`;
+          throw error;
+        }
+
+        // Initialize the suite
+        suite.init(container);
+
+        // Expose benchmark functions
+        window.benchmarks = {
+          create1000: () => {
+            suite.cleanup();
+            suite.init(container);
+            suite.create1000();
+          },
+          create10000: () => {
+            suite.cleanup();
+            suite.init(container);
+            suite.create10000();
+          },
+          append1000: () => suite.append1000(),
+          updateEvery10th: () => suite.updateEvery10th(),
+          selectRow: () => suite.selectRow(5),
+          swapRows: () => suite.swapRows(),
+          removeRow: () => suite.removeRow(5),
+          clear: () => suite.clear(),
+        };
+
+        // Setup function for benchmarks that need existing data
+        window.benchSetup = () => {
+          suite.cleanup();
+          suite.init(container);
+          suite.create1000();
+        };
+
+        // Reset function
+        window.benchReset = () => {
+          suite.cleanup();
+          suite.init(container);
+        };
+
+        // Wire up buttons to benchmark functions
+        document.querySelectorAll("[data-benchmark]").forEach((btn) => {
+          const benchName = btn.getAttribute("data-benchmark");
+          btn.addEventListener("click", () => {
+            if (window.benchmarks[benchName]) {
+              window.benchmarks[benchName]();
+            }
+          });
+        });
+
+        // Signal that we're ready
+        window.benchReady = true;
+        statusEl.textContent = `${framework} loaded and ready`;
+      }
+
+      loadFramework().catch((err) => {
+        console.error("Failed to load framework:", err);
+      });
+    </script>
+  </body>
+</html>
