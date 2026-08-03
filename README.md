@@ -340,25 +340,79 @@ async function* loadUser(settled) {
 }
 ```
 
+A complete recipe - the `state` option serializes the listed signals on the server and restores them before hydrating, so no manual JSON plumbing is needed:
+
+```ts
+// app.ts - the piece both the server and the browser run
+const userId = signal(1);
+const user = signal<User | null>(null); // fetched data, restored from the payload
+
+function App() {
+  return html`
+    <div>
+      ${async function* (settled?: unknown) {
+        const id = userId.value; // Tracked: changes restart the generator.
+        if (settled) return settled; // Hydration: keep the server DOM.
+        if (user.value?.id === id) {
+          // Data restored from the payload: render it, no fetch.
+          return UserCard(user.value);
+        }
+        yield html`<p>Loading user ${id}...</p>`;
+        const u = await fetchUser(id); // Node at build time, browser afterwards.
+        user.value = u; // Stored so the payload can carry it.
+        return UserCard(u);
+      }}
+    </div>
+  `;
+}
+```
+
+```ts
+// build time (Node) - pass the state to serialize
+import { renderToStringAsync } from "balises/ssr";
+
+const { html, payload } = await renderToStringAsync(App(), {
+  state: { userId, user }, // anything with a .value: signals, computeds...
+});
+// ship `html` + <script id="ssr-data" type="application/json">${payload}</script>
+```
+
+```ts
+// client bootstrap - the state option restores before hydrating
+import { hydrate } from "balises/hydrate";
+
+hydrate(App(), document.querySelector("#app"), { state: { userId, user } });
+```
+
+Fetching happens in three phases with the same code: the server runs the generators (real fetches in Node); hydration restores the payload state and the generators render from it without refetching; and a tracked-signal change restarts a generator, fetching fresh in the browser. Data the initial render needs goes in the payload; navigation-driven data is refetched by the generator itself; auth/user-specific data stays client-only (fetch after hydration).
+
+For custom restore logic (URLs, localStorage, validation), `serializeState`/`deserializeState` are exported from `balises/ssr` and `balises/hydrate` as the manual building blocks.
+
 </details>
 
 <details>
 <summary><b>Sharing state between the server and the client</b></summary>
 
 <br/>
-The client must recreate the state the server rendered with, or the markup and the bindings disagree. Serialize what the client cannot derive into the page, and restore it before hydrating:
+The client must recreate the state the server rendered with, or the markup and the bindings disagree. The `state` option of `renderToString(Async)` / `hydrate` does this automatically for any signal or computed (see "Fetching data" above). The manual equivalent - for custom restore logic around URLs, localStorage or validation:
 
 ```ts
 // server.ts
+import { serializeState } from "balises/ssr";
+
 const markup = renderToString(template);
 const page = `<div id="app">${markup}</div>
-  <script id="ssr-data" type="application/json">${JSON.stringify({ count: count.value }).replace(/</g, "\u003c")}</script>`;
+  <script id="ssr-data" type="application/json">${serializeState({ count: count.value })}</script>`;
 ```
 
 ```ts
 // client.ts
-const state = JSON.parse(document.getElementById("ssr-data")!.textContent!);
-const count = signal(state.count);
+import { deserializeState } from "balises/hydrate";
+
+const state = deserializeState<{ count: number }>(
+  document.getElementById("ssr-data"),
+);
+const count = signal(state?.count ?? 0);
 hydrate(html`<p>Count: ${count}</p>`, document.querySelector("#app"));
 ```
 

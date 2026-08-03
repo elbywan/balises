@@ -18,6 +18,16 @@ function setup(template: ReturnType<typeof html>, target = document.body) {
   return { container, nodes, dispose };
 }
 
+/** Helper: the state option returns { html, payload }. */
+async function renderToStringAsyncWithState(
+  template: ReturnType<typeof html>,
+  state: Record<string, { value: unknown }>,
+) {
+  const result = await renderToStringAsync(template, { state });
+  if (typeof result === "string") throw new Error("expected state form");
+  return result;
+}
+
 describe("hydrate", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
@@ -42,6 +52,37 @@ describe("hydrate", () => {
     assert.strictEqual(text, p.firstChild, "static text node untouched");
 
     dispose();
+  });
+
+  it("should restore state passed to hydrate from the page payload", async () => {
+    const count = signal(1);
+    const user = signal<{ name: string } | null>(null);
+    const template = html`<p>${count}</p>`;
+    // The server rendered with different values than the client defaults.
+    const { html: serverHtml, payload } = await renderToStringAsyncWithState(
+      template,
+      { count, user },
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = serverHtml;
+    const data = document.createElement("script");
+    data.id = "ssr-data";
+    data.type = "application/json";
+    data.textContent = payload;
+    document.body.appendChild(data);
+    // The client defaults are stale; hydrate restores them first.
+    count.value = 99;
+    user.value = { name: "stale" };
+    const dispose = hydrate(template, container, { state: { count, user } });
+    assert.strictEqual(container.textContent, "1");
+    assert.strictEqual(count.value, 1);
+    assert.deepStrictEqual(user.value, null);
+    count.value = 7;
+    assert.strictEqual(container.textContent, "7");
+    data.remove();
+    dispose();
+    container.remove();
   });
 
   it("should throw when hydrating an empty target", () => {

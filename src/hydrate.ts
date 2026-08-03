@@ -26,6 +26,7 @@ import {
 } from "./template.js";
 import { isSignal, type Reactive } from "./signals/index.js";
 import { SSR_OPEN, SSR_CLOSE, ssrTemplateData } from "./ssr-shared.js";
+import { deserializeState } from "./ssr-state.js";
 import { MEMO, MATCH } from "./descriptors.js";
 
 /**
@@ -434,7 +435,39 @@ function hydrateBound(
  * const dispose = hydrate(html`<p>Count: ${count}</p>`, container);
  * ```
  */
-export function hydrate(template: Template, target: ParentNode): () => void {
+/** Options accepted by `hydrate`: reactive state to restore from the
+ *  page payload before attaching the bindings. */
+export interface HydrateOptions {
+  /** Signals/computeds (anything with a `.value`) to restore. */
+  state?: Record<string, { value: unknown }>;
+  /** Id of the payload script tag (defaults to "ssr-data"). */
+  elementId?: string;
+}
+
+export function hydrate(template: Template, target: ParentNode): () => void;
+export function hydrate(
+  template: Template,
+  target: ParentNode,
+  options: HydrateOptions,
+): () => void;
+export function hydrate(
+  template: Template,
+  target: ParentNode,
+  options?: HydrateOptions,
+): () => void {
+  if (options?.state) {
+    // Restore the state the server rendered with before the walk runs:
+    // the bindings read the signal values while attaching.
+    const parsed = deserializeState(
+      document.getElementById(options.elementId ?? "ssr-data"),
+    );
+    if (parsed) {
+      const record = parsed as Record<string, unknown>;
+      for (const [key, ref] of Object.entries(options.state)) {
+        if (key in record) ref.value = record[key];
+      }
+    }
+  }
   if (!target.firstChild) {
     throw new Error(
       "[balises/hydrate] The target is empty - there is no server-rendered markup to hydrate. Render the template instead, or call hydrate on the element that received the markup.",

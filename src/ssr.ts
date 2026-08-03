@@ -27,6 +27,7 @@ import { MATCH, type MatchDescriptor } from "./match.js";
 import { MEMO } from "./memo.js";
 import { isAsyncGeneratorFunction } from "./async.js";
 import { SSR_OPEN, SSR_CLOSE, SSR_ROW } from "./ssr-shared.js";
+import { serializeState } from "./ssr-state.js";
 
 /** Escape text content for HTML. */
 function escapeText(value: string): string {
@@ -215,6 +216,22 @@ function renderTemplate(tpl: Template, ctx: SsrContext): string {
   return out;
 }
 
+/** Options accepted by the SSR renderers: reactive state to serialize
+ *  into the page for the client to restore before hydrating. */
+export interface SsrStateOptions {
+  /** Signals/computeds (anything with a `.value`) to serialize. */
+  state?: Record<string, { value: unknown }>;
+}
+
+/** Read the current values of the state option. */
+function readState(
+  state: Record<string, { value: unknown }>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, ref] of Object.entries(state)) out[key] = ref.value;
+  return out;
+}
+
 /**
  * Render a template to an HTML string.
  *
@@ -231,8 +248,18 @@ function renderTemplate(tpl: Template, ctx: SsrContext): string {
  * // "<p>Count: <!--b-->0<!--/b--></p>"
  * ```
  */
-export function renderToString(template: Template): string {
-  return renderTemplate(template, { async: false });
+export function renderToString(template: Template): string;
+export function renderToString(
+  template: Template,
+  options: SsrStateOptions,
+): { html: string; payload: string };
+export function renderToString(
+  template: Template,
+  options?: SsrStateOptions,
+): string | { html: string; payload: string } {
+  const html = renderTemplate(template, { async: false });
+  if (!options?.state) return html;
+  return { html, payload: serializeState(readState(options.state)) };
 }
 
 /** Run an async generator to completion and collect its final content. */
@@ -251,11 +278,20 @@ async function runAsyncGenerator(
  * Render a template to an HTML string, awaiting async generators to
  * completion (their final content is rendered).
  */
-export async function renderToStringAsync(template: Template): Promise<string> {
+export function renderToStringAsync(template: Template): Promise<string>;
+export function renderToStringAsync(
+  template: Template,
+  options: SsrStateOptions,
+): Promise<{ html: string; payload: string }>;
+export async function renderToStringAsync(
+  template: Template,
+  options?: SsrStateOptions,
+): Promise<string | { html: string; payload: string }> {
   const ctx: SsrContext = { async: true, pending: new Map(), uid: 0 };
   let out = renderTemplate(template, ctx);
   for (const [token, promise] of ctx.pending ?? []) {
     out = out.replaceAll(token, await promise);
   }
-  return out;
+  if (!options?.state) return out;
+  return { html: out, payload: serializeState(readState(options.state)) };
 }
