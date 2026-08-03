@@ -49,6 +49,23 @@ export type HydrateRecurse = (
 ) => boolean;
 
 /**
+ * Remove everything currently sitting between a region's boundary (the
+ * node before its open marker, which never gets removed by region
+ * renders) and its anchor. Region clears MUST walk backward from the
+ * anchor: a forward walk from a captured start node breaks once a
+ * concurrent render detaches that node (its `nextSibling` becomes null
+ * and the loop exits immediately), leaving stale content behind. @internal
+ */
+export function clearRegion(boundary: Node | null, anchor: Node): void {
+  let current: Node | null = anchor.previousSibling;
+  while (current && current !== boundary) {
+    const prev: Node | null = current.previousSibling;
+    (current as ChildNode).remove();
+    current = prev;
+  }
+}
+
+/**
  * Registry of hydration handlers for plugin descriptor types
  * (each/match/memo/async). Plugins register at module load, so the
  * core bundle stays free of the plugin modules. @internal
@@ -84,7 +101,13 @@ export function hydrateWalk(
   startNode: Node | null,
   disposers: (() => void)[],
 ): HydrateWalkResult {
-  const [strings, values] = ssrTemplateData.get(tpl)!;
+  const data = ssrTemplateData.get(tpl);
+  if (!data) {
+    throw new Error(
+      "This template was created by a different balises build - import html and hydrate from the same package entry.",
+    );
+  }
+  const [strings, values] = data;
   let cursor = startNode;
   let aligned = true;
   const elementStack: Element[] = [];
@@ -246,7 +269,11 @@ function hydrateSlotValue(
   disposers: (() => void)[],
   recurse: HydrateRecurse,
 ): boolean {
-  if (value == null || typeof value === "boolean") return true;
+  if (value == null || typeof value === "boolean") {
+    // The server rendered nothing for such slots: the region must be
+    // empty, or the markup belongs to a different structure.
+    return !contentStart || contentStart === anchor;
+  }
   if (isSignal(value)) {
     hydrateBound(value, contentStart, anchor, disposers);
     return true;
@@ -359,6 +386,7 @@ function hydrateBound(
     currentNodes.length = 0;
   };
   const update = (v: unknown) => {
+    if (!anchor.parentNode) return; // Region removed (e.g. hidden branch).
     clear();
     renderValue(anchor, v, currentNodes, childDisposers);
   };

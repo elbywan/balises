@@ -139,8 +139,15 @@ function renderEach(desc: EachDescriptor<unknown>, ctx: SsrContext): string {
 }
 
 function renderMatch(desc: MatchDescriptor, ctx: SsrContext): string {
+  const cases = desc.cases;
   const key = String(desc.selector());
-  const factory = desc.cases[key] ?? desc.cases["_"];
+  // Only own keys match - inherited Object.prototype keys like
+  // "toString"/"constructor" must never be treated as cases.
+  const factory = Object.hasOwn(cases, key)
+    ? cases[key]
+    : Object.hasOwn(cases, "_")
+      ? cases["_"]
+      : undefined;
   if (!factory) return "";
   return renderTemplate(factory(), ctx);
 }

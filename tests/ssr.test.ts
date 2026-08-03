@@ -147,6 +147,32 @@ describe("renderToString", () => {
     );
   });
 
+  it("should not treat Object.prototype keys as match cases", () => {
+    const key = signal<string>("nope");
+    const template = html`<div>
+      ${match(() => key.value, {
+        a: () => html`<span class="ma">A</span>`,
+        _: () => html`<span class="fallback">F</span>`,
+      })}
+    </div>`;
+    // "toString" is on Object.prototype - must hit the default case,
+    // not crash by calling the inherited function as a factory.
+    assert.strictEqual(
+      renderToString(template),
+      '<div>\n      <!--b--><span class="fallback">F</span><!--/b-->\n    </div>',
+    );
+    key.value = "toString";
+    assert.strictEqual(
+      renderToString(template),
+      '<div>\n      <!--b--><span class="fallback">F</span><!--/b-->\n    </div>',
+    );
+    key.value = "a";
+    assert.strictEqual(
+      renderToString(template),
+      '<div>\n      <!--b--><span class="ma">A</span><!--/b-->\n    </div>',
+    );
+  });
+
   it("should render memoized components", () => {
     const Card = memo(({ name }: { name: string }) => html`<b>${name}</b>`);
     assert.strictEqual(

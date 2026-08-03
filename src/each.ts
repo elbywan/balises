@@ -105,7 +105,7 @@ function hydrateEach<T>(
   contentStart: Node | null,
   anchor: Comment,
   disposers: (() => void)[],
-): void {
+): boolean {
   const rawList = desc.__list__;
   const items = (
     typeof rawList === "function" && !isSignal(rawList)
@@ -115,6 +115,7 @@ function hydrateEach<T>(
         : (rawList as T[])
   ) as T[];
   const adopted: { key: unknown; entry: CacheEntry<T> }[] = [];
+  let aligned = true;
   let node = contentStart;
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
@@ -132,7 +133,10 @@ function hydrateEach<T>(
     const itemSignal = signal(item);
     const rowDisposers: (() => void)[] = [];
     const rowTpl = desc.__renderFn__(new ReadonlySignal(itemSignal), i);
-    if (rowNodes[0]) hydrateWalk(rowTpl, rowNodes[0]!, rowDisposers);
+    if (rowNodes[0]) {
+      const result = hydrateWalk(rowTpl, rowNodes[0]!, rowDisposers);
+      if (!result.aligned) aligned = false;
+    }
     const key = desc.__keyFn__(item, i);
     adopted.push({
       key,
@@ -146,19 +150,18 @@ function hydrateEach<T>(
     });
   }
   bindEachHydrated(desc, anchor, disposers, adopted);
+  return aligned;
 }
 
 registerHydrateHandler((value) => {
   if (!(value && typeof value === "object" && EACH in value)) return null;
-  return (contentStart, anchor, disposers) => {
+  return (contentStart, anchor, disposers) =>
     hydrateEach(
       value as EachDescriptor<unknown>,
       contentStart,
       anchor,
       disposers,
     );
-    return true;
-  };
 });
 
 /**

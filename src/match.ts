@@ -31,7 +31,7 @@
 
 import { computed } from "./signals/computed.js";
 import { Template, renderValue, type InterpolationPlugin } from "./template.js";
-import { hydrateWalk, registerHydrateHandler } from "./hydrate.js";
+import { clearRegion, hydrateWalk, registerHydrateHandler } from "./hydrate.js";
 import { MATCH } from "./descriptors.js";
 
 export { MATCH } from "./descriptors.js";
@@ -163,21 +163,23 @@ registerHydrateHandler((value) => {
     const clear = () => {
       for (const d of childDisposers) d();
       childDisposers.length = 0;
-      // Remove whatever currently sits between the boundary and the
-      // anchor: concurrent renders (e.g. the async generator inside a
-      // branch) may have inserted nodes the stale `nodes` collection
-      // does not know about.
-      let current: Node | null = anchor.previousSibling;
-      while (current && current !== boundary) {
-        const prev: Node | null = current.previousSibling;
-        (current as ChildNode).remove();
-        current = prev;
-      }
+      clearRegion(boundary, anchor);
       nodes.length = 0;
+    };
+    // Only own keys match - inherited Object.prototype keys like
+    // "toString"/"constructor" must never be treated as cases.
+    const getFactory = () => {
+      const cases = value.cases;
+      const key = keyComputed.value;
+      return Object.hasOwn(cases, key)
+        ? cases[key]
+        : Object.hasOwn(cases, "_")
+          ? cases["_"]
+          : undefined;
     };
     const renderBranch = () => {
       clear();
-      const factory = value.cases[keyComputed.value] ?? value.cases["_"];
+      const factory = getFactory();
       if (factory) renderValue(anchor, factory(), nodes, childDisposers);
     };
     // Collect the server-rendered region so switches can clear it.
@@ -188,7 +190,7 @@ registerHydrateHandler((value) => {
     }
     let adopted = false;
     if (contentStart) {
-      const factory = value.cases[keyComputed.value] ?? value.cases["_"];
+      const factory = getFactory();
       if (factory) {
         const walkDisposers: (() => void)[] = [];
         adopted = hydrateWalk(factory(), contentStart, walkDisposers).aligned;

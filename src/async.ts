@@ -28,7 +28,11 @@ import {
   type TrackableSource,
 } from "./signals/context.js";
 import { renderValue, Template, type InterpolationPlugin } from "./template.js";
-import { registerHydrateHandler, type HydrateRecurse } from "./hydrate.js";
+import {
+  clearRegion,
+  registerHydrateHandler,
+  type HydrateRecurse,
+} from "./hydrate.js";
 import { isSignal, type Reactive } from "./signals/index.js";
 
 /** Reactive source type - TrackableSource may or may not be subscribable */
@@ -169,18 +173,15 @@ registerHydrateHandler((value) => {
         );
         if (!aligned) {
           // The binding may have replaced the region while the walk ran
-          // (both run the generator's fetch path); the seed nodes may be
-          // stale, so remove whatever currently sits between the region
-          // boundary and the anchor (walking back from the anchor: the
-          // forward start may itself have been removed already).
+          // (both run the generator's fetch path): clear whatever
+          // currently sits between the region boundary and the anchor,
+          // then render the settled content fresh.
           for (const f of seed.childDisposers) f();
           seed.childDisposers.length = 0;
-          let current: Node | null = anchor.previousSibling;
-          while (current && current !== seed.boundary) {
-            const prev: Node | null = current.previousSibling;
-            (current as ChildNode).remove();
-            current = prev;
-          }
+          clearRegion(
+            seed.boundary ?? anchor.parentNode?.firstChild ?? null,
+            anchor,
+          );
           nodes.length = 0;
           renderValue(anchor, result.value, nodes, seed.childDisposers);
         }
@@ -264,18 +265,15 @@ function bindAsyncGenerator(
   const clearNodes = () => {
     for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
     childDisposers = [];
-    if (seed?.boundary) {
+    if (seed) {
       // Hydrated region: concurrent renders (the hydration walk's own
       // fetch path) may have inserted nodes the seed collection does not
-      // know about - walk back from the marker to the region boundary,
-      // removing whatever currently sits in between (the forward start
-      // may itself have been removed already).
-      let current: Node | null = marker.previousSibling;
-      while (current && current !== seed.boundary) {
-        const prev: Node | null = current.previousSibling;
-        current.parentNode?.removeChild(current);
-        current = prev;
-      }
+      // know about - remove whatever currently sits between the region
+      // boundary and the marker.
+      clearRegion(
+        seed.boundary ?? marker.parentNode?.firstChild ?? null,
+        marker,
+      );
     } else {
       for (let i = 0; i < currentNodes.length; i++)
         currentNodes[i]!.parentNode?.removeChild(currentNodes[i]!);
