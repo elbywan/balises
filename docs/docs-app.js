@@ -98,6 +98,11 @@ const API_ITEMS = [
     desc: "Like renderToString, but awaits async generators and renders their final content. Import from <code>balises/ssr</code>.",
   },
   {
+    title: "renderToStringStream(template)",
+    code: "ssr-stream",
+    desc: "Renders progressively: the shell first, then each async generator's content as it settles (chunks are prefixes of the final HTML). Stopping iteration early cancels in-flight generators via their context signal. Read the state for the payload after the loop (serializeState). Import from <code>balises/ssr</code>.",
+  },
+  {
     title: "hydrate(template, target)",
     code: "ssr-hydrate",
     desc: "Attaches the reactive bindings to server-rendered markup without re-rendering it. With <code>{ state }</code> it restores the server's signal values from the page payload first. Returns a dispose function. Import from <code>balises/hydrate</code>.",

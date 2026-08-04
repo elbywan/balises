@@ -14,7 +14,10 @@
  *
  * Async generators are supported via `renderToStringAsync()`, which runs
  * generators to completion and renders their final content (including
- * generators nested inside each() rows and match() branches).
+ * generators nested inside each() rows and match() branches), and
+ * `renderToStringStream()`, which emits the HTML progressively as each
+ * generator settles. Generators receive a context carrying the render's
+ * AbortSignal: stopping a stream early cancels the in-flight work.
  */
 
 import { HTMLParser } from "./parser.js";
@@ -25,7 +28,10 @@ import { signal, ReadonlySignal } from "./signals/signal.js";
 import { EACH, type EachDescriptor } from "./each.js";
 import { MATCH, type MatchDescriptor } from "./match.js";
 import { MEMO } from "./memo.js";
-import { isAsyncGeneratorFunction } from "./async.js";
+import {
+  isAsyncGeneratorFunction,
+  type AsyncGeneratorContext,
+} from "./async.js";
 import { SSR_OPEN, SSR_CLOSE, SSR_ROW } from "./ssr-shared.js";
 import { serializeState } from "./ssr-state.js";
 
@@ -58,9 +64,19 @@ interface SsrContext {
   async: boolean;
   pending?: Map<string, Promise<string>>;
   uid?: number;
+  /** Abort controller for the whole render: aborts when a stream
+   *  consumer stops iterating early, cancelling in-flight generators
+   *  through their context signal. */
+  controller?: AbortController;
 }
 
 const uidToken = (uid: number): string => `\u0000ssr${uid}\u0000`;
+
+/** Matches an async placeholder token (`\u0000ssr<uid>\u0000`). */
+// The token is NUL-delimited by design (user text can never contain
+// the full token sequence); the rule is irrelevant here.
+// eslint-disable-next-line no-control-regex
+const TOKEN_RE = /\u0000ssr\d+\u0000/;
 
 function renderValue(value: unknown, ctx: SsrContext): string {
   if (value == null || typeof value === "boolean") return "";
@@ -86,22 +102,35 @@ function renderValue(value: unknown, ctx: SsrContext): string {
     if (isAsyncGeneratorFunction(value)) {
       if (!ctx.async) {
         throw new Error(
-          "[balises/ssr] Async generators require renderToStringAsync().",
+          "[balises/ssr] Async generators require renderToStringAsync() or renderToStringStream().",
         );
       }
       // Register the generator for post-parse resolution and emit a
       // placeholder token in its place (works at any nesting depth).
+      // The generator receives a context whose signal aborts when the
+      // render is cancelled (stream consumer stopped early), so
+      // server-side requests can be wired to it too.
       const uid = ctx.uid!++;
-      ctx.pending!.set(
-        uidToken(uid),
-        (async () => {
-          const gen = (
-            value as () => AsyncGenerator<unknown, unknown, unknown>
-          )();
-          const result = await runAsyncGenerator(gen);
-          return renderValue(result, ctx);
-        })(),
-      );
+      ctx.controller ??= new AbortController();
+      const controller = ctx.controller;
+      const promise = (async () => {
+        // Two arguments: settled is undefined on the server, the
+        // context goes in its documented (second) position.
+        const gen = (
+          value as (
+            settled?: unknown,
+            ctx?: AsyncGeneratorContext,
+          ) => AsyncGenerator<unknown, unknown, unknown>
+        )(undefined, { signal: controller.signal });
+        const result = await runAsyncGenerator(gen);
+        return renderValue(result, ctx);
+      })();
+      // Mark handled: when a stream consumer stops early, the abort
+      // cancels in-flight generators and their promises reject - that
+      // must not surface as unhandled rejections. Consumers that await
+      // the promise still observe the error.
+      promise.catch(() => {});
+      ctx.pending!.set(uidToken(uid), promise);
       return uidToken(uid);
     }
     return renderValue((value as () => unknown)(), ctx);
@@ -278,7 +307,11 @@ async function runAsyncGenerator(
 
 /**
  * Render a template to an HTML string, awaiting async generators to
- * completion (their final content is rendered).
+ * completion (their final content is rendered). Implemented on top of
+ * `renderToStringStream`; a failing generator rejects the whole render
+ * and cancels the other in-flight generators. The state payload is
+ * read after the render, so generator writes to state signals are
+ * included.
  */
 export function renderToStringAsync(template: Template): Promise<string>;
 export function renderToStringAsync(
@@ -289,11 +322,74 @@ export async function renderToStringAsync(
   template: Template,
   options?: SsrStateOptions,
 ): Promise<string | { html: string; payload: string }> {
+  let html = "";
+  for await (const chunk of renderToStringStream(template)) html += chunk;
+  if (!options?.state) return html;
+  return { html, payload: serializeState(readState(options.state)) };
+}
+
+/**
+ * Render a template to an HTML string as a stream of chunks.
+ *
+ * Chunks are emitted as async slots settle: everything before the first
+ * async generator is the first chunk, then each generator's content as
+ * it resolves (in order of appearance), then the tail. Every chunk is a
+ * text prefix of the final HTML, so consumers can forward them
+ * incrementally (e.g. `res.write` per chunk) and the page appears as
+ * the slowest fetch completes. Stopping iteration early (break/return/
+ * throw) aborts the render: the generators' context signal fires, so
+ * in-flight requests wired to `ctx.signal` are cancelled.
+ *
+ * State for the client payload is read after the stream completes -
+ * generators may have written to state signals while running:
+ *
+ * @example
+ * ```ts
+ * import { renderToStringStream, serializeState } from "balises/ssr";
+ *
+ * const stream = renderToStringStream(App());
+ * for await (const chunk of stream) res.write(chunk);
+ * res.write(
+ *   `<script id="ssr-data">${serializeState({ user: user.value })}</script>`,
+ * );
+ * ```
+ */
+export function renderToStringStream(
+  template: Template,
+): AsyncGenerator<string, void, unknown> {
   const ctx: SsrContext = { async: true, pending: new Map(), uid: 0 };
-  let out = renderTemplate(template, ctx);
-  for (const [token, promise] of ctx.pending ?? []) {
-    out = out.replaceAll(token, await promise);
+  return streamTemplate(template, ctx);
+}
+
+/** Emit the render's HTML progressively, resolving async placeholders
+ *  in order of appearance (a resolved placeholder's content may itself
+ *  introduce further placeholders - nested generators). */
+async function* streamTemplate(
+  template: Template,
+  ctx: SsrContext,
+): AsyncGenerator<string, void, unknown> {
+  try {
+    let remaining = renderTemplate(template, ctx);
+    const pending = ctx.pending!;
+    while (true) {
+      const match = remaining.match(TOKEN_RE);
+      if (!match) {
+        if (remaining.length) yield remaining;
+        return;
+      }
+      const index = match.index ?? 0;
+      const token = match[0]!;
+      const head = remaining.slice(0, index);
+      if (head.length) yield head;
+      const promise = pending.get(token);
+      if (!promise) {
+        throw new Error("[balises/ssr] Unresolved async placeholder.");
+      }
+      remaining = (await promise) + remaining.slice(index + token.length);
+    }
+  } finally {
+    // The consumer stopped iterating early (break/return/throw): cancel
+    // in-flight generators, which abort their requests via ctx.signal.
+    ctx.controller?.abort();
   }
-  if (!options?.state) return out;
-  return { html: out, payload: serializeState(readState(options.state)) };
 }
