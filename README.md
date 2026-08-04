@@ -196,6 +196,21 @@ Async generators replace the entire yielded content on each yield. For surgical 
 
 Generators receive a mutable context object as their second argument. This object persists across restarts and can hold user-defined state for diffing or caching. Use the `AsyncGeneratorContext<T>` type from `balises/async` for type safety.
 
+Every run gets a fresh `ctx.signal` (`AbortSignal`) that aborts when the generator restarts (a tracked signal changed mid-run) or the binding is disposed - and server-side, when a `renderToStringStream` consumer stops early. Wire your requests to it so in-flight work is cancelled instead of wasted:
+
+```ts
+html`
+  ${async function* (settled, ctx) {
+    void settled;
+    const id = userId.value; // Tracked: changes restart the generator
+    const user = await fetch(`/api/users/${id}`, {
+      signal: ctx?.signal, // Cancelled on restart/dispose/stream stop
+    }).then((r) => r.json());
+    return html`<div>${user.name}</div>`;
+  }}
+`.render();
+```
+
 ### DOM Preservation on Restart
 
 When a signal changes, the generator restarts and normally replaces the DOM. To preserve existing DOM and enable surgical updates via reactive bindings, return the `settled` parameter:
@@ -467,6 +482,19 @@ const markup = await renderToStringAsync(
 
 On the client the same generator hydrates its settled content without refetching: the adopted DOM is passed to the generator as the `settled` handle - return it to preserve it across restarts (the [DOM Preservation pattern](#dom-preservation-on-restart)).
 
+**Streaming** - `renderToStringStream` emits the HTML progressively instead of waiting for every generator:
+
+```ts
+import { renderToStringStream } from "balises/ssr";
+
+const { stream, payload } = renderToStringStream(App(), { state: { user } });
+res.write('<!doctype html><div id="app">');
+for await (const chunk of stream) res.write(chunk); // shell first, then each generator's content as it settles
+res.write(`</div><script id="ssr-data">${payload}</script>`);
+```
+
+Chunks are emitted in order of appearance (not resolution order) and every chunk is a text prefix of the final HTML, so the browser parses the page incrementally and content appears as the slowest fetch completes. `renderToStringStream` accepts the same `state` option as `renderToStringAsync` and returns `{ stream, payload }` when it is provided (the stream itself otherwise). Stopping iteration early (break/return/throw - e.g. the client disconnected) aborts the render: the generators' context signal fires, cancelling in-flight requests.
+
 </details>
 
 <details>
@@ -576,12 +604,12 @@ class MyApp extends HTMLElement {
 - Nested templates and arrays
 - `each()` keyed lists - rows hydrate in place and keep their identity across list updates
 - `when()`/`match()` branches and `memo()` components - the server renders the active branch
-- Async generators with `renderToStringAsync`
+- Async generators with `renderToStringAsync` and progressive HTML via `renderToStringStream`
 
 ### Notes
 
 - The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them. If the markup does not match the template (markers stripped, structure changed since the build), `hydrate()` falls back to a fresh render of the subtree - the client always wins, exactly like a client-only render.
-- `renderToString` throws on async generators - use `renderToStringAsync`.
+- `renderToString` throws on async generators - use `renderToStringAsync` or `renderToStringStream`.
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
@@ -1030,7 +1058,11 @@ import { store } from "balises/signals/store";
 import { batch, scope } from "balises/signals/context";
 
 // Server-side rendering (opt-in - never part of the main bundle)
-import { renderToString, renderToStringAsync } from "balises/ssr";
+import {
+  renderToString,
+  renderToStringAsync,
+  renderToStringStream,
+} from "balises/ssr";
 import { hydrate } from "balises/hydrate";
 ```
 

@@ -66,9 +66,11 @@ type SubscribableSource = Reactive<unknown>;
  *
  *   // First load
  *   yield html`<div class="skeleton">...</div>`;
- *   const user = await fetchUser(id);
+ *   const user = await fetchUser(id, { signal: ctx?.signal });
  *   state.user = user;
  *   return UserCard({ state });
+ *   // The fetch is cancelled when the generator restarts (id changed),
+ *   // the binding is disposed, or a stream consumer stops early.
  * }
  * ```
  */
@@ -79,9 +81,15 @@ export interface RenderedContent {
 
 /**
  * Mutable context object that persists across async generator restarts.
+ *
+ * `signal` is replaced with a fresh AbortSignal for every run: it aborts
+ * when the generator restarts (a tracked signal changed mid-run) or the
+ * binding is disposed, and on the server when a stream consumer stops
+ * early. Pass it to fetch()/requests so in-flight work is cancelled
+ * instead of wasting bandwidth.
  */
 export type AsyncGeneratorContext<T extends object = Record<string, unknown>> =
-  T;
+  T & { signal: AbortSignal };
 
 /** Internal structure for RenderedContent */
 interface RenderedContentInternal extends RenderedContent {
@@ -160,6 +168,14 @@ registerHydrateHandler((value) => {
     // (e.g. from state already restored from the page payload). If the
     // settled content does not align with the region (e.g. the route
     // changed since the render), replace it with a fresh render.
+    //
+    // The walk instance gets its own context: generators that read
+    // ctx.signal work here too, and the signal aborts when the binding
+    // is disposed, cancelling any stray in-flight work.
+    const context: AsyncGeneratorContext = {} as AsyncGeneratorContext;
+    const walkController = new AbortController();
+    context.signal = walkController.signal;
+    disposers.push(() => walkController.abort());
     void (async () => {
       // The generator may throw (e.g. a fetch error it does not catch).
       // The bound generator owns the error path; this walk-instance only
@@ -167,7 +183,7 @@ registerHydrateHandler((value) => {
       let result: IteratorResult<unknown>;
       let lastYield: unknown = null;
       try {
-        const gen = (value as AsyncGenFn)();
+        const gen = (value as AsyncGenFn)(undefined, context);
         result = await gen.next();
         while (!result.done) {
           lastYield = result.value;
@@ -274,7 +290,8 @@ function bindAsyncGenerator(
   let iterationId = 0;
   let depUnsubscribers: (() => void)[] = [];
   let lastSettled: RenderedContentInternal | null = seed ?? null;
-  const context: AsyncGeneratorContext = {};
+  const context: AsyncGeneratorContext = {} as AsyncGeneratorContext;
+  let controller: AbortController | null = null;
 
   const clearNodes = () => {
     for (let i = 0; i < childDisposers.length; i++) childDisposers[i]!();
@@ -299,8 +316,17 @@ function bindAsyncGenerator(
 
   const cleanupGenerator = () => {
     clearDeps();
+    // Cancel the previous run: its context signal aborts, so in-flight
+    // requests wired to it stop instead of wasting bandwidth.
+    if (controller) {
+      controller.abort();
+      controller = null;
+    }
     if (generator) {
-      generator.return(undefined);
+      // The pending next() may reject (e.g. an AbortError from the
+      // cancelled signal): mark the return() promise handled so the
+      // cancellation never surfaces as an unhandled rejection.
+      void generator.return(undefined).catch(() => {});
       generator = null;
     }
   };
@@ -322,6 +348,11 @@ function bindAsyncGenerator(
 
     if (disposed) return;
 
+    // Fresh signal for this run: aborts when the run is superseded
+    // (restart) or the binding is disposed.
+    controller = new AbortController();
+    context.signal = controller.signal;
+
     generator = genFn(lastSettled ?? undefined, context);
     let lastYielded: unknown = null;
 
@@ -340,9 +371,12 @@ function bindAsyncGenerator(
 
         result = await tracked.value;
       } catch (e) {
+        // A superseded run (restarted or disposed) must not touch the
+        // region - it belongs to a newer run - and its cancellation
+        // errors (e.g. AbortError from ctx.signal) are expected.
+        if (disposed || thisIteration !== iterationId) return;
         cleanup();
-        if (!disposed) throw e;
-        return;
+        throw e;
       }
 
       // The binding may have been disposed or replaced while the

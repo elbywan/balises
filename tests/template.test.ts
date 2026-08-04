@@ -2135,6 +2135,89 @@ describe("Template.render()", () => {
       dispose();
     });
 
+    it("should provide a fresh AbortSignal per run via ctx", async () => {
+      const userId = signal(1);
+      const signals: AbortSignal[] = [];
+
+      const { fragment, dispose } = html`<div>
+        ${async function* (
+          settled?: RenderedContent,
+          ctx?: AsyncGeneratorContext,
+        ) {
+          void settled;
+          signals.push(ctx!.signal);
+          const id = userId.value;
+          yield html`<span>User ${id}</span>`;
+          await tick(50);
+          yield html`<span>Done ${id}</span>`;
+          await tick(1000); // Long wait - won't complete during test
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      assert.strictEqual(signals.length, 1);
+      assert.strictEqual(signals[0]!.aborted, false);
+
+      // Restart: the previous run's signal aborts, the new run gets a
+      // fresh (not yet aborted) signal.
+      userId.value = 2;
+      await tick(100);
+
+      assert.strictEqual(signals.length, 2);
+      assert.strictEqual(signals[0]!.aborted, true);
+      assert.strictEqual(signals[1]!.aborted, false);
+      assert.notStrictEqual(signals[1], signals[0]);
+
+      // Dispose: the active run's signal aborts too.
+      dispose();
+      assert.strictEqual(signals[1]!.aborted, true);
+    });
+
+    it("should suppress cancellation errors from superseded runs", async () => {
+      const userId = signal(1);
+      const resolved: string[] = [];
+
+      const { fragment, dispose } = html`<div>
+        ${async function* (
+          settled?: RenderedContent,
+          ctx?: AsyncGeneratorContext,
+        ) {
+          void settled;
+          const id = userId.value;
+          yield html`<span>User ${id}</span>`;
+          // A request wired to ctx.signal: rejects with AbortError when
+          // the run is superseded. The cancellation must stay silent
+          // (no unhandled rejection, no DOM churn from the dead run).
+          await new Promise<void>((resolve, reject) => {
+            ctx!.signal.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          });
+          resolved.push(String(id));
+        }}
+      </div>`.render();
+
+      document.body.appendChild(fragment);
+      await tick();
+
+      // Supersedes run 1 mid-await: its AbortError must not surface.
+      userId.value = 2;
+      await tick(100);
+
+      assert.deepStrictEqual(resolved, []); // Both runs still awaiting
+      const div = document.body.querySelector("div")!;
+      assert.strictEqual(
+        div.querySelector("span")?.textContent,
+        "User 2",
+        "the new run rendered its content",
+      );
+      dispose();
+    });
+
     it("should handle nested async generators", async () => {
       const { fragment } = html`<div>
         ${async function* () {
