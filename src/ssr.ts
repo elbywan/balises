@@ -309,7 +309,9 @@ async function runAsyncGenerator(
  * Render a template to an HTML string, awaiting async generators to
  * completion (their final content is rendered). Implemented on top of
  * `renderToStringStream`; a failing generator rejects the whole render
- * and cancels the other in-flight generators.
+ * and cancels the other in-flight generators. The state payload is
+ * read after the render, so generator writes to state signals are
+ * included.
  */
 export function renderToStringAsync(template: Template): Promise<string>;
 export function renderToStringAsync(
@@ -320,16 +322,10 @@ export async function renderToStringAsync(
   template: Template,
   options?: SsrStateOptions,
 ): Promise<string | { html: string; payload: string }> {
-  const result = options?.state
-    ? renderToStringStream(template, options)
-    : renderToStringStream(template);
   let html = "";
-  if ("stream" in result) {
-    for await (const chunk of result.stream) html += chunk;
-    return { html, payload: result.payload };
-  }
-  for await (const chunk of result) html += chunk;
-  return html;
+  for await (const chunk of renderToStringStream(template)) html += chunk;
+  if (!options?.state) return html;
+  return { html, payload: serializeState(readState(options.state)) };
 }
 
 /**
@@ -344,33 +340,25 @@ export async function renderToStringAsync(
  * throw) aborts the render: the generators' context signal fires, so
  * in-flight requests wired to `ctx.signal` are cancelled.
  *
+ * State for the client payload is read after the stream completes -
+ * generators may have written to state signals while running:
+ *
  * @example
  * ```ts
- * import { renderToStringStream } from "balises/ssr";
+ * import { renderToStringStream, serializeState } from "balises/ssr";
  *
- * const { stream, payload } = renderToStringStream(App(), {
- *   state: { user },
- * });
+ * const stream = renderToStringStream(App());
  * for await (const chunk of stream) res.write(chunk);
+ * res.write(
+ *   `<script id="ssr-data">${serializeState({ user: user.value })}</script>`,
+ * );
  * ```
  */
 export function renderToStringStream(
   template: Template,
-): AsyncGenerator<string, void, unknown>;
-export function renderToStringStream(
-  template: Template,
-  options: SsrStateOptions,
-): { stream: AsyncGenerator<string, void, unknown>; payload: string };
-export function renderToStringStream(
-  template: Template,
-  options?: SsrStateOptions,
-):
-  | AsyncGenerator<string, void, unknown>
-  | { stream: AsyncGenerator<string, void, unknown>; payload: string } {
+): AsyncGenerator<string, void, unknown> {
   const ctx: SsrContext = { async: true, pending: new Map(), uid: 0 };
-  const stream = streamTemplate(template, ctx);
-  if (!options?.state) return stream;
-  return { stream, payload: serializeState(readState(options.state)) };
+  return streamTemplate(template, ctx);
 }
 
 /** Emit the render's HTML progressively, resolving async placeholders

@@ -100,7 +100,7 @@ const API_ITEMS = [
   {
     title: "renderToStringStream(template)",
     code: "ssr-stream",
-    desc: "Renders progressively: the shell first, then each async generator's content as it settles (chunks are prefixes of the final HTML). Stopping iteration early cancels in-flight generators via their context signal. With <code>{ state }</code> it returns <code>{ stream, payload }</code>. Import from <code>balises/ssr</code>.",
+    desc: "Renders progressively: the shell first, then each async generator's content as it settles (chunks are prefixes of the final HTML). Stopping iteration early cancels in-flight generators via their context signal. Read the state for the payload after the loop (serializeState). Import from <code>balises/ssr</code>.",
   },
   {
     title: "hydrate(template, target)",

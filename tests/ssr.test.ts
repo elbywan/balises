@@ -295,7 +295,7 @@ describe("renderToStringStream", () => {
     assert.deepStrictEqual(chunks, ["<p>hi</p>"]);
   });
 
-  it("should return the stream directly without state", () => {
+  it("should return an async generator", () => {
     const stream = renderToStringStream(html`<p>hi</p>`);
     assert.strictEqual(typeof stream[Symbol.asyncIterator], "function");
   });
@@ -305,10 +305,10 @@ describe("renderToStringStream", () => {
     const gate = new Promise<void>((r) => (resolve = r));
     const template = html`<main>
         ${async function* () {
-        yield html`<p>loading</p>`;
-        await gate;
-        return html`<p>done</p>`;
-      }}
+          yield html`<p>loading</p>`;
+          await gate;
+          return html`<p>done</p>`;
+        }}
       </main>
       <footer>foot</footer>`;
 
@@ -414,16 +414,20 @@ describe("renderToStringStream", () => {
     assert.strictEqual(htmlString, expected);
   });
 
-  it("should return the payload with the state option", async () => {
-    const user = signal("ada");
-    const result = renderToStringStream(html`<p>${user}</p>`, {
-      state: { user },
-    });
-    assert.strictEqual(typeof result.stream[Symbol.asyncIterator], "function");
-    assert.deepStrictEqual(JSON.parse(result.payload), { user: "ada" });
-    let htmlString = "";
-    for await (const chunk of result.stream) htmlString += chunk;
-    assert.strictEqual(htmlString, "<p><!--b-->ada<!--/b--></p>");
+  it("should serialize state after generators run", async () => {
+    const user = signal<string | null>(null);
+    const { html: htmlString, payload } = await renderToStringAsync(
+      html`<p>
+        ${async function* () {
+          user.value = "ada"; // Stored during the render
+          yield html`<span>${user.value}</span>`;
+        }}
+      </p>`,
+      { state: { user } },
+    );
+    assert.ok(htmlString.includes("ada"));
+    // The payload must reflect the write, not the pre-render value.
+    assert.deepStrictEqual(JSON.parse(payload), { user: "ada" });
   });
 
   it("should pass a context with a live signal to generators", async () => {
@@ -432,11 +436,11 @@ describe("renderToStringStream", () => {
     const htmlString = await renderToStringAsync(
       html`<p>
         ${async function* (settled?: unknown, ctx?: AsyncGeneratorContext) {
-        void settled;
-        seen = ctx?.signal;
-        abortedDuringRun = ctx?.signal.aborted;
-        yield html`<span>ok</span>`;
-      }}
+          void settled;
+          seen = ctx?.signal;
+          abortedDuringRun = ctx?.signal.aborted;
+          yield html`<span>ok</span>`;
+        }}
       </p>`,
     );
     assert.ok(seen, "generator received a context");
@@ -453,16 +457,16 @@ describe("renderToStringStream", () => {
     const stream = renderToStringStream(
       html`<div>
         ${async function* (settled?: unknown, ctx?: AsyncGeneratorContext) {
-        void settled;
-        yield html`<p>loading</p>`;
-        await new Promise<void>((resolve, reject) => {
-          ctx!.signal.addEventListener("abort", () => {
-            aborted = true;
-            reject(new DOMException("Aborted", "AbortError"));
+          void settled;
+          yield html`<p>loading</p>`;
+          await new Promise<void>((resolve, reject) => {
+            ctx!.signal.addEventListener("abort", () => {
+              aborted = true;
+              reject(new DOMException("Aborted", "AbortError"));
+            });
           });
-        });
-        return html`<p>done</p>`;
-      }}
+          return html`<p>done</p>`;
+        }}
       </div>`,
     );
     for await (const chunk of stream) {

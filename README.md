@@ -485,15 +485,18 @@ On the client the same generator hydrates its settled content without refetching
 **Streaming** - `renderToStringStream` emits the HTML progressively instead of waiting for every generator:
 
 ```ts
-import { renderToStringStream } from "balises/ssr";
+import { renderToStringStream, serializeState } from "balises/ssr";
 
-const { stream, payload } = renderToStringStream(App(), { state: { user } });
+const stream = renderToStringStream(App());
 res.write('<!doctype html><div id="app">');
 for await (const chunk of stream) res.write(chunk); // shell first, then each generator's content as it settles
-res.write(`</div><script id="ssr-data">${payload}</script>`);
+// Read the state after the render completes: generator writes count.
+res.write(
+  `</div><script id="ssr-data">${serializeState({ user: user.value })}</script>`,
+);
 ```
 
-Chunks are emitted in order of appearance (not resolution order) and every chunk is a text prefix of the final HTML, so the browser parses the page incrementally and content appears as the slowest fetch completes. `renderToStringStream` accepts the same `state` option as `renderToStringAsync` and returns `{ stream, payload }` when it is provided (the stream itself otherwise). Stopping iteration early (break/return/throw - e.g. the client disconnected) aborts the render: the generators' context signal fires, cancelling in-flight requests.
+Chunks are emitted in order of appearance (not resolution order) and every chunk is a text prefix of the final HTML, so the browser parses the page incrementally and content appears as the slowest fetch completes. Stopping iteration early (break/return/throw - e.g. the client disconnected) aborts the render: the generators' context signal fires, cancelling in-flight requests.
 
 </details>
 
