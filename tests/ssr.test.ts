@@ -476,4 +476,71 @@ describe("renderToStringStream", () => {
     await tick(20);
     assert.strictEqual(aborted, true);
   });
+
+  it("should propagate generator errors to the consumer", async () => {
+    const boom = new Error("boom");
+    const stream = renderToStringStream(
+      html`<p>
+        ${async function* () {
+          yield html`<span>loading</span>`;
+          throw boom;
+        }}
+      </p>`,
+    );
+    await assert.rejects(
+      (async () => {
+        for await (const chunk of stream) {
+          void chunk;
+        }
+      })(),
+      (e: unknown) => e === boom,
+    );
+  });
+
+  it("should cancel in-flight generators when one fails", async () => {
+    let siblingAborted = false;
+    const template = html`<div>
+      ${async function* () {
+        yield html`<span>a</span>`;
+        throw new Error("fail-fast");
+      }}
+      ${async function* (settled?: unknown, ctx?: AsyncGeneratorContext) {
+        void settled;
+        ctx!.signal.addEventListener("abort", () => {
+          siblingAborted = true;
+        });
+        await new Promise((r) => setTimeout(r, 1000));
+        yield html`<span>b</span>`;
+      }}
+    </div>`;
+    await assert.rejects(async () => {
+      for await (const chunk of renderToStringStream(template)) {
+        void chunk;
+      }
+    });
+    await tick(20);
+    assert.strictEqual(siblingAborted, true);
+  });
+
+  it("should ignore errors from abandoned renders", async () => {
+    // The consumer breaks out; the abandoned generator later throws.
+    // The rejection must stay handled (no unhandled-rejection crash).
+    let resolveBoom!: () => void;
+    const gate = new Promise<void>((r) => (resolveBoom = r));
+    const stream = renderToStringStream(
+      html`<p>
+        ${async function* () {
+          yield html`<span>loading</span>`;
+          await gate;
+          throw new Error("late-boom");
+        }}
+      </p>`,
+    );
+    for await (const chunk of stream) {
+      void chunk;
+      break;
+    }
+    resolveBoom();
+    await tick(20);
+  });
 });
