@@ -34,6 +34,7 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Async Generators](#async-generators)
 - [Web Components](#web-components)
 - [Server-Side Rendering](#server-side-rendering)
+- [Hot Module Replacement](#hot-module-replacement)
 - [Template Syntax](#template-syntax)
 - [Reactivity API](#reactivity-api)
 - [Tree-Shaking / Modular Imports](#tree-shaking--modular-imports)
@@ -616,6 +617,41 @@ class MyApp extends HTMLElement {
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
 - Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
+## Hot Module Replacement
+
+HMR is opt-in (`balises/hmr`) and dev-only: the module never touches `import.meta.hot`, so it adds nothing to your production bundle. Mount templates with `mount()` and hot reloads replace the rendered region in place — no page reload, no framework runtime required.
+
+```ts
+// state.ts — keep state here, in a module that is never hot-reloaded
+import { signal } from "balises";
+export const count = signal(0);
+```
+
+```ts
+// app.ts
+import { html } from "balises";
+import { mount } from "balises/hmr";
+import { count } from "./state.js";
+
+mount(
+  document.querySelector("#app")!,
+  html` <button @click=${() => count.update((n) => n + 1)}>${count}</button> `,
+);
+
+// Vite: opt in to hot updates for this module
+import.meta.hot?.accept();
+```
+
+### How it works
+
+- `mount(container, template)` renders the template into the container and records the render in a registry keyed by container. When the module re-executes (the hot reload), calling `mount()` again with the same container replaces the previous render: the new nodes are inserted before the old region, the old range is removed, and the old subscriptions are disposed.
+- `mount()` returns an idempotent dispose function that removes the nodes, releases the subscriptions, and unregisters the render.
+
+### What survives a reload
+
+- **State must live outside hot modules.** Signals created at module scope are recreated when the module re-executes, so their values reset. Hoist them into a separate module (Vite never re-executes it unless you edit it) or use `import.meta.hot.data`.
+- Module-scope `effect()`s are not covered by `mount()` — dispose them on reload with `import.meta.hot?.dispose(() => cleanup())` to avoid orphaned subscriptions.
+
 ## Template Syntax
 
 <details>
@@ -1067,6 +1103,9 @@ import {
   renderToStringStream,
 } from "balises/ssr";
 import { hydrate } from "balises/hydrate";
+
+// Hot module replacement (opt-in - dev-only, never part of the main bundle)
+import { mount } from "balises/hmr";
 ```
 
 ### Template Plugins

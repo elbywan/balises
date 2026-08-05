@@ -80,6 +80,10 @@
     "./hydrate": {
       "import": "./dist/esm/hydrate.js",
       "types": "./dist/esm/hydrate.d.ts"
+    },
+    "./hmr": {
+      "import": "./dist/esm/hmr.js",
+      "types": "./dist/esm/hmr.d.ts"
     }
   },
   "scripts": {

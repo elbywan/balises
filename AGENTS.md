@@ -45,6 +45,11 @@ disposers)`; a binder returning `false` means "skip clearing, preserve
   the anchor to the region boundary (`clearRegion`) — forward walks break
   when a concurrent render detaches the start node. Run `yarn ssr:smoke`
   (22 jsdom e2e checks) after touching any of this.
+- **HMR** (`src/hmr.ts`, `balises/hmr`) — opt-in, dev-only, bundler-agnostic
+  (never touches `import.meta.hot`). `mount(container, template)` renders
+  and registers per-container; repeated mounts replace in place (new nodes
+  inserted before the old region, old range removed, old disposers run).
+  Module re-execution is the only update signal.
 - `package.json` `exports` mirrors the module layout; `store` is not part of
   the main entry.
 
