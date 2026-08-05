@@ -25,7 +25,7 @@ interface Registration {
 }
 
 /** Live renders, keyed by mount container (weak so dead containers GC). */
-const registry = new WeakMap<ParentNode, Registration>();
+const registry = new WeakMap<Element | DocumentFragment, Registration>();
 
 /**
  * Mount a template into a container.
@@ -54,7 +54,10 @@ const registry = new WeakMap<ParentNode, Registration>();
  * // Optionally clean up module-scope effects on update:
  * import.meta.hot?.dispose(() => { … });
  */
-export function mount(container: ParentNode, template: Template): () => void {
+export function mount(
+  container: Element | DocumentFragment,
+  template: Template,
+): () => void {
   const prev = registry.get(container);
 
   // Same template source and the previous region is still in the DOM:
@@ -101,7 +104,7 @@ export function mount(container: ParentNode, template: Template): () => void {
 }
 
 /** Remove a registered render: nodes, subscriptions, and registration. */
-function unmount(container: ParentNode): void {
+function unmount(container: Element | DocumentFragment): void {
   const reg = registry.get(container);
   if (!reg) return;
   registry.delete(container);
