@@ -344,6 +344,20 @@ describe("hmr", () => {
     assert.strictEqual(container.childElementCount, 1);
   });
 
+  it("should re-render after a clear even with an unchanged template source", () => {
+    // The re-bind path must not assume the previous region still exists:
+    // a cleared container falls back to a fresh render.
+    const count = signal(1);
+    const render = () => baseHtml`<p>${count}</p>`;
+
+    mount(container, render());
+    container.innerHTML = "";
+
+    mount(container, render());
+    assert.strictEqual(container.querySelector("p")?.textContent, "1");
+    assert.strictEqual(container.childElementCount, 1);
+  });
+
   it("should dispose re-bound renders on unmount", () => {
     let count = signal(1);
     const dispose = mount(container, baseHtml`<p>${count}</p>`);

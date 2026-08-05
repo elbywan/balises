@@ -57,8 +57,15 @@ const registry = new WeakMap<ParentNode, Registration>();
 export function mount(container: ParentNode, template: Template): () => void {
   const prev = registry.get(container);
 
-  // Same template source: re-bind slots in place, preserving DOM and state.
-  if (prev && template.rebind(prev.template, prev.result)) {
+  // Same template source and the previous region is still in the DOM:
+  // re-bind slots in place, preserving DOM and state. (A cleared container
+  // falls through to the replace path, which re-renders from scratch.)
+  if (
+    prev &&
+    prev.first !== null &&
+    container.contains(prev.first) &&
+    template.rebind(prev.template, prev.result)
+  ) {
     prev.template = template;
     return () => unmount(container);
   }
@@ -79,13 +86,7 @@ export function mount(container: ParentNode, template: Template): () => void {
     if (first !== null && container.contains(first)) {
       // Insert new nodes before the old region, then remove the old range.
       container.insertBefore(result.fragment, first);
-      let node: ChildNode | null = first;
-      while (node !== null) {
-        const next: ChildNode | null = node.nextSibling;
-        node.remove();
-        if (node === last) break;
-        node = next;
-      }
+      removeRange(first, last);
     } else {
       // Old region is gone (container was cleared) — just append.
       container.appendChild(result.fragment);
@@ -106,13 +107,18 @@ function unmount(container: ParentNode): void {
   registry.delete(container);
   const { first, last, result } = reg;
   if (first !== null && container.contains(first)) {
-    let node: ChildNode | null = first;
-    while (node !== null) {
-      const next: ChildNode | null = node.nextSibling;
-      node.remove();
-      if (node === last) break;
-      node = next;
-    }
+    removeRange(first, last);
   }
   result.dispose();
+}
+
+/** Remove a contiguous range of sibling nodes, from first to last inclusive. */
+function removeRange(first: ChildNode, last: ChildNode | null): void {
+  let node: ChildNode | null = first;
+  while (node !== null) {
+    const next: ChildNode | null = node.nextSibling;
+    node.remove();
+    if (node === last) break;
+    node = next;
+  }
 }
