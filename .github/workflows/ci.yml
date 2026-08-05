@@ -36,6 +36,7 @@ jobs:
         run: |
           SIZE=$(gzip -c dist/balises.iife.min.js | wc -c)
           echo "Gzipped size: ${SIZE} bytes"
-          if [ "$SIZE" -gt 3500 ]; then
+          # 3800: HMR slot re-binding (dev-time feature) added ~400B in v0.12.
+          if [ "$SIZE" -gt 3800 ]; then
             echo "::warning::Bundle size (${SIZE} bytes) is getting large!"
           fi

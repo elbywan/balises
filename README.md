@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library for building websites and web components. ~3.3KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~3.7KB gzipped.
 
 Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
 
@@ -615,24 +615,18 @@ class MyApp extends HTMLElement {
 - The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them. If the markup does not match the template (markers stripped, structure changed since the build), `hydrate()` falls back to a fresh render of the subtree - the client always wins, exactly like a client-only render.
 - `renderToString` throws on async generators - use `renderToStringAsync` or `renderToStringStream`.
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
-- Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
+- Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.7 KB gzipped).
 
 ## Hot Module Replacement
 
-HMR is opt-in (`balises/hmr`) and dev-only: the module never touches `import.meta.hot`, so it adds nothing to your production bundle. Mount templates with `mount()` and hot reloads replace the rendered region in place — no page reload, no framework runtime required.
-
-```ts
-// state.ts — keep state here, in a module that is never hot-reloaded
-import { signal } from "balises";
-export const count = signal(0);
-```
+HMR is opt-in (`balises/hmr`) and dev-only — the `mount()` module never touches `import.meta.hot`, and the re-binding support it relies on lives in the core renderer (~3.7 KB gzipped total). Mount templates with `mount()` and hot reloads update the DOM in place — no page reload, no framework runtime, and no Fast Refresh plugin required.
 
 ```ts
 // app.ts
-import { html } from "balises";
+import { html, signal } from "balises";
 import { mount } from "balises/hmr";
-import { count } from "./state.js";
 
+const count = signal(0);
 mount(
   document.querySelector("#app")!,
   html` <button @click=${() => count.update((n) => n + 1)}>${count}</button> `,
@@ -644,13 +638,17 @@ import.meta.hot?.accept();
 
 ### How it works
 
-- `mount(container, template)` renders the template into the container and records the render in a registry keyed by container. When the module re-executes (the hot reload), calling `mount()` again with the same container replaces the previous render: the new nodes are inserted before the old region, the old range is removed, and the old subscriptions are disposed.
+- `mount(container, template)` renders the template into the container and records the render in a registry keyed by container. When the module re-executes (the hot reload), calling `mount()` again with the same container re-binds the previous render in place.
+- **Only changed slots update.** Slots whose value changed are re-bound individually — text, attributes, properties, and event handlers — while the rest of the DOM keeps its nodes, focus, and scroll position. This applies recursively to nested templates: a child component with an unchanged source re-binds its own slots, so editing a sibling (or the parent) leaves it untouched.
+- **Signal state is preserved.** When a slot's value was a signal and the new module provides a fresh instance, the old value is carried into the new instance before binding — state wins over initial values, exactly like React Fast Refresh. The new instance is the live one, so subsequent updates flow through the new module's code.
+- **Changed template source** (the static markup differs) falls back to replacing the whole region in place, disposing the old subscriptions.
 - `mount()` returns an idempotent dispose function that removes the nodes, releases the subscriptions, and unregisters the render.
 
-### What survives a reload
+### What still resets on a reload
 
-- **State must live outside hot modules.** Signals created at module scope are recreated when the module re-executes, so their values reset. Hoist them into a separate module (Vite never re-executes it unless you edit it) or use `import.meta.hot.data`.
-- Module-scope `effect()`s are not covered by `mount()` — dispose them on reload with `import.meta.hot?.dispose(() => cleanup())` to avoid orphaned subscriptions.
+- **Derived values recompute.** A `computed()` slot (or a function slot) re-evaluates against the new module's inputs — if its underlying signal is also module-scope, that signal starts at its initial value. Bind signals directly to preserve their state, or hoist the signal into a separate module.
+- **Plugin-wrapped state.** `each()` lists and `memo()` props are wrapped inside descriptors created at module scope; the slot re-renders with the fresh descriptor, so mutations to a module-scope list signal are not carried over. Hoist the list signal to keep rows, or accept the re-render (rows are rebuilt in place, siblings untouched).
+- **Module-scope `effect()`s** are not covered by `mount()` — dispose them on reload with `import.meta.hot?.dispose(() => cleanup())` to avoid orphaned subscriptions.
 
 ## Template Syntax
 
@@ -1083,7 +1081,7 @@ After dispose, reading `.value` returns the last computed value, but the compute
 You can import just what you need to keep bundle size down:
 
 ```ts
-// Full library (~3.3KB gzipped)
+// Full library (~3.7KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
 // Signals only (no HTML templating - use in any JS project)
