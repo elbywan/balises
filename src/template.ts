@@ -351,7 +351,6 @@ export class Template {
     const disposers: (() => void)[] = [];
     const values = this.#values;
     // Re-binding slots, one per template value index (tracked renders only).
-    // Re-binding slots, one per template value index (tracked renders only).
     // Production builds fold the guard to a plain empty array.
     const slots: Slot[] =
       process.env.NODE_ENV !== "production" && track

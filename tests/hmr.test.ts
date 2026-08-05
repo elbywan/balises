@@ -2,7 +2,12 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
 import { html as baseHtml } from "../src/template.js";
 import { mount } from "../src/hmr.js";
-import { signal, computed, type Signal } from "../src/signals/index.js";
+import {
+  signal,
+  computed,
+  type Signal,
+  type Computed,
+} from "../src/signals/index.js";
 import eachPlugin, { each } from "../src/each.js";
 import memoPlugin, { memo } from "../src/memo.js";
 
@@ -276,6 +281,45 @@ describe("hmr", () => {
     assert.strictEqual(container.querySelector("h1"), h1);
     assert.strictEqual(container.querySelector("p")?.textContent, "two");
     assert.strictEqual(container.childElementCount, 2);
+  });
+
+  it("should re-bind multi-slot attributes and preserve signal state", () => {
+    let a = signal("a"),
+      b = signal("b");
+    const render = (x: typeof a, y: typeof b) =>
+      baseHtml`<div class="pre ${x} mid ${y} post"></div>`;
+
+    mount(container, render(a, b));
+    const div = container.querySelector("div")!;
+
+    // Hot reload: both slots get fresh signal instances, both transferred.
+    a = signal("a2");
+    b = signal("b2");
+    mount(container, render(a, b));
+
+    assert.strictEqual(div.getAttribute("class"), "pre a mid b post");
+    // The new instances are live.
+    a.value = "zz";
+    assert.strictEqual(div.getAttribute("class"), "pre zz mid b post");
+    b.value = "q";
+    assert.strictEqual(div.getAttribute("class"), "pre zz mid q post");
+  });
+
+  it("should transfer a computed's last value into a new signal", () => {
+    let c = signal(2);
+    let d: Signal<number> | Computed<number> = computed(() => c.value * 10);
+    mount(container, baseHtml`<p>${d}</p>`);
+
+    c.value = 5; // d = 50
+
+    // Hot reload: the module switched from a computed to a plain signal.
+    c = signal(1);
+    d = signal(0);
+    mount(container, baseHtml`<p>${d}</p>`);
+
+    assert.strictEqual(container.querySelector("p")?.textContent, "50");
+    d.value = 1;
+    assert.strictEqual(container.querySelector("p")?.textContent, "1");
   });
 
   it("should keep containers independent", () => {
