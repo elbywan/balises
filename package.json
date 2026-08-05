@@ -11,7 +11,8 @@
   ],
   "workspaces": [
     "bench",
-    "bench-dom"
+    "bench-dom",
+    "examples/hmr"
   ],
   "files": [
     "dist"
@@ -112,7 +113,7 @@
     "bench-dom:quick": "yarn workspace balises-dom-benchmarks build && node --import tsx/esm bench-dom/src/playwright-runner.ts --quick",
     "bench-dom:check": "yarn bench-dom:run && node --import tsx/esm bench-dom/src/check-standings.ts",
     "docs": "yarn docs:build && yarn dlx serve _site",
-    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/*.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/ && cp -r dist/esm _site/examples/balises-esm",
+    "docs:build": "yarn build && yarn examples:build && rm -rf _site && mkdir -p _site/assets && cp docs/index.html _site/ && cp docs/*.css _site/ && cp docs/*.js _site/ && cp assets/logo.svg _site/assets/ && cp assets/logo-icon.svg _site/assets/ && cp -r examples _site/examples && cp dist/balises.esm.js _site/examples/ && cp -r dist/esm _site/examples/balises-esm && perl -pi -e 's/process\\.env\\.NODE_ENV/\"development\"/g' _site/examples/balises-esm/*.js _site/examples/balises-esm/signals/*.js",
     "ssr:smoke": "yarn examples:build && node --import tsx/esm scripts/ssr-smoke.mjs"
   },
   "devDependencies": {

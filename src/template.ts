@@ -86,17 +86,10 @@ export function renderValue(
   for (const item of items) {
     if (item instanceof Template) {
       const result =
-        typeof process !== "undefined" &&
-        process.env.NODE_ENV !== "production" &&
-        tracked
+        process.env.NODE_ENV !== "production" && tracked
           ? item.renderTracked()
           : item.render();
-      if (
-        typeof process !== "undefined" &&
-        process.env.NODE_ENV !== "production" &&
-        tracked
-      )
-        nested = result;
+      if (process.env.NODE_ENV !== "production" && tracked) nested = result;
       disposers.push(result.dispose);
       nodes.push(...result.fragment.childNodes);
       parent.insertBefore(result.fragment, marker);
@@ -265,10 +258,7 @@ export class Template {
    * @internal Exported for the HMR module.
    */
   renderTracked(): RenderResult {
-    if (
-      typeof process !== "undefined" &&
-      process.env.NODE_ENV !== "production"
-    ) {
+    if (process.env.NODE_ENV !== "production") {
       let cached = cache.get(this.#strings);
       if (!cached) cache.set(this.#strings, (cached = this.#buildPrototype()));
       return this.#instantiate(cached, true);
@@ -285,10 +275,7 @@ export class Template {
    * @internal Exported for the HMR module.
    */
   rebind(prev: Template, result: RenderResult): boolean {
-    if (
-      typeof process !== "undefined" &&
-      process.env.NODE_ENV !== "production"
-    ) {
+    if (process.env.NODE_ENV !== "production") {
       const as = this.#strings,
         bs = prev.#strings;
       if (as.length !== bs.length) return false;
@@ -367,9 +354,7 @@ export class Template {
     // Re-binding slots, one per template value index (tracked renders only).
     // Production builds fold the guard to a plain empty array.
     const slots: Slot[] =
-      typeof process !== "undefined" &&
-      process.env.NODE_ENV !== "production" &&
-      track
+      process.env.NODE_ENV !== "production" && track
         ? new Array(values.length)
         : [];
 
@@ -384,13 +369,9 @@ export class Template {
         // Content binding - fast path for static values inline
         const value = values[b[2]];
         const t = typeof value;
-        // `!(typeof process !== "undefined" && process.env.NODE_ENV !== "production" && track)` folds to `true` in production builds.
+        // `!(process.env.NODE_ENV !== "production" && track)` folds to `true` in production builds.
         if (
-          !(
-            typeof process !== "undefined" &&
-            process.env.NODE_ENV !== "production" &&
-            track
-          ) &&
+          !(process.env.NODE_ENV !== "production" && track) &&
           (t === "string" || t === "number" || t === "bigint")
         ) {
           // Static primitive - insert text node directly, no disposer needed
@@ -398,11 +379,7 @@ export class Template {
           const n = document.createTextNode(String(value));
           node.parentNode!.insertBefore(n, node);
         } else if (
-          !(
-            typeof process !== "undefined" &&
-            process.env.NODE_ENV !== "production" &&
-            track
-          ) &&
+          !(process.env.NODE_ENV !== "production" && track) &&
           (value == null || t === "boolean")
         ) {
           // null, undefined, boolean - render nothing, no disposer needed
@@ -415,11 +392,7 @@ export class Template {
             track,
           );
           // #bindContent only returns null for untracked renders.
-          if (
-            typeof process !== "undefined" &&
-            process.env.NODE_ENV !== "production" &&
-            track
-          )
+          if (process.env.NODE_ENV !== "production" && track)
             slots[b[2]] = slot!;
         }
       } else if (b[0] === 1) {
@@ -427,26 +400,17 @@ export class Template {
         const [, , name, statics, attrSlots] = b;
         // Current slot values for this binding (tracked mode only).
         const holder: unknown[] =
-          typeof process !== "undefined" &&
           process.env.NODE_ENV !== "production"
             ? new Array(attrSlots.length)
             : [];
-        if (
-          typeof process !== "undefined" &&
-          process.env.NODE_ENV !== "production"
-        )
+        if (process.env.NODE_ENV !== "production")
           attrSlots.forEach((s, j) => (holder[j] = values[s]));
         const getVal = (j: number) =>
-          typeof process !== "undefined" &&
           process.env.NODE_ENV !== "production"
             ? holder[j]
             : values[attrSlots[j]!];
         const d =
-          typeof process !== "undefined" &&
-          process.env.NODE_ENV !== "production" &&
-          track
-            ? []
-            : disposers;
+          process.env.NODE_ENV !== "production" && track ? [] : disposers;
         // Built by refresh() — wrapFn computeds run eagerly at construction,
         // so building twice would double-execute function slots.
         let resolved: unknown[] = [];
@@ -473,11 +437,7 @@ export class Template {
           // Tracked mode uses a binding-local disposer array; untracked
           // shares the render's array, which must never be drained here
           // (other bindings' subscriptions live in it).
-          if (
-            typeof process !== "undefined" &&
-            process.env.NODE_ENV !== "production" &&
-            track
-          ) {
+          if (process.env.NODE_ENV !== "production" && track) {
             for (const f of d) f();
             d.length = 0;
           }
@@ -490,11 +450,7 @@ export class Template {
             if (isSignal(r)) d.push(r.subscribe(update));
         };
         refresh();
-        if (
-          typeof process !== "undefined" &&
-          process.env.NODE_ENV !== "production" &&
-          track
-        ) {
+        if (process.env.NODE_ENV !== "production" && track) {
           disposers.push(() => {
             for (const f of d) f();
           });
@@ -517,20 +473,12 @@ export class Template {
         // Property binding
         const [, , name, slot] = b;
         const d =
-          typeof process !== "undefined" &&
-          process.env.NODE_ENV !== "production" &&
-          track
-            ? []
-            : disposers;
+          process.env.NODE_ENV !== "production" && track ? [] : disposers;
         const update = (v: unknown) =>
           ((node as unknown as Record<string, unknown>)[name] = v);
         let current = values[slot];
         bind(current, update, d);
-        if (
-          typeof process !== "undefined" &&
-          process.env.NODE_ENV !== "production" &&
-          track
-        ) {
+        if (process.env.NODE_ENV !== "production" && track) {
           disposers.push(() => {
             for (const f of d) f();
           });
@@ -560,11 +508,7 @@ export class Template {
             node.removeEventListener(name, handler);
           }
         });
-        if (
-          typeof process !== "undefined" &&
-          process.env.NODE_ENV !== "production" &&
-          track
-        )
+        if (process.env.NODE_ENV !== "production" && track)
           slots[slot] = (v: unknown) => {
             if (v === handler) return true;
             node.removeEventListener(name, handler);
@@ -596,12 +540,7 @@ export class Template {
   ): Slot | null {
     // Binding-local disposers: a fresh array in tracked mode (re-bindable),
     // the shared render disposers otherwise.
-    const d =
-      typeof process !== "undefined" &&
-      process.env.NODE_ENV !== "production" &&
-      track
-        ? []
-        : disposers;
+    const d = process.env.NODE_ENV !== "production" && track ? [] : disposers;
     let currentNodes: Node[] = [],
       childDisposers: (() => void)[] = [];
     // Cleanup callback registered by a plugin that took over rendering.
@@ -681,11 +620,7 @@ export class Template {
     };
 
     bindValue(value);
-    if (
-      typeof process !== "undefined" &&
-      process.env.NODE_ENV !== "production" &&
-      track
-    ) {
+    if (process.env.NODE_ENV !== "production" && track) {
       disposers.push(() => {
         for (const f of d) f();
         clear();

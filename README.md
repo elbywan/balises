@@ -619,7 +619,7 @@ class MyApp extends HTMLElement {
 
 ## Hot Module Replacement
 
-HMR is opt-in (`balises/hmr`) and dev-only. The `mount()` module never touches `import.meta.hot`, and the slot re-binding machinery it relies on is **compiled out of production bundles**: the core renderer guards it with `process.env.NODE_ENV`, which bundlers replace statically — production builds fold it away (~3.4 KB gzipped total; dev builds carry an extra ~0.4 KB). Mount templates with `mount()` and hot reloads update the DOM in place — no page reload, no framework runtime, and no Fast Refresh plugin required.
+HMR is opt-in (`balises/hmr`) and dev-only. The `mount()` module never touches `import.meta.hot`, and the slot re-binding machinery it relies on is **compiled out of production bundles**: the core renderer guards it with `process.env.NODE_ENV`, which bundlers replace statically — production builds fold it away (~3.4 KB gzipped total; dev builds carry an extra ~0.4 KB). Mount templates with `mount()` and hot reloads update the DOM in place — no page reload, no framework runtime, and no Fast Refresh plugin required. (The modular `balises/*` imports assume a bundler or Node; the pre-built bundle and IIFE are ready for script-tag/import-map use.)
 
 ```ts
 // app.ts

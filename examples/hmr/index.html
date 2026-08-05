@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>balises HMR playground</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      button {
+        font-size: 1rem;
+        padding: 0.25rem 0.75rem;
+        cursor: pointer;
+      }
+      input {
+        font-size: 1rem;
+        padding: 0.25rem 0.5rem;
+      }
+      .hint {
+        color: #666;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+      .box {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        margin: 1rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>balises HMR playground</h1>
+    <p class="hint">
+      Click the button, type in the input — then edit
+      <code>src/main.ts</code> or <code>src/child.ts</code> and save. Editing
+      <strong>code</strong> (handlers, logic) updates the page in place: count,
+      typed text, focus and the child list all survive. Editing the template's
+      <strong>static text</strong>
+      replaces just that region.
+    </p>
+    <div id="app"></div>
+    <div id="child-area" class="box"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

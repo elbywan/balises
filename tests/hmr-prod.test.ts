@@ -36,21 +36,23 @@ describe("hmr (production)", () => {
     assert.strictEqual(p2?.textContent, "0"); // no state transfer
   });
 
-  it("should not crash without a process global (unbundled browsers)", () => {
-    const dist = fileURLToPath(
-      new URL("../dist/esm/template.js", import.meta.url),
+  it("should not crash without a process global (unbundled bundles)", () => {
+    // The raw dist/esm keeps the `process.env.NODE_ENV` guard for each
+    // consumer's bundler to replace — it requires a bundler. The pre-built
+    // bundles have the guard folded at build time and must evaluate in a
+    // bare browser (no `process`, no bundler). Built by `yarn build` (CI
+    // runs build before test).
+    const bundle = fileURLToPath(
+      new URL("../dist/balises.esm.js", import.meta.url),
     );
-    // Built by `yarn build` (CI runs build before test).
-    if (!existsSync(dist)) return;
+    if (!existsSync(bundle)) return;
 
-    // A bare browser/import-map environment has no `process`: the module
-    // must evaluate (dev-mode guard returns true) instead of throwing.
     const out = execFileSync(
       process.execPath,
       [
         "--input-type=module",
         "-e",
-        `globalThis.process = undefined; await import(${JSON.stringify(dist)});`,
+        `globalThis.process = undefined; await import(${JSON.stringify(bundle)});`,
       ],
       // Drop inherited loader flags (PnP preloads break without `process`).
       { encoding: "utf8", env: { ...process.env, NODE_OPTIONS: "" } },
