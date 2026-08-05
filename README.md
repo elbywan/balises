@@ -4,7 +4,7 @@
   <img alt="balises" src="./assets/logo.svg" width="280">
 </picture>
 
-### A minimal reactive HTML templating library for building websites and web components. ~3.7KB gzipped.
+### A minimal reactive HTML templating library for building websites and web components. ~3.4KB gzipped.
 
 Balises gives you reactive signals and HTML templates without the framework overhead. Works great with custom elements, vanilla JavaScript projects, or anywhere you need dynamic UIs but don't want to pull in React.
 
@@ -615,11 +615,11 @@ class MyApp extends HTMLElement {
 - The rendered HTML contains `<!--b-->`/`<!--/b-->` marker comments that locate the bindings - don't strip them. If the markup does not match the template (markers stripped, structure changed since the build), `hydrate()` falls back to a fresh render of the subtree - the client always wins, exactly like a client-only render.
 - `renderToString` throws on async generators - use `renderToStringAsync` or `renderToStringStream`.
 - Call `dispose()` when removing a hydrated subtree to release all subscriptions.
-- Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.7 KB gzipped).
+- Zero runtime dependencies; the SSR modules are tree-shaken out of the main bundle (`balises` stays ~3.4 KB gzipped).
 
 ## Hot Module Replacement
 
-HMR is opt-in (`balises/hmr`) and dev-only — the `mount()` module never touches `import.meta.hot`, and the re-binding support it relies on lives in the core renderer (~3.7 KB gzipped total). Mount templates with `mount()` and hot reloads update the DOM in place — no page reload, no framework runtime, and no Fast Refresh plugin required.
+HMR is opt-in (`balises/hmr`) and dev-only. The `mount()` module never touches `import.meta.hot`, and the slot re-binding machinery it relies on is **compiled out of production bundles**: the core renderer guards it with `process.env.NODE_ENV`, which bundlers replace statically — production builds fold it away (~3.4 KB gzipped total; dev builds carry an extra ~0.4 KB). Mount templates with `mount()` and hot reloads update the DOM in place — no page reload, no framework runtime, and no Fast Refresh plugin required.
 
 ```ts
 // app.ts
@@ -1081,7 +1081,7 @@ After dispose, reading `.value` returns the last computed value, but the compute
 You can import just what you need to keep bundle size down:
 
 ```ts
-// Full library (~3.7KB gzipped)
+// Full library (~3.4KB gzipped)
 import { html, signal, computed, effect } from "balises";
 
 // Signals only (no HTML templating - use in any JS project)

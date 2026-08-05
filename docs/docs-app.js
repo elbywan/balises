@@ -17,7 +17,7 @@ import { store } from "./examples/balises-esm/signals/store.js";
 const FEATURES = [
   {
     title: "Tiny bundle size",
-    desc: "Just ~3.7KB gzipped, zero dependencies",
+    desc: "Just ~3.4KB gzipped, zero dependencies",
   },
   {
     title: "Fine-grained reactivity",
@@ -434,7 +434,7 @@ class DocsApp extends HTMLElement {
             Reactive HTML templating for building websites and web components
           </p>
           <div class="badges">
-            <span class="badge"><strong>~3.7KB</strong> gzipped</span>
+            <span class="badge"><strong>~3.4KB</strong> gzipped</span>
             <span class="badge"><strong>Zero</strong> dependencies</span>
             <span class="badge"><strong>TypeScript</strong> native</span>
           </div>

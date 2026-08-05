@@ -9,9 +9,11 @@ side project — limited maintenance guarantees.
 
 - **Minimal API surface.** Every primitive must earn its place; prefer
   composition and boring solutions over new abstractions.
-- **Bundle size is a feature.** The IIFE must stay under ~3.8KB gzipped (CI
-  warns above 3800 bytes — the HMR slot re-binding machinery accounts for
-  ~400B of that). Avoid avoidable allocations and copies in hot paths
+- **Bundle size is a feature.** The IIFE must stay under ~3.5KB gzipped (CI
+  warns above 3500 bytes). The HMR slot re-binding machinery is guarded by
+  an inline `process.env.NODE_ENV` check in template.ts: production builds
+  fold it away via the rolldown `define` (~75B of @internal API residue
+  remains). Avoid avoidable allocations and copies in hot paths
   (subscription notification, recompute).
 - **Reactivity is subtle.** Tracking, batching, disposal, `.is()` slots, and
   detached-marker handling have sharp edges that only tests catch. Fix bugs
