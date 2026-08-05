@@ -29,6 +29,7 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Mounting](#mounting)
 - [Function Components](#function-components)
 - [Memo Components](#memo-components)
 - [Async Generators](#async-generators)
@@ -68,6 +69,26 @@ const { fragment, dispose } = html`
 document.body.appendChild(fragment);
 // Call dispose() when done to clean up subscriptions
 ```
+
+## Mounting
+
+`render()` returns a fragment you can place anywhere — shadow roots, detached nodes, anywhere you need full control:
+
+```ts
+const { fragment, dispose } = html`...`.render();
+document.body.appendChild(fragment);
+```
+
+For the root(s) of your app, prefer `mount()` from `balises/hmr`: it renders, appends, returns an idempotent dispose function, and records the render so hot reloads can re-bind it in place. In production builds it degrades to a plain render + append.
+
+```ts
+import { mount } from "balises/hmr";
+
+const dispose = mount(document.querySelector("#app")!, html`...`);
+// dispose() removes the nodes and releases all subscriptions
+```
+
+`mount()` lives in the opt-in `balises/hmr` module (tree-shaken if unused) — importing it is safe and idiomatic in production too. See [Hot Module Replacement](#hot-module-replacement) for how it behaves under a dev server.
 
 ## Function Components
 
