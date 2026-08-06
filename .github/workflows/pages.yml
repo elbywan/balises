@@ -32,24 +32,11 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build library
-        run: yarn build
-
-      - name: Build examples
-        run: |
-          yarn examples:build
-
-      - name: Prepare pages
-        run: |
-          mkdir -p _site/assets
-          cp docs/index.html _site/
-          cp docs/*.css _site/
-          cp docs/*.js _site/
-          cp assets/logo.svg _site/assets/
-          cp assets/logo-icon.svg _site/assets/
-          cp -r examples _site/examples
-          cp dist/balises.esm.js _site/examples/
-          cp -r dist/esm _site/examples/balises-esm
+      - name: Build docs site
+        # Builds the library, the examples, and assembles _site/ (including
+        # the dev-mode replacement of process.env.NODE_ENV in the modular
+        # ESM copy, which is loaded unbundled in the browser).
+        run: yarn docs:build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
