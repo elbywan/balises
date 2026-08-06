@@ -78,6 +78,9 @@ disposers)`; a binder returning `false` means "skip clearing, preserve
 - Tests: node:test + jsdom (`tests/setup.ts`), one file per module; GC/memory
   suites use real V8 GC (`tests/gc-utils.ts`).
 - Commits: `feat:` / `fix:` / `chore:` / `refactor:` style.
+- Releases: bump `package.json` (commit `vX.Y.Z`), tag `vX.Y.Z`, and add a
+  `## [X.Y.Z]` entry to `CHANGELOG.md` (Keep a Changelog format) — the
+  release workflow fails if the changelog entry is missing.
 - Generated output (`dist/`, `_site/`) is never edited by hand.
 
 ## Environment & commands

@@ -15,7 +15,8 @@
     "examples/hmr"
   ],
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "license": "MIT",
   "main": "./dist/esm/index.js",

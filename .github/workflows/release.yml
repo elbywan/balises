@@ -44,5 +44,13 @@ jobs:
             exit 1
           fi
           echo "Version: $PKG_VERSION"
+      - name: Verify changelog entry exists
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          if ! grep -q "^## \[$TAG_VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md is missing an entry for [$TAG_VERSION]"
+            exit 1
+          fi
+          echo "Changelog entry found: $TAG_VERSION"
       - name: Publish to npm
         run: yarn npm publish

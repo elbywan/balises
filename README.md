@@ -43,6 +43,7 @@ Ultimately it turns out that I am quite happy with the result! It is quite perfo
 - [Using as a Standalone Signals Library](#using-as-a-standalone-signals-library)
 - [Full Example](#full-example)
 - [Benchmarks](#benchmarks)
+- [Changelog](CHANGELOG.md)
 - [License](#license)
 
 ## Installation
