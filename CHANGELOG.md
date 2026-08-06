@@ -154,10 +154,10 @@ import { store } from "balises/signals/store";
 Conditional rendering (opt-in `balises/match` plugin) — branches are reused while the condition result stays the same, and `{ cache: true }` keeps hidden branches in memory for instant switching:
 
 ```ts
-html`${when(() => show.value, [
-  () => html`<div>Visible</div>`,
-  () => html`<div>Hidden</div>`,
-])}`;
+html`${when(
+  () => show.value,
+  [() => html`<div>Visible</div>`, () => html`<div>Hidden</div>`],
+)}`;
 
 html`${match(() => state.tab, {
   home: () => html`<div>Home</div>`,
@@ -224,7 +224,13 @@ import { html as baseHtml } from "balises";
 import eachPlugin, { each } from "balises/each";
 
 const html = baseHtml.with(eachPlugin);
-html`<ul>${each(items, (i) => i.id, (item) => html`<li>${item.name}</li>`)}</ul>`;
+html`<ul>
+  ${each(
+    items,
+    (i) => i.id,
+    (item) => html`<li>${item.name}</li>`,
+  )}
+</ul>`;
 ```
 
 ## [0.6.0] - 2026-01-04
