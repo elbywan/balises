@@ -81,10 +81,10 @@ disposers)`; a binder returning `false` means "skip clearing, preserve
 - Releases: bump `package.json` (commit `vX.Y.Z`), tag `vX.Y.Z`, and add a
   `## [X.Y.Z]` entry to `CHANGELOG.md` (Keep a Changelog format, backfilled
   for all releases) — the release workflow fails if the changelog entry is
-  missing. Feature entries carry a short TypeScript snippet showing the
-  actual API (verified against the source), with behavior explained in a
-  sentence or two; fixes stay one concise line unless a snippet clarifies
-  the behavior.
+  missing. Each important change gets its own `####` sub-heading under the
+  category, with a short TypeScript snippet showing the actual API
+  (verified against the source) and a sentence or two of behavior; fixes
+  stay one concise line unless a snippet clarifies the behavior.
 - Generated output (`dist/`, `_site/`) is never edited by hand.
 
 ## Environment & commands

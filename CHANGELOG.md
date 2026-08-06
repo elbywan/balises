@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-Hot module replacement via the opt-in `balises/hmr` module. `mount(container, template)` renders a root template; when a hot reload re-executes the module, it re-binds the previous render **in place** instead of rebuilding it:
+#### Hot module replacement (`balises/hmr`)
+
+`mount(container, template)` renders a root template; when a hot reload re-executes the module, it re-binds the previous render **in place** instead of rebuilding it:
 
 ```ts
 import { html, signal } from "balises";
@@ -28,14 +30,16 @@ import.meta.hot?.accept();
 
 On a hot reload only changed slots update (text, attributes, properties, events), signal state is carried into fresh module-scope instances ("state wins", like React Fast Refresh), and nested templates re-bind recursively so child components survive edits to siblings. A changed template source falls back to an in-place region replace. In production, `mount()` is simply render + append + dispose.
 
-Also added:
+#### HMR playground and documentation
 
 - `examples/hmr`: a Vite playground demonstrating the real-app shape — one root `mount()`, imported component modules, live state/focus/DOM preservation.
 - README sections for Mounting and Hot Module Replacement; the docs site gains an HMR feature card and a `mount()` API entry.
 
 ### Changed
 
-- The slot re-binding machinery is compiled out of production bundles via `process.env.NODE_ENV` (main bundle ~3.4 KB gzipped; +76 B of `@internal` API residue remains).
+#### Production bundles compile out the machinery
+
+The slot re-binding machinery is gated by `process.env.NODE_ENV` and folded out of production builds (main bundle ~3.4 KB gzipped; +76 B of `@internal` API residue remains).
 
 ### Fixed
 
@@ -46,7 +50,9 @@ Also added:
 
 ### Added
 
-Abortable async generators and streaming SSR. Every generator run gets a fresh `ctx.signal` that aborts when the generator restarts, is disposed, or a stream consumer stops early — wire requests to it so in-flight work is cancelled:
+#### Abortable async generators
+
+Every generator run gets a fresh `ctx.signal` that aborts when the generator restarts, is disposed, or a stream consumer stops early — wire requests to it so in-flight work is cancelled:
 
 ```ts
 html`
@@ -59,6 +65,8 @@ html`
   }}
 `;
 ```
+
+#### Streaming SSR (`renderToStringStream`)
 
 `renderToStringStream` emits HTML progressively — the shell first, then each generator's content as it settles:
 
@@ -81,7 +89,9 @@ State is serialized after the render; the stream API was made leaner.
 
 ### Added
 
-Server-side rendering with hydration. `renderToString` produces the HTML in a DOM-less Node environment; `hydrate` reuses the server markup on the client instead of re-rendering it:
+#### Server-side rendering with hydration
+
+`renderToString` produces the HTML in a DOM-less Node environment; `hydrate` reuses the server markup on the client instead of re-rendering it:
 
 ```ts
 // server.ts
@@ -102,13 +112,17 @@ const dispose = hydrate(template, document.querySelector("#app"));
 count.value = 5; // Updates the text in place — the server markup is reused
 ```
 
-The `state` option serializes non-derivable signal values automatically; `serializeState`/`deserializeState` are exported from the entry modules.
+#### Automatic state hand-off
+
+The `state` option on the SSR render functions serializes non-derivable signal values for the client; `serializeState`/`deserializeState` are exported from the entry modules.
 
 ## [0.9.0] - 2026-08-03
 
 ### Added
 
-`memo()` component memoization (opt-in `balises/memo` plugin) — components re-render only when their props change:
+#### `memo()` component memoization
+
+Opt-in `balises/memo` plugin — components re-render only when their props change:
 
 ```ts
 const Counter = memo(({ count }) => {
@@ -117,7 +131,9 @@ const Counter = memo(({ count }) => {
 });
 ```
 
-`store()` moved to the opt-in `balises/signals/store` subpath (out of the main entry):
+#### `store()` as a subpath
+
+`store()` moved to the opt-in `balises/signals/store` subpath, out of the main entry:
 
 ```ts
 import { store } from "balises/signals/store";
@@ -133,13 +149,15 @@ import { store } from "balises/signals/store";
 
 ### Added
 
-`match()` and `when()` conditional rendering (opt-in `balises/match` plugin) — branches are reused while the condition result stays the same, and `{ cache: true }` keeps hidden branches in memory for instant switching:
+#### `match()` and `when()`
+
+Conditional rendering (opt-in `balises/match` plugin) — branches are reused while the condition result stays the same, and `{ cache: true }` keeps hidden branches in memory for instant switching:
 
 ```ts
-html`${when(
-  () => show.value,
-  [() => html`<div>Visible</div>`, () => html`<div>Hidden</div>`],
-)}`;
+html`${when(() => show.value, [
+  () => html`<div>Visible</div>`,
+  () => html`<div>Hidden</div>`,
+])}`;
 
 html`${match(() => state.tab, {
   home: () => html`<div>Home</div>`,
@@ -152,7 +170,9 @@ html`${match(() => state.tab, {
 
 ### Added
 
-Async generator context: a fresh `AbortSignal` per run, aborted on restart or dispose (see [0.11.0](#0110---2026-08-04) for the full pattern).
+#### Async generator context
+
+A fresh `AbortSignal` per run, aborted on restart or dispose (see [0.11.0](#0110---2026-08-04) for the full pattern).
 
 ## [0.8.2] - 2026-01-19
 
@@ -195,27 +215,25 @@ Async generator context: a fresh `AbortSignal` per run, aborted on restart or di
 
 ### Added
 
-Keyed `each()` list rendering (opt-in `balises/each` plugin) — rows are reconciled by key instead of recreated, so reordering, adding, or removing items keeps existing DOM:
+#### Keyed `each()` lists
+
+Opt-in `balises/each` plugin — rows are reconciled by key instead of recreated, so reordering, adding, or removing items keeps existing DOM:
 
 ```ts
 import { html as baseHtml } from "balises";
 import eachPlugin, { each } from "balises/each";
 
 const html = baseHtml.with(eachPlugin);
-html`<ul>
-  ${each(
-    items,
-    (i) => i.id,
-    (item) => html`<li>${item.name}</li>`,
-  )}
-</ul>`;
+html`<ul>${each(items, (i) => i.id, (item) => html`<li>${item.name}</li>`)}</ul>`;
 ```
 
 ## [0.6.0] - 2026-01-04
 
 ### Added
 
-Plugin system: `html.with(...plugins)` composes opt-in interpolation plugins; async generators were externalized to `balises/async`:
+#### Plugin system
+
+`html.with(...plugins)` composes opt-in interpolation plugins; async generators were externalized to `balises/async`:
 
 ```ts
 import { html as baseHtml } from "balises";
@@ -250,7 +268,9 @@ const html = baseHtml.with(asyncPlugin);
 
 ### Added
 
-`scope()` for grouped disposal:
+#### `scope()`
+
+Groups reactive primitives for disposal together:
 
 ```ts
 const dispose = scope(() => {
@@ -266,7 +286,9 @@ Type checking added to CI.
 
 ### Added
 
-`effect()` for eager side effects and `update()` for functional signal writes:
+#### `effect()` and `update()`
+
+`effect()` for eager side effects, `update()` for functional signal writes:
 
 ```ts
 const count = signal(0);
@@ -288,7 +310,9 @@ const dispose = effect(() => console.log(count.value));
 
 ### Added
 
-Initial release: reactive signals and tagged-template HTML rendering:
+#### Initial release
+
+Reactive signals and tagged-template HTML rendering:
 
 ```ts
 import { html, signal } from "balises";
