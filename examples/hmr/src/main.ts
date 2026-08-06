@@ -1,36 +1,29 @@
-import { html, signal } from "balises";
+import { html } from "balises";
 import { mount } from "balises/hmr";
-import "./child.ts"; // side-effect: mounts its own region and opts into HMR
+import { Counter } from "./counter.ts";
+import { TextField } from "./fields.ts";
+import { List } from "./list.ts";
 
-// Module-scope state. On a hot reload this signal is recreated by the
-// module re-execution, and mount() carries the old value into the new
-// instance ("state wins" — exactly like React Fast Refresh).
-const count = signal(0);
-const text = signal("");
-
-// An inline "component": a template inside a slot. On a reload this is a
-// new template instance with the same static source, so the slot re-binds
-// it in place — the nodes around it (and their focus) are untouched.
-const counter = () => html`
-  <button @click=${() => count.update((n) => n + 4)}>
-    clicked ${count} times — label edited live!
-  </button>
-`;
-
+// The real-app shape: ONE root mount, nested "components" imported from
+// separate modules and rendered inside the root template's slots.
 mount(
   document.querySelector("#app")!,
   html`
-    <div class="box">${counter()}</div>
-    <div class="box">
-      <input
-        .value=${text}
-        @input=${(e: Event) => (text.value = (e.target as HTMLInputElement).value)}
-        placeholder="type here"
-      />
-      <p>you typed: <strong>${text}</strong></p>
-    </div>
+    <h1>balises HMR playground</h1>
+    <p class="hint">
+      Click the counter, type in the input — then edit
+      <code>src/counter.ts</code>, <code>src/fields.ts</code> or
+      <code>src/list.ts</code> and save. Only the edited component's region
+      updates; the others keep their DOM, state and focus. Editing a component's
+      static markup replaces just that region.
+    </p>
+    <div class="box">${Counter()}</div>
+    <div class="box">${TextField()}</div>
+    <div class="box">${List()}</div>
   `,
 );
 
-// Vite: opt in to hot updates for this module instead of a full page reload.
+// accept() belongs ONLY in modules that call mount(). The component
+// modules must NOT accept: if they did, an edit would re-execute them
+// without the root re-running, and nothing would update.
 import.meta.hot?.accept();

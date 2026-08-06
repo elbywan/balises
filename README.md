@@ -665,6 +665,13 @@ import.meta.hot?.accept();
 - **Changed template source** (the static markup differs) falls back to replacing the whole region in place, disposing the old subscriptions.
 - `mount()` returns an idempotent dispose function that removes the nodes, releases the subscriptions, and unregisters the render.
 
+### The structure of an HMR-ready app
+
+`import.meta.hot?.accept()` belongs only in the modules that call `mount()` — typically one root module per page. Components imported by the root (plain functions returning templates, see [Function Components](#function-components)) are rendered inside the root template's slots, and editing them flows through the root's re-bind:
+
+- Editing a component module re-executes it plus the import chain up to the root; the root's `mount()` re-runs and the edited component's slots re-bind in place — sibling components keep their DOM, state and focus (verified: an edit to one imported component leaves the others' nodes untouched).
+- A component module must **not** call `accept()` itself: that stops Vite's update propagation before the root re-executes, so the edit silently does nothing. If a module doesn't call `mount()`, it doesn't accept.
+
 ### What still resets on a reload
 
 - **Derived values recompute.** A `computed()` slot (or a function slot) re-evaluates against the new module's inputs — if its underlying signal is also module-scope, that signal starts at its initial value. Bind signals directly to preserve their state, or hoist the signal into a separate module.
