@@ -10,8 +10,11 @@ side project — limited maintenance guarantees.
 - **Minimal API surface.** Every primitive must earn its place; prefer
   composition and boring solutions over new abstractions.
 - **Bundle size is a feature.** The IIFE must stay under ~3.5KB gzipped (CI
-  warns above 3500 bytes). Avoid avoidable allocations and copies in hot
-  paths (subscription notification, recompute).
+  warns above 3500 bytes). The HMR slot re-binding machinery is guarded by
+  an inline `process.env.NODE_ENV` check in template.ts: production builds
+  fold it away via the rolldown `define` (~75B of @internal API residue
+  remains). Avoid avoidable allocations and copies in hot paths
+  (subscription notification, recompute).
 - **Reactivity is subtle.** Tracking, batching, disposal, `.is()` slots, and
   detached-marker handling have sharp edges that only tests catch. Fix bugs
   test-first: every behavioral change ships with a regression test that
@@ -45,6 +48,16 @@ disposers)`; a binder returning `false` means "skip clearing, preserve
   the anchor to the region boundary (`clearRegion`) — forward walks break
   when a concurrent render detaches the start node. Run `yarn ssr:smoke`
   (22 jsdom e2e checks) after touching any of this.
+- **HMR** (`src/hmr.ts`, `balises/hmr`) — opt-in, dev-only, bundler-agnostic
+  (never touches `import.meta.hot`). `mount(container, template)` renders
+  via `renderTracked()` and registers per-container; repeated mounts call
+  `Template.rebind()` — same source → re-bind changed slots in place
+  (recursing into nested templates, transferring signal values into fresh
+  instances); changed source → replace the region (new nodes inserted
+  before the old region, old range removed, old disposers run). Tracked
+  renders build per-slot re-binders (`RenderResult.slots`) and per-binding
+  disposer arrays — untracked `render()` keeps the shared-array hot path.
+  Module re-execution is the only update signal.
 - `package.json` `exports` mirrors the module layout; `store` is not part of
   the main entry.
 

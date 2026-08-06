@@ -17,7 +17,7 @@ import { store } from "./examples/balises-esm/signals/store.js";
 const FEATURES = [
   {
     title: "Tiny bundle size",
-    desc: "Just ~3.3KB gzipped, zero dependencies",
+    desc: "Just ~3.4KB gzipped, zero dependencies",
   },
   {
     title: "Fine-grained reactivity",
@@ -38,6 +38,10 @@ const FEATURES = [
   {
     title: "Standalone signals",
     desc: "Use the reactivity system independently in any JavaScript project",
+  },
+  {
+    title: "Hot Module Replacement",
+    desc: "Edit code and see it live — state, focus and DOM survive the reload",
   },
 ];
 
@@ -106,6 +110,11 @@ const API_ITEMS = [
     title: "hydrate(template, target)",
     code: "ssr-hydrate",
     desc: "Attaches the reactive bindings to server-rendered markup without re-rendering it. With <code>{ state }</code> it restores the server's signal values from the page payload first. Returns a dispose function. Import from <code>balises/hydrate</code>.",
+  },
+  {
+    title: "mount(container, template)",
+    code: "hmr-mount",
+    desc: "Renders a template into a container and tracks it for hot reloads: re-mounting with an unchanged template source re-binds changed slots in place, so signal state, focus and untouched DOM survive. Returns an idempotent dispose. In production it degrades to render + append. Import from <code>balises/hmr</code>.",
   },
   {
     title: "batch(fn)",
@@ -207,6 +216,16 @@ const CODE_EXAMPLES = {
     "// { state } restores the server's signal values from the page\n" +
     "// payload before the bindings attach.\n" +
     "count.value = 5; // Updates the text in place",
+
+  "hmr-mount":
+    'import { html, signal } from "balises";\n' +
+    'import { mount } from "balises/hmr";\n' +
+    "\n" +
+    "const count = signal(0);\n" +
+    'mount(document.querySelector("#app"), html`<p>${count}</p>`);\n' +
+    "\n" +
+    "// Vite: opt in to hot updates for this module\n" +
+    "import.meta.hot?.accept();",
 
   signal:
     "const count = signal(0);\n" +
@@ -434,7 +453,7 @@ class DocsApp extends HTMLElement {
             Reactive HTML templating for building websites and web components
           </p>
           <div class="badges">
-            <span class="badge"><strong>~3.3KB</strong> gzipped</span>
+            <span class="badge"><strong>~3.4KB</strong> gzipped</span>
             <span class="badge"><strong>Zero</strong> dependencies</span>
             <span class="badge"><strong>TypeScript</strong> native</span>
           </div>

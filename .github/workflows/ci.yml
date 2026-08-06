@@ -36,6 +36,8 @@ jobs:
         run: |
           SIZE=$(gzip -c dist/balises.iife.min.js | wc -c)
           echo "Gzipped size: ${SIZE} bytes"
+          # HMR slot re-binding is folded out of production builds via
+          # NODE_ENV define; ~75B remains for the @internal API surface.
           if [ "$SIZE" -gt 3500 ]; then
             echo "::warning::Bundle size (${SIZE} bytes) is getting large!"
           fi

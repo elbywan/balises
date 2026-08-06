@@ -53,6 +53,9 @@ export default defineConfig({
     entryFileNames: "[name].js",
     minify: false, // Preserve export names for dynamic imports
   },
+  // The benchmarks run in the browser with no `process` global — fold the
+  // dev-mode guard to its production value.
+  define: { "process.env.NODE_ENV": JSON.stringify("production") },
   resolve: {
     alias: {
       balises: join(import.meta.dirname, "../dist/esm/index.js"),
